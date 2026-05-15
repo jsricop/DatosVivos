@@ -1,4 +1,5 @@
 """Tools MCP expuestas: search_datasets, get_metadata, query_data, cross_datasets."""
+
 from mcp.server.fastmcp import FastMCP
 
 from . import get_metadata, query_data, search_datasets

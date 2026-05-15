@@ -1,4 +1,5 @@
 """Wrapper de la Discovery API — búsqueda en el catálogo global de Socrata."""
+
 from typing import Any
 
 import httpx

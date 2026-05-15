@@ -1,4 +1,5 @@
 """Wrapper de la SODA API — consultas SoQL sobre datasets de datos.gov.co."""
+
 from typing import Any
 
 import httpx

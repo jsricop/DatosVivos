@@ -1,4 +1,5 @@
 """Punto de entrada del MCP Server. Registra las tools y arranca transporte SSE/stdio."""
+
 import logging
 
 from mcp.server.fastmcp import FastMCP

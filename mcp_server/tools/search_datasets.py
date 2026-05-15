@@ -1,4 +1,5 @@
 """Tool MCP: search_datasets — busca datasets por keyword vía Discovery API."""
+
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP

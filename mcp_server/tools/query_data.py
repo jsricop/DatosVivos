@@ -1,4 +1,5 @@
 """Tool MCP: query_data — ejecuta consultas SoQL sobre un dataset vía SODA API."""
+
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP

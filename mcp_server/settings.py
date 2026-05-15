@@ -1,4 +1,5 @@
 """Configuración del MCP Server cargada desde .env vía pydantic-settings."""
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
