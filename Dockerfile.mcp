@@ -1,0 +1,8 @@
+# Dockerfile para el MCP Server.
+# Pendiente de definir durante Sprint 1.
+FROM python:3.11-slim
+WORKDIR /app
+# COPY requirements.mcp.txt .
+# RUN pip install --no-cache-dir -r requirements.mcp.txt
+# COPY mcp_server/ ./mcp_server/
+# CMD ["python", "-m", "mcp_server.server"]

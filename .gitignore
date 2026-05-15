@@ -1,0 +1,33 @@
+# Contexto interno
+MAIN.md
+
+# Environment
+.env
+*.env.local
+
+# Data
+data/
+*.pkl
+*.bin
+*.index
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Power BI temp
+*.pbix.tmp
+
+# Docker volumes
+postgres_data/
+ollama_models/
