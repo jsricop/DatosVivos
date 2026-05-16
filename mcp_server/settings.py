@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     discovery_api_url: str = "https://api.us.socrata.com/api/catalog/v1"
 
     mcp_transport: str = "sse"
+    mcp_host: str = "0.0.0.0"
     mcp_port: int = 3000
 
     log_level: str = "INFO"

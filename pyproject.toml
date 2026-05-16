@@ -15,4 +15,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "live: tests que llaman a datos.gov.co real (skip con -m 'not live')",
+    "integration: tests que arrancan el servidor MCP en subprocess (más lentos)",
 ]
