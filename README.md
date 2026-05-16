@@ -49,29 +49,41 @@ tests/        Pruebas pytest                             (continuo)
 git clone https://github.com/jsricop/DatosVivos.git
 cd DatosVivos
 python3.11 -m venv .venv && source .venv/bin/activate
+
+# Para el MCP Server (Sprint 1)
 pip install -r requirements.mcp.txt -r requirements-dev.txt
+
+# Adicionalmente, para el motor de IA (Sprint 2: índice vectorial + clasificador)
+pip install -r requirements.ai.txt
 
 # 2. Configurar entorno (opcional para el MCP Server — funciona con defaults)
 cp .env.example .env
 # editar .env si necesitas un SOCRATA_APP_TOKEN para mayor rate limit
 
-# 3. Correr los tests (16 tests, ~8s, requieren internet)
-pytest
+# 3. Correr los tests
+pytest                              # toda la suite
+pytest tests/test_mcp_tools.py      # solo Sprint 1
+pytest tests/test_sprint2_acceptance.py  # solo Sprint 2 (requiere índice)
 
 # 4. Levantar el MCP Server (elige un transporte)
 MCP_TRANSPORT=stdio python -m mcp_server.server     # para hosts MCP locales
 MCP_TRANSPORT=sse   python -m mcp_server.server     # HTTP/SSE en :3000
 
-# 5. Build y run vía Docker
+# 5. Build y run del MCP Server vía Docker
 docker build -f Dockerfile.mcp -t datosvivos-mcp:dev .
 docker run --rm -p 3000:3000 -e MCP_TRANSPORT=sse datosvivos-mcp:dev
+
+# 6. Construir el índice vectorial del catálogo (Sprint 2, ~10 min para ~8k datasets)
+python -m scripts.build_index                       # build completo
+python -m scripts.build_index --limit 500           # build parcial (dev/test)
+python -m scripts.build_index --output ./custom     # output custom
 ```
 
 ## Lo que NO funciona aún
 
 - `docker compose up` — los servicios `api`, `streamlit`, `nginx` son placeholders hasta Sprint 4
-- `scripts/build_index.py` — stub vacío, se implementa en Sprint 2
-- Integración con Ollama, vector index, Streamlit — pendientes según cronograma
+- Integración con Ollama, generación de SoQL, Streamlit — pendientes según cronograma
+- Tool `cross_datasets` — Sprint 3
 
 ## Convenciones de desarrollo
 
