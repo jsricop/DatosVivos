@@ -81,6 +81,17 @@ class Analyzer:
         # Recuperar datasets candidatos para CUALQUIER intent — son la base del contexto
         hits = self.vector_index.search(question, k=self.top_k_datasets)
         datasets_used = [h.id for h in hits]
+        reformulated_query: str | None = None
+
+        # Tier 3 fallback (ADR-007): si vector index no encontró nada, pedimos
+        # al LLM reformular la pregunta y reintentamos UNA vez. La reformulación
+        # se marca en el narrative para transparencia con el usuario.
+        if not hits:
+            reformulated_query = await self._llm_reformulate(question)
+            if reformulated_query and reformulated_query.strip() != question:
+                log.info("Tier 3 fallback: query reformulada por LLM → %r", reformulated_query)
+                hits = self.vector_index.search(reformulated_query, k=self.top_k_datasets)
+                datasets_used = [h.id for h in hits]
 
         if not hits:
             narrative = await self._narrate_no_matches(question, intent)
@@ -140,3 +151,28 @@ class Analyzer:
             f"directamente. Español, máximo 3 frases."
         )
         return await self.llm.generate(prompt, max_tokens=200)
+
+    async def _llm_reformulate(self, question: str) -> str | None:
+        """Tier 3 fallback (ADR-007): pide al LLM reformular la pregunta con
+        keywords alternativos cuando el match preciso y la búsqueda temática
+        no produjeron resultados.
+
+        Devuelve `None` si el LLM no produjo nada útil.
+        """
+        prompt = (
+            f"Reformula esta pregunta usando 3-5 palabras clave alternativas "
+            f"en español que un sistema de búsqueda de datos abiertos podría "
+            f"encontrar mejor. Devuelve SOLO las palabras clave separadas por "
+            f"espacios, sin explicación.\n\n"
+            f"Pregunta original: {question!r}\n\n"
+            f"Palabras clave alternativas:"
+        )
+        try:
+            response = await self.llm.generate(prompt, max_tokens=100, temperature=0.3)
+        except Exception as exc:  # noqa: BLE001 — fallback debe ser robusto
+            log.warning("LLM reformulation failed: %s", exc)
+            return None
+        result = (response or "").strip()
+        if not result or len(result) > 300:
+            return None
+        return result

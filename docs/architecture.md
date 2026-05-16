@@ -66,6 +66,52 @@ Ver [glosario](./glossary.md) para qué es MCP.
 | `query_data` | `dataset_id, soql_query?, limit, offset` | filas como dicts | SODA API |
 | `cross_datasets` | `dataset_ids: list[str], join_keys: str \| list[str], select_columns?, per_dataset_limit?` | filas merged | Descarga 1-5 datasets, encadena pandas merges |
 
+### Búsqueda con fallback en 3 tiers (`search_datasets`)
+
+La búsqueda contra `datos.gov.co` enfrenta un problema real: los ciudadanos NO suelen mencionar entidades por nombre. Dicen *"datos sobre tierras"*, no *"datos de la ANT"*. Para mitigar esto, `DiscoveryClient.search()` aplica tres niveles de expansión en cascada:
+
+```
+Tier 1 — Acrónimos (precisión alta)
+    Si la query menciona una entidad por sigla/nombre/alias conocido
+    (MinTIC, MEN, ICBF, "Ministerio de las TIC", "Cancillería"…), expande
+    al nombre canónico (`mcp_server/socrata/acronyms.py`).
+    → Siempre rápido. Cero LLM. Cero latencia agregada.
+                    │
+                    ▼ si Socrata devuelve resultados, retornar
+                    │
+                    ▼ si vacío:
+
+Tier 2 — Topic keywords iterativo (recuperación amplia)
+    Cuando la query NO menciona entidad por nombre, intentamos detectar
+    el tema. Cada entidad tiene 3-6 `keywords` temáticos extraídos del
+    contenido real de sus datasets en datos.gov.co.
+
+    Estrategia iterativa para evitar inundar la query:
+        a. Calcular ranking de entidades por overlap query↔keywords.
+        b. Agrupar de a 2 entidades por rank.
+        c. Buscar con top-2 expandido → si hay resultados, retornar.
+        d. Si vacío, buscar con next-2 (rank 3-4) → si hay, retornar.
+        e. Continuar hasta agotar grupos o encontrar resultados.
+
+    → Latencia: hasta N llamadas HTTP secuenciales (típico 1-3).
+    → Cero LLM. Mantiene determinismo.
+                    │
+                    ▼ si todos los grupos exhaustos sin resultados:
+
+Tier 3 — LLM reformulación (último recurso)
+    El `Analyzer` invoca el LLM con un prompt que le pide reformular la
+    pregunta usando keywords alternativos. Se reintenta la búsqueda con
+    el query reformulado. Marca en `AnalysisResult` que se reformuló
+    (transparencia al usuario).
+
+    → Latencia agregada: +1-2 s.
+    → Solo se ejecuta cuando ambos tiers anteriores fallan.
+```
+
+**Por qué cap de 2 entidades por grupo:** evitar inundar Socrata con ~5 nombres canónicos completos en una sola query (cada uno tiene 6-8 palabras). Eso genera mucho ruido en el matching. Iterar grupos de 2 mantiene calidad por intento, a costa de hasta N llamadas HTTP secuenciales en el peor caso.
+
+**Trade-off documentado:** la latencia del Tier 2 crece linealmente con el número de grupos intentados. En la práctica, las queries con tema claro encuentran resultados en 1-2 iteraciones. Queries muy vagas pueden hacer 5+ intentos antes de caer al LLM (Tier 3).
+
 ### `cross_datasets` — el diferenciador
 
 Cruza de **1 a 5 datasets** de entidades distintas por claves territoriales comunes (DIVIPOLA, código DANE, NIT, departamento, municipio).
