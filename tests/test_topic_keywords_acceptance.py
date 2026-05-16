@@ -29,13 +29,11 @@ from __future__ import annotations
 
 import pytest
 
-
 # ============================================================
 # A. Módulo topic_keywords
 # ============================================================
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_keywords_module_exposes_api():
     """El módulo expone `KEYWORDS_BY_CANONICAL`, `topic_match_ranked`,
     `expand_with_topics_iterative`."""
@@ -47,7 +45,6 @@ def test_topic_keywords_module_exposes_api():
     assert callable(topic_keywords.topic_match_ranked)
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_keywords_covers_all_acronym_entities_with_min_3_each():
     """Cada entidad canónica del módulo `acronyms` debe tener ≥3 keywords
     temáticos. Esto previene gaps de fallback (lo que vimos en el audit:
@@ -69,7 +66,6 @@ def test_topic_keywords_covers_all_acronym_entities_with_min_3_each():
     assert not short, f"Entidades con <3 keywords: {len(short)}. Primeras 5: {short[:5]}"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_match_ranked_returns_groups_of_at_most_two():
     """`topic_match_ranked` agrupa de a 2 entidades por rank.
 
@@ -84,12 +80,11 @@ def test_topic_match_ranked_returns_groups_of_at_most_two():
     assert all(len(g) <= 2 for g in groups), "cada grupo debe tener máximo 2 entidades"
     # Al menos un grupo con al menos 1 entidad de tierras
     flat = [c for g in groups for c in g]
-    assert any("Tierras" in c or "Rurales" in c for c in flat), (
-        f"Esperaba al menos una entidad de tierras en {flat}"
-    )
+    assert any(
+        "Tierras" in c or "Rurales" in c for c in flat
+    ), f"Esperaba al menos una entidad de tierras en {flat}"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_keywords_dont_duplicate_acronym_aliases():
     """Los keywords NO deben coincidir con aliases ya presentes en `acronyms.py`.
 
@@ -106,9 +101,7 @@ def test_topic_keywords_dont_duplicate_acronym_aliases():
         for kw in kws:
             if kw.lower() in aliases:
                 violations.append((canonical, kw))
-    assert not violations, (
-        f"Keywords que duplican aliases (tier 1 ya los cubre): {violations[:10]}"
-    )
+    assert not violations, f"Keywords que duplican aliases (tier 1 ya los cubre): {violations[:10]}"
 
 
 # ============================================================
@@ -116,7 +109,6 @@ def test_topic_keywords_dont_duplicate_acronym_aliases():
 # ============================================================
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_match_orders_by_overlap_count():
     """Entidad con más palabras-clave en la query aparece antes en el ranking."""
     from mcp_server.socrata.topic_keywords import topic_match_ranked
@@ -129,12 +121,11 @@ def test_topic_match_orders_by_overlap_count():
     # IDEAM (clima, lluvias, meteorología) debería rankear por encima de
     # otras entidades que solo matcheen "territorio" o "nacional"
     if flat:
-        assert any("Hidrología" in c or "IDEAM" in c for c in flat[:2]), (
-            f"Esperaba IDEAM en top-2 grupos. Vi: {flat[:4]}"
-        )
+        assert any(
+            "Hidrología" in c or "IDEAM" in c for c in flat[:2]
+        ), f"Esperaba IDEAM en top-2 grupos. Vi: {flat[:4]}"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 def test_topic_match_nonsense_returns_empty():
     """Query sin ninguna palabra clave temática conocida → `[]`."""
     from mcp_server.socrata.topic_keywords import topic_match_ranked
@@ -147,7 +138,6 @@ def test_topic_match_nonsense_returns_empty():
 # ============================================================
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 async def test_discovery_iterative_tries_groups_in_rank_order(monkeypatch):
     """DiscoveryClient debe intentar los grupos de keywords en orden de rank.
 
@@ -160,8 +150,6 @@ async def test_discovery_iterative_tries_groups_in_rank_order(monkeypatch):
     # Si Tier 1 no expandió y Socrata devuelve 0 en query base, debe
     # iterar a través de los grupos de topic keywords en orden.
     queries_attempted: list[str] = []
-
-    original_search = DiscoveryClient.search
 
     async def spy_search(self, query=None, limit=10, offset=0):
         queries_attempted.append(query or "")
@@ -177,10 +165,11 @@ async def test_discovery_iterative_tries_groups_in_rank_order(monkeypatch):
     )
 
     # Al menos 2 intentos (query base + al menos un grupo de topic)
-    assert len(queries_attempted) >= 2, f"Solo {len(queries_attempted)} intentos: {queries_attempted}"
+    assert (
+        len(queries_attempted) >= 2
+    ), f"Solo {len(queries_attempted)} intentos: {queries_attempted}"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 async def test_discovery_iterative_short_circuits_on_first_nonempty(monkeypatch):
     """Cuando un grupo devuelve resultados, NO debe seguir intentando los siguientes."""
     from mcp_server.socrata.discovery_client import DiscoveryClient
@@ -204,12 +193,11 @@ async def test_discovery_iterative_short_circuits_on_first_nonempty(monkeypatch)
     )
 
     assert results, "Esperaba resultados del 2do intento"
-    assert call_count["n"] == 2, (
-        f"Short-circuit falló: se hicieron {call_count['n']} llamadas, esperaba 2"
-    )
+    assert (
+        call_count["n"] == 2
+    ), f"Short-circuit falló: se hicieron {call_count['n']} llamadas, esperaba 2"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 async def test_discovery_iterative_returns_empty_when_all_groups_exhausted(monkeypatch):
     """Si todos los grupos de keywords fallan, retorna `[]` (sin LLM en esta capa)."""
     from mcp_server.socrata.discovery_client import DiscoveryClient
@@ -233,7 +221,6 @@ async def test_discovery_iterative_returns_empty_when_all_groups_exhausted(monke
 # ============================================================
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 async def test_analyzer_invokes_llm_reformulation_when_topic_fallback_empty():
     """Si tiers 1 y 2 retornan [], el analyzer pide reformulación al LLM."""
     from ai_engine.analyzer import Analyzer
@@ -263,12 +250,11 @@ async def test_analyzer_invokes_llm_reformulation_when_topic_fallback_empty():
     # NOTA: si por casualidad la pregunta vaga matchea algo, este test puede no aplicar.
     # Inspecciona el narrative para confirmar el path.
     narrative = result.narrative if hasattr(result, "narrative") else result.get("narrative", "")
-    assert reformulation_calls or "reformul" in narrative.lower() or result.datasets_used, (
-        f"Esperaba reformulación o algún resultado. Narrative: {narrative[:200]!r}"
-    )
+    assert (
+        reformulation_calls or "reformul" in narrative.lower() or result.datasets_used
+    ), f"Esperaba reformulación o algún resultado. Narrative: {narrative[:200]!r}"
 
 
-@pytest.mark.skip(reason="topic-keywords WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_analyzer_end_to_end_thematic_query_finds_results():
     """Query temática SIN nombre de entidad encuentra datasets via tier 2 (o 3 con Ollama).
@@ -301,5 +287,9 @@ async def test_analyzer_end_to_end_thematic_query_finds_results():
     )
     result = await analyzer.analyze("información sobre tierras rurales en Colombia")
 
-    datasets = result.datasets_used if hasattr(result, "datasets_used") else result.get("datasets_used", [])
+    datasets = (
+        result.datasets_used
+        if hasattr(result, "datasets_used")
+        else result.get("datasets_used", [])
+    )
     assert datasets, "Esperaba al menos 1 dataset para query temática de tierras"
