@@ -110,6 +110,44 @@ items = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
 
 ---
 
+## Expansión de acrónimos del sector público colombiano (post-Sprint 3)
+
+### 💡 Las entidades publicadoras de datos.gov.co ya tienen el acrónimo embebido en `attribution`
+
+**Contexto:** al construir el diccionario de acrónimos, descubrí que el campo `attribution` de cada dataset YA contiene la sigla oficial en formato `"Nombre Canónico - SIGLA, Ciudad/Departamento"`. Ejemplo: `"Ministerio de Tecnologías de la Información y las Comunicaciones - MinTIC, Bogotá D.C."`.
+
+**Implicación:** podemos **derivar el diccionario directamente del catálogo** en vez de mantener una lista manual. Extrajimos ~100 pares (canonical, sigla) programáticamente de las 8.389 entidades indexadas.
+
+**Aplicabilidad:** cuando construyes diccionarios para datos gubernamentales colombianos, busca primero en `attribution`. Hay otras convenciones similares ("Alcaldía de X, Y" → entidad territorial X).
+
+---
+
+### 🐛 "Estadísticas" plural vs "Estadística" singular
+
+**Síntoma:** mi test de aceptación asumió `"Departamento Administrativo Nacional de Estadística"` (singular). La realidad: el catálogo usa `"Estadísticas"` plural.
+
+**Aplicabilidad:** **nunca asumir formas oficiales** de nombres de entidades del Estado colombiano. Extraerlas siempre del catálogo. Hay variaciones inesperadas: "del derecho" en minúscula en MinJusticia, "Cultura, las Artes y los Saberes" reciente en MinCultura, "La República" con mayúscula en DAPRE.
+
+---
+
+### 💡 Word boundary regex con soporte para acentos
+
+**Problema:** la palabra "anillo" contiene "ANI" como sustring. Un regex naive `\bANI\b` con `re.IGNORECASE` matchea **dentro** de "ANIllo" porque la `\b` Python clásica es ASCII-only.
+
+**Solución:** `(?<![A-Za-zÁÉÍÓÚÜáéíóúüÑñ])ANI(?![A-Za-zÁÉÍÓÚÜáéíóúüÑñ])` — lookbehind/lookahead unicode-aware. Verificado con test específico (`test_expand_query_does_not_match_inside_other_words`).
+
+**Aplicabilidad:** cualquier matching de términos en español/idiomas con acentos. La `\b` de Python NO funciona bien con caracteres acentuados.
+
+---
+
+### 💡 Append > Replace en expansión de queries
+
+**Decisión:** `expand_query("datos del MEN")` devuelve `"datos del MEN Ministerio de Educación Nacional"` (append), NO `"datos del Ministerio de Educación Nacional"` (replace).
+
+**Razón:** Socrata full-text search es bag-of-words. Append preserva los keywords originales del usuario (que podrían matchear documentos donde solo aparece la sigla y no el nombre completo). Cero costo, beneficio aditivo.
+
+---
+
 ## Extensión cross-multi (post-Sprint 3)
 
 ### 💡 Auto-detectar columnas comunes es la causa típica de falsos positivos en joins

@@ -66,7 +66,7 @@ class OllamaBackend:
         self,
         host: str | None = None,
         model: str | None = None,
-        timeout: float = 60.0,
+        timeout: float = 120.0,  # 60s era ajustado bajo carga concurrente (CPU/Metal contention)
     ) -> None:
         self.host = (host or os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST)).rstrip("/")
         self.model = model or os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
