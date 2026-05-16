@@ -24,22 +24,31 @@ class DiscoveryClient:
         self.domain = domain or settings.socrata_domain
         self.timeout = timeout
 
-    async def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        """Busca datasets por palabras clave en el catálogo del dominio configurado.
+    async def search(
+        self,
+        query: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Busca datasets en el catálogo del dominio configurado.
 
         Args:
-            query: Término de búsqueda (español o inglés).
-            limit: Máximo de resultados.
+            query: Término de búsqueda. Si es `None`, lista todos los datasets
+                (orden por defecto de Socrata — popularidad/relevancia).
+            limit: Máximo de resultados por página.
+            offset: Desplazamiento para paginación.
 
         Returns:
             Lista de objetos `result` con `resource`, `classification`, `metadata`.
         """
         params: dict[str, Any] = {
             "domains": self.domain,
-            "q": query,
             "limit": limit,
+            "offset": offset,
             "only": "dataset",
         }
+        if query:
+            params["q"] = query
         headers = {"User-Agent": "DatosVivos/0.1 (+https://github.com/jsricop/DatosVivos)"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(self.base_url, params=params, headers=headers)

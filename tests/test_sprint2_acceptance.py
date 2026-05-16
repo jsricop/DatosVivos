@@ -31,8 +31,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pytest
-
 # ============================================================
 # A. Clasificador de intención
 # ============================================================
@@ -80,7 +78,6 @@ INTENT_TEST_SET: list[tuple[str, str]] = [
 ]
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_intent_classifier_returns_one_of_five_categories():
     """El clasificador SIEMPRE devuelve una de las 5 categorías oficiales."""
     from ai_engine.intent_classifier import IntentClassifier
@@ -94,7 +91,6 @@ def test_intent_classifier_returns_one_of_five_categories():
         )
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_intent_classifier_accuracy_at_least_85_percent():
     """Sobre 30 ejemplos held-out, accuracy ≥ 0.85 (al menos 26 correctos)."""
     from ai_engine.intent_classifier import IntentClassifier
@@ -116,7 +112,6 @@ def test_intent_classifier_accuracy_at_least_85_percent():
     )
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_intent_classifier_latency_under_100ms():
     """Una clasificación toma menos de 100 ms (P50 sobre 20 muestras)."""
     from ai_engine.intent_classifier import IntentClassifier
@@ -147,7 +142,6 @@ VECTOR_INDEX_CANONICAL_QUERIES: list[tuple[str, str, int]] = [
 ]
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_vector_index_covers_at_least_1000_datasets():
     """El índice persistido contiene al menos 1.000 datasets del catálogo (~8.000 total)."""
     from ai_engine.vector_index import VectorIndex
@@ -157,7 +151,6 @@ def test_vector_index_covers_at_least_1000_datasets():
     assert n >= 1000, f"Cobertura insuficiente: {n} datasets indexados, esperaba ≥ 1.000"
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_vector_index_finds_canonical_datasets_in_top_k():
     """Para cada query canónica, el dataset esperado aparece en el top-K."""
     from ai_engine.vector_index import VectorIndex
@@ -172,7 +165,6 @@ def test_vector_index_finds_canonical_datasets_in_top_k():
     assert not failures, f"Datasets esperados no encontrados en top-K: {failures}"
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_vector_index_persists_across_restart():
     """Cargar el índice, descartarlo, volver a cargar → mismo tamaño y mismas búsquedas."""
     from ai_engine.vector_index import VectorIndex
@@ -188,13 +180,12 @@ def test_vector_index_persists_across_restart():
     results2 = idx2.search("educación", k=3)
     ids2 = [r.id if hasattr(r, "id") else r["id"] for r in results2]
 
-    assert count_initial == count_after, (
-        f"Tamaño cambió tras reload: {count_initial} → {count_after}"
-    )
+    assert (
+        count_initial == count_after
+    ), f"Tamaño cambió tras reload: {count_initial} → {count_after}"
     assert ids1 == ids2, f"Resultados cambiaron tras reload:\n  Antes: {ids1}\n  Después: {ids2}"
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_vector_index_query_latency_under_200ms_p50():
     """Una búsqueda toma < 200 ms (P50 sobre 20 muestras), excluyendo warmup."""
     from ai_engine.vector_index import VectorIndex
@@ -219,7 +210,6 @@ def test_vector_index_query_latency_under_200ms_p50():
     assert p50 < 0.2, f"Latencia P50 {p50*1000:.0f}ms ≥ 200ms"
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_vector_index_low_confidence_on_nonsense_query():
     """Una query sin sentido NO debe devolver resultados con alta confianza."""
     from ai_engine.vector_index import VectorIndex
@@ -244,7 +234,6 @@ def test_vector_index_low_confidence_on_nonsense_query():
 # ============================================================
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_build_index_script_is_idempotent(tmp_path: Path):
     """Correr build_index dos veces no duplica entradas ni rompe el índice.
 
@@ -266,7 +255,6 @@ def test_build_index_script_is_idempotent(tmp_path: Path):
     )
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_build_index_reports_progress(tmp_path: Path, capsys):
     """El script debe imprimir progreso, no quedarse silencioso 10 minutos."""
     from scripts.build_index import build_index
@@ -279,14 +267,33 @@ def test_build_index_reports_progress(tmp_path: Path, capsys):
         keyword in output.lower()
         for keyword in ["progreso", "indexed", "indexados", "%", "datasets"]
     )
-    assert has_progress_signal, (
-        f"Sin señal de progreso en stdout/stderr (primeros 500 chars):\n{output[:500]}"
-    )
+    assert (
+        has_progress_signal
+    ), f"Sin señal de progreso en stdout/stderr (primeros 500 chars):\n{output[:500]}"
 
 
-@pytest.mark.skip(reason="Sprint 2 WIP — implementar antes de Jun 1")
 def test_build_index_handles_discovery_api_errors_gracefully(tmp_path: Path, monkeypatch):
-    """Si Discovery API falla intermitentemente, el script no debe morir; reintenta o salta."""
-    # Implementación específica depende del diseño del cliente Discovery.
-    # El test queda como contrato: la build no debe ser frágil ante errores transitorios.
-    pytest.skip("Diseño de retry/skip strategy pendiente — definir al implementar")
+    """Si Discovery falla intermitentemente, el build reintenta y al final NO crashea.
+
+    Simula: la primera llamada a Discovery falla con timeout, las siguientes OK.
+    Esperado: build_index completa sin excepción (con retry exponencial interno).
+    """
+    import httpx
+
+    from mcp_server.socrata.discovery_client import DiscoveryClient
+    from scripts.build_index import build_index
+
+    original_search = DiscoveryClient.search
+    call_count = {"n": 0}
+
+    async def flaky_search(self, query=None, limit=10, offset=0):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise httpx.TimeoutException("simulated transient timeout")
+        return await original_search(self, query=query, limit=limit, offset=offset)
+
+    monkeypatch.setattr(DiscoveryClient, "search", flaky_search)
+
+    # No debe lanzar excepción a pesar del primer timeout
+    n = build_index(output_path=tmp_path / "vector_index", limit=20)
+    assert n >= 1, "Build no recuperó del timeout transitorio"

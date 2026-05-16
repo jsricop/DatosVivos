@@ -112,6 +112,32 @@ items = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
 
 ## Sprint 2 (en curso)
 
+### 🐛 Embeddings tipo e5 floorean cosine similarity en ~0.7
+
+**Síntoma:** El test `test_vector_index_low_confidence_on_nonsense_query` exigía que una query nonsense ("qslsdkjfgh1234nonsense") produjera scores < 0.5. Con `intfloat/multilingual-e5-base`, todas las queries — incluso garbage — producen similitudes en el rango 0.70-0.85.
+
+**Causa:** Los modelos transformer modernos (e5, BGE, etc.) embeben todo en una región acotada del espacio. Tokens irreconocibles caen cerca del centroide del corpus, dando similitud ~0.7 con cualquier documento. El supuesto naive "score bajo = match malo" no aplica.
+
+**Solución:** Doble filtro en `VectorIndex.search()`:
+1. **min_score absoluto** (0.3): descarta basura obvia.
+2. **min_margin** (0.02): el top score debe ser meaningfully mayor a la mediana del top-k. Para queries reales, top-median ≈ 0.04+. Para nonsense, ≈ 0.005.
+
+Si nada supera ambos filtros, `search()` retorna `[]` — preferible para el LLM consumidor que devolver resultados ruidosos.
+
+**Aplicabilidad:** Cualquier sistema que use embeddings modernos para búsqueda semántica. El umbral absoluto de cosine similarity NO es buen señal de confianza; el margen relativo sí lo es.
+
+---
+
+### 💡 e5 requiere prefijos `passage:` y `query:`
+
+**Contexto:** El modelo `intfloat/multilingual-e5-base` fue entrenado con prefijos específicos para distinguir documentos indexados (`passage: ...`) de queries (`query: ...`). Sin el prefijo, la calidad de matching cae notablemente.
+
+**Solución implementada:** `VectorIndex.upsert_many` aplica `passage:` automáticamente al texto a embedear. `VectorIndex.search()` aplica `query:`. El caller pasa texto plano y no se entera del prefijo.
+
+**Aplicabilidad:** Cualquier modelo e5 (small, base, large). Si en el futuro migramos a BGE o ColBERT, los prefijos cambian — revisar el model card.
+
+---
+
 ### 📋 Adopción de disciplina test-first
 
 **Contexto:** Cerrando Sprint 1, declaré "100% verificado" en PR #2. El stakeholder pidió segunda auditoría y aparecieron 4 huecos reales (transporte stdio no probado, paths de error no testeados, etc.). En PR #3 cerramos los huecos, pero la raíz del problema fue **escribir tests después del código** — los tests medían lo que se construyó, no lo que el sprint prometía.
