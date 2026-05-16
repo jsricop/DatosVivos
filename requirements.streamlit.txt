@@ -1,0 +1,9 @@
+# Interfaz Streamlit (Capa 3, Sprint 4)
+# Asume que requirements.mcp.txt y requirements.ai.txt ya están instalados
+# (la app envuelve ai_engine.Analyzer y consume el MCP server).
+
+streamlit>=1.32.0
+plotly>=5.20.0
+folium>=0.16.0
+streamlit-folium>=0.21.0
+pandas>=2.2.0
