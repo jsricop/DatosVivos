@@ -73,6 +73,19 @@ docker run --rm -p 3000:3000 -e MCP_TRANSPORT=sse datosvivos-mcp:dev
 - `scripts/build_index.py` — stub vacío, se implementa en Sprint 2
 - Integración con Ollama, vector index, Streamlit — pendientes según cronograma
 
+## Convenciones de desarrollo
+
+Si vas a contribuir código, dos disciplinas obligatorias:
+
+### Test-first para features de sprint
+Los tests con criterios de aceptación se escriben **antes** del código de producción. Cada sprint con criterios medibles (accuracy, latencia, cobertura) tiene un archivo `tests/test_sprintN_acceptance.py` con todos los tests `@pytest.mark.skip`. Se va quitando el `@skip` a medida que cada feature se implementa. **Los tests no se modifican** durante el sprint; si fallan, se corrige el código. Ejemplo activo: [`tests/test_sprint2_acceptance.py`](tests/test_sprint2_acceptance.py).
+
+### Doc-first para cambios visibles
+Toda PR que afecte interfaz pública (comandos, contratos de tools, arquitectura, dependencias) debe actualizar la documentación en el mismo PR. Sin docs, no se mergea. Checklist específico por tipo de cambio: ver MAIN.md §6.5 (interno) o pregúntale a un maintainer.
+
+### Convención de commits
+Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`. Cada commit debe cerrar con `Co-Authored-By: ANI Team & Claude <noreply@anthropic.com>`. Ver historial reciente para ejemplos.
+
 ## Seguridad y privacidad
 
 - DatosVivos opera **exclusivamente** sobre datos públicos de [datos.gov.co](https://www.datos.gov.co)

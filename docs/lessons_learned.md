@@ -112,4 +112,22 @@ items = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
 
 ## Sprint 2 (en curso)
 
-_Pendientes — capturar bugs y lecciones aquí a medida que aparezcan._
+### 📋 Adopción de disciplina test-first
+
+**Contexto:** Cerrando Sprint 1, declaré "100% verificado" en PR #2. El stakeholder pidió segunda auditoría y aparecieron 4 huecos reales (transporte stdio no probado, paths de error no testeados, etc.). En PR #3 cerramos los huecos, pero la raíz del problema fue **escribir tests después del código** — los tests medían lo que se construyó, no lo que el sprint prometía.
+
+**Lección:** sin definir criterios de aceptación **antes** de implementar, la verificación final tiende a ser un autoengaño confirmatorio.
+
+**Práctica adoptada para Sprint 2 en adelante (documentada como regla en `MAIN.md §6.6`):**
+
+1. Antes de tocar código de producción, escribir `tests/test_sprintN_acceptance.py` con todos los tests congelados (`@pytest.mark.skip`).
+2. Commitear a `develop` como "frozen baseline".
+3. Durante el sprint, quitar el `@skip` test por test cuando cada feature está lista.
+4. **Si un test falla:** corregir el código, NO el test. Excepción única para errores conceptuales del test (con justificación explícita en commit y MAIN.md).
+5. Umbrales obligatoriamente cuantificables (accuracy ≥ 0.85, latencia P50 < 200ms, etc.). Nada de "que funcione razonablemente".
+
+**Por qué importa para el concurso:** el criterio "Análisis y rigor técnico" (15 pts) evalúa metodología. Tener tests congelados antes de implementar es evidencia documental de rigor; tests post-hoc no lo son.
+
+**Aplicabilidad:** todos los Sprints 2-5. Sprint 1 ya cerrado con la deuda (capturada aquí). El archivo `tests/test_sprint2_acceptance.py` es el primer ejemplo de la práctica.
+
+---
