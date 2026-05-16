@@ -13,13 +13,18 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-mcp = FastMCP("datosvivos")
+mcp = FastMCP("datosvivos", host=settings.mcp_host, port=settings.mcp_port)
 register_all(mcp)
 
 
 def main() -> None:
     transport = settings.mcp_transport.lower()
-    log.info("MCP Server arrancando: transport=%s port=%s", transport, settings.mcp_port)
+    log.info(
+        "MCP Server arrancando: transport=%s host=%s port=%s",
+        transport,
+        settings.mcp_host,
+        settings.mcp_port,
+    )
     if transport == "stdio":
         mcp.run(transport="stdio")
     elif transport == "sse":
