@@ -6,18 +6,18 @@ Documento de diseño técnico del sistema. Describe las **tres capas** y sus int
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│           CAPA 3: INTERFACES DE USUARIO             │
+│           CAPA 3: INTERFAZ DE USUARIO               │
 │                                                     │
-│  ┌─────────────────┐    ┌────────────────────────┐  │
-│  │   Streamlit      │    │   Power BI             │  │
-│  │   (ciudadano)    │    │   (analítica de uso)   │  │
-│  │   - Chat NL      │    │   - KPIs               │  │
-│  │   - Plotly/Folium│    │   - Tendencias         │  │
-│  │   - Exportación  │    │   - Mapa departamental │  │
-│  │   - ♿ Modo a11y  │    │                        │  │
-│  └────────┬─────────┘    └───────────┬────────────┘  │
-│           │                          │               │
-│           ▼                          ▼               │
+│  ┌──────────────────────────────────────────────┐   │
+│  │   Streamlit (ciudadano)                      │   │
+│  │   - Chat NL (st.chat_message/st.chat_input)  │   │
+│  │   - Páginas: chat · explorer · about         │   │
+│  │   - Plotly / Folium / st.dataframe           │   │
+│  │   - Exportación CSV                          │   │
+│  │   - ♿ Modo accesible (Web Speech API)       │   │
+│  └────────────────────────┬─────────────────────┘   │
+│                           │                          │
+│                           ▼                          │
 ├─────────────────────────────────────────────────────┤
 │              CAPA 2: MOTOR DE IA                    │
 │                                                     │
@@ -47,7 +47,7 @@ Documento de diseño técnico del sistema. Describe las **tres capas** y sus int
               │  - Logs consultas   │
               │  - Métricas de uso  │
               │  - Caché resultados │
-              │  - Feed Power BI    │
+              │  (Sprint posterior) │
               └─────────────────────┘
 ```
 
@@ -165,20 +165,66 @@ Tres subcapas que convierten lenguaje natural en llamadas a las tools de la Capa
 - **Tareas:** generar queries SoQL, decidir qué datasets cruzar, producir narrativa en español, interpretar resultados
 - **Backend intercambiable:** variable `LLM_BACKEND=ollama|openai|anthropic` para cambiar sin modificar código (ver ADR-001)
 
-## Capa 3 — Interfaces
+## Capa 3 — Interfaz Streamlit
 
-### 3.1 Streamlit (ciudadanos)
+La interfaz ciudadana es una app **Streamlit** multipágina. Power BI **no** forma parte del entregable: queda como integración opcional que un usuario externo podría conectar a su propia base si decide montar logging persistente.
 
-- Chat en lenguaje natural
-- Visualizaciones: Plotly (gráficos), Folium (mapas georreferenciados de Colombia)
-- Modo accesibilidad: ver [accessibility.md](./accessibility.md)
-- Exportación de resultados
+### 3.1 Estructura de la app
 
-### 3.2 Power BI (analítica interna)
+```
+app/
+├── main.py                            # entrypoint, st.navigation multipage
+├── agent_client.py                    # wrapper de ai_engine.Analyzer
+├── components/
+│   ├── chart_renderer.py              # auto-detección Plotly (línea/barra/scatter)
+│   ├── map_renderer.py                # Folium + join con dataset DIVIPOLA
+│   └── accessibility/
+│       ├── speech_input.py            # Web Speech API STT (entrada por voz)
+│       ├── speech_output.py           # Web Speech API TTS (respuesta hablada)
+│       ├── chart_narrator.py          # alt-text auto-generado por gráfico
+│       └── a11y_toggle.py             # toggle global accesibilidad en sidebar
+└── pages/
+    ├── chat.py                        # chat conversacional
+    ├── explorer.py                    # buscador de datasets + ficha + preview
+    └── about.py                       # qué es y cómo funciona
+```
 
-- Dashboard de métricas de uso del agente
-- Conectado a las tablas de PostgreSQL (`queries`, `dataset_usage`, `cross_operations`)
-- No es interfaz ciudadana — es para monitoreo del equipo
+### 3.2 Páginas
+
+| Página | Propósito | Tools MCP usadas |
+|---|---|---|
+| **Chat** | Pregunta libre en NL → respuesta narrada + visualización inline. Historial en `st.session_state`. | Todas vía `Analyzer` |
+| **Explorer** | Buscar datasets por keyword, ver metadata, preview de filas. | `search_datasets`, `get_metadata`, `query_data` |
+| **About** | Descripción del proyecto, cómo funciona, créditos. | — |
+
+### 3.3 Componentes
+
+- **Plotly** (`chart_renderer.py`) — clasifica columnas por tipo (datetime/numérica/categórica) y elige automáticamente serie temporal, barra agrupada o scatter. El alt-text descriptivo lo aporta `accessibility/chart_narrator.py`.
+- **Folium** (`map_renderer.py`) — cuando hay `lat/lon` o `cod_dpto/cod_mpio`, hace join con `gdxc-w37w` y dibuja capa coroplética.
+- **`st.dataframe`** — tabla filtrable + botón descarga CSV.
+
+### 3.4 Accesibilidad
+
+Ver [accessibility.md](./accessibility.md). Implementación en `app/components/accessibility/`:
+
+- `speech_input.py` — STT vía Web Speech API embebida con `streamlit.components.v1.html`. Fallback a `st.chat_input` cuando el navegador no soporta `SpeechRecognition`.
+- `speech_output.py` — TTS opcional: lee la respuesta del agente en voz alta. Se activa con el toggle del sidebar.
+- `chart_narrator.py` — alt-text auto-generado por gráfico (resumen estadístico narrado en español).
+- `a11y_toggle.py` — toggle global del sidebar que habilita STT/TTS por sesión.
+- WCAG 2.1 AA: contraste tema dark, navegación por teclado, foco visible.
+
+### 3.5 Backend del agente
+
+`app/agent_client.py` instancia un `ai_engine.Analyzer` único por sesión, parametrizado por `.env`:
+
+- `LLM_BACKEND=ollama` (default local) o `anthropic` (cloud).
+- Cliente MCP apunta a `http://mcp-server:8000/sse` (Docker Compose) o `http://localhost:8000/sse` (dev local).
+
+### 3.6 Fuera de scope del Sprint 4
+
+- PostgreSQL logging de consultas
+- Power BI / cualquier dashboard analítico
+- Autenticación de usuarios
 
 ## Base de Datos (PostgreSQL 16)
 
@@ -188,7 +234,7 @@ Schema en [`db/init.sql`](../db/init.sql). Tres tablas principales:
 - `dataset_usage` — qué datasets se usan cuánto, por entidad publicadora
 - `cross_operations` — operaciones de cruce ejecutadas (join_key, rows_result)
 
-Power BI consume estas tablas vía conector nativo de PostgreSQL.
+> **Nota Sprint 4:** la activación de logging en PostgreSQL queda fuera del scope del Sprint 4. El schema existe como referencia para un sprint posterior si se decide instrumentar el agente. Cualquier integración externa (Power BI, Metabase, Superset) puede conectarse a estas tablas vía conector nativo de PostgreSQL.
 
 ## APIs externas consumidas
 
@@ -212,7 +258,7 @@ Sin API key requerida. App Token opcional para mayor rate limit (registro en dat
 
 ## Infraestructura objetivo
 
-- 6 servicios Docker Compose (ollama, mcp-server, api, streamlit, postgres, nginx)
+- Servicios Docker Compose objetivo: `ollama`, `mcp-server`, `streamlit` (Sprint 4), `postgres` (referencia, sin activar aún), `nginx` (reverse proxy HTTPS)
 - VM Ubuntu 22.04/24.04 con 8 vCPU / 16 GB RAM
 - VPN FortiClient SSL para acceso administrativo (no expone a internet)
 - Nginx como reverse proxy HTTPS

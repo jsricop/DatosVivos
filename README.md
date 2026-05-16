@@ -12,30 +12,30 @@ Tres capas:
 
 1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
 2. **Motor de IA** — clasificador de intención (embeddings) + índice vectorial de metadatos + generador local (Ollama / Qwen 2.5 7B). **Sprints 2-3.**
-3. **Interfaces** — Streamlit para ciudadanos (chat + Plotly + Folium + voz), Power BI para analítica de uso. **Sprint 4.**
+3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + voz). **Sprint 4.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
 
 ## Stack objetivo
 
 Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-transformers · ChromaDB · PostgreSQL 16 · Streamlit · Plotly · Folium · Docker Compose · Nginx
 
-## Estado actual (2026-05-15)
+## Estado actual (2026-05-16)
 
 | Capa | Sprint | Estado |
 |---|---|---|
-| MCP Server (3 tools sobre datos.gov.co) | 1 | ✅ Funcional, 16 tests verdes |
-| Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional, 11 tests verdes |
-| `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional, 16+8 tests verdes |
-| Streamlit + Power BI + accesibilidad | 4 | 🔜 |
+| MCP Server (4 tools sobre datos.gov.co) | 1 + 3 | ✅ Funcional, tests verdes |
+| Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional |
+| `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
+| Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
+| Streamlit + accesibilidad (sin Power BI) | 4 | 🔜 En curso |
 | Docs CRISP-ML(Q) | 5 | 🔜 |
 
 ## Estructura
 
 ```
 mcp_server/   Capa 1 — MCP Server + clientes Socrata    (Sprint 1: ✅)
-ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3)
-app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4)
-api/          FastAPI backend                            (Sprint 4)
-db/           Schema PostgreSQL + migraciones            (Sprint 4)
+ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3: ✅)
+app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: 🔜)
+db/           Schema PostgreSQL (referencia)             (sprint posterior)
 scripts/      Indexación, mantenimiento                  (Sprint 2)
 docs/         Documentación CRISP-ML(Q)                  (Sprint 5)
 tests/        Pruebas pytest                             (continuo)
@@ -85,11 +85,11 @@ python -m scripts.build_index --output ./custom     # output custom
 
 ## Lo que NO funciona aún
 
-- `docker compose up` — los servicios `api`, `streamlit`, `nginx` son placeholders hasta Sprint 4
-- Interfaz Streamlit ciudadana — Sprint 4
-- Dashboard Power BI conectado a PostgreSQL — Sprint 4
+- `docker compose up` — los servicios `streamlit`, `nginx` son placeholders hasta Sprint 4
+- Interfaz Streamlit ciudadana — Sprint 4 (en curso)
 - Modo de accesibilidad (Web Speech API) — Sprint 4
 - Documentación CRISP-ML(Q) completa — Sprint 5
+- Power BI / logging persistente — fuera del scope, integración externa opcional
 
 ## Convenciones de desarrollo
 
