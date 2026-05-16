@@ -44,7 +44,13 @@ async def test_stdio_initialize_and_list_tools():
 
             tools_resp = await session.list_tools()
             names = {t.name for t in tools_resp.tools}
-            assert names == {"search_datasets", "get_metadata", "query_data"}, names
+            # cross_datasets agregada en Sprint 3 (PR feature/ai-sprint3)
+            assert names == {
+                "search_datasets",
+                "get_metadata",
+                "query_data",
+                "cross_datasets",
+            }, names
 
 
 @pytest.mark.live

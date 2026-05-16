@@ -10,7 +10,7 @@ Incluye un **modo de accesibilidad** para personas con discapacidad visual: entr
 
 Tres capas:
 
-1. **MCP Server** — expone tools sobre las APIs de Socrata de datos.gov.co. Sprint 1 entrega 3 tools (`search_datasets`, `get_metadata`, `query_data`); `cross_datasets` se agrega en Sprint 3.
+1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
 2. **Motor de IA** — clasificador de intención (embeddings) + índice vectorial de metadatos + generador local (Ollama / Qwen 2.5 7B). **Sprints 2-3.**
 3. **Interfaces** — Streamlit para ciudadanos (chat + Plotly + Folium + voz), Power BI para analítica de uso. **Sprint 4.**
 
@@ -23,9 +23,8 @@ Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-tra
 | Capa | Sprint | Estado |
 |---|---|---|
 | MCP Server (3 tools sobre datos.gov.co) | 1 | ✅ Funcional, 16 tests verdes |
-| Motor de IA (índice vectorial + clasificador) | 2 | 🔜 Por iniciar |
-| `cross_datasets` (cruce por DIVIPOLA/DANE) | 3 | 🔜 |
-| Ollama integration | 3 | 🔜 |
+| Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional, 11 tests verdes |
+| `cross_datasets` + Ollama + analyzer end-to-end | 3 | ✅ Funcional, 16 tests verdes |
 | Streamlit + Power BI + accesibilidad | 4 | 🔜 |
 | Docs CRISP-ML(Q) | 5 | 🔜 |
 
@@ -53,8 +52,13 @@ python3.11 -m venv .venv && source .venv/bin/activate
 # Para el MCP Server (Sprint 1)
 pip install -r requirements.mcp.txt -r requirements-dev.txt
 
-# Adicionalmente, para el motor de IA (Sprint 2: índice vectorial + clasificador)
+# Adicionalmente, para el motor de IA (Sprint 2: índice vectorial + clasificador, Sprint 3: orquestación)
 pip install -r requirements.ai.txt
+
+# Sprint 3 requiere Ollama corriendo local para tests con LLM real:
+#   brew install ollama && ollama serve &
+#   ollama pull qwen2.5-coder:3b
+# (Sin Ollama, los tests dependientes se saltan con skipif. Suite no-LLM corre normal.)
 
 # 2. Configurar entorno (opcional para el MCP Server — funciona con defaults)
 cp .env.example .env

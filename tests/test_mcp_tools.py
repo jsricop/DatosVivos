@@ -126,11 +126,6 @@ async def test_search_datasets_no_matches_returns_empty_list():
     assert results == []
 
 
-async def test_cross_datasets_is_not_registered():
-    """cross_datasets es Sprint 3 — debe NO aparecer en list_tools."""
-    tools = await mcp.list_tools()
-    names = {t.name for t in tools}
-    assert (
-        "cross_datasets" not in names
-    ), f"cross_datasets se registró antes de tiempo (Sprint 3). Tools actuales: {names}"
-    assert names == {"search_datasets", "get_metadata", "query_data"}
+# Guard `test_cross_datasets_is_not_registered` eliminado en Sprint 3:
+# cross_datasets YA está registrada (ver tests/test_sprint3_acceptance.py::
+# test_cross_datasets_is_registered_in_mcp_server).
