@@ -57,21 +57,35 @@ Expone **tools MCP** (Model Context Protocol) sobre las APIs públicas de Socrat
 
 Ver [glosario](./glossary.md) para qué es MCP.
 
-### Tools expuestas (Sprint 1)
+### Tools expuestas
 
 | Tool | Input | Output | Fuente |
 |---|---|---|---|
 | `search_datasets` | `query: str, limit: int` | lista de datasets con id, name, entity, etc. | Discovery API |
 | `get_metadata` | `dataset_id: str` | esquema (columnas, tipos, descripción) | Metadata API |
 | `query_data` | `dataset_id, soql_query?, limit, offset` | filas como dicts | SODA API |
+| `cross_datasets` | `dataset_ids: list[str], join_keys: str \| list[str], select_columns?, per_dataset_limit?` | filas merged | Descarga 1-5 datasets, encadena pandas merges |
 
-### Tool planeada (Sprint 3)
+### `cross_datasets` — el diferenciador
 
-| Tool | Input | Output | Lógica |
-|---|---|---|---|
-| `cross_datasets` | `dataset_a_id, dataset_b_id, join_key, select_columns?` | filas merged | Descarga ambos, pandas merge |
+Cruza de **1 a 5 datasets** de entidades distintas por claves territoriales comunes (DIVIPOLA, código DANE, NIT, departamento, municipio).
 
-`cross_datasets` es el **diferenciador** del proyecto. Cruza datasets de entidades distintas por claves territoriales comunes (DIVIPOLA, código DANE, NIT, departamento, municipio).
+**Cardinalidades:**
+- `N=1` → devuelve filas del dataset sin merge.
+- `N=2` → comportamiento pairwise canónico.
+- `N=3..5` → cadena de merges, cada uno verificado.
+- `N=0` o `N>5` → `ToolError` con mensaje explícito.
+
+**Variantes de `join_keys`:**
+- **String único:** la misma columna existe en todos los datasets (caso común con DIVIPOLA).
+- **Lista de N-1 strings:** una key por cada paso de merge (cuando las columnas se llaman distinto entre datasets).
+- **`None`:** solo válido si N=1. Para N≥2 es error explícito — NO auto-detectamos columnas comunes (causa típica de falsos positivos).
+
+**Garantías anti-falsos-positivos:**
+- Verificación previa: si la `join_key` falta en algún dataset, se aborta con error que identifica cuál.
+- Short-circuit: si un merge intermedio queda vacío, no se descargan los datasets siguientes (ahorra red y memoria).
+- Cap por dataset (5.000) + cap intermedio (5.000) + cap final (5.000) — defensa en profundidad contra joins runaway.
+- NO se infiere "columna común" por nombre coincidente — el caller debe declarar explícitamente.
 
 ### Transportes soportados
 

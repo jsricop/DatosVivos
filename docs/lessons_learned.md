@@ -110,6 +110,42 @@ items = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
 
 ---
 
+## Extensión cross-multi (post-Sprint 3)
+
+### 💡 Auto-detectar columnas comunes es la causa típica de falsos positivos en joins
+
+**Contexto:** al extender `cross_datasets` para soportar 1-5 datasets, era tentador auto-detectar la columna compartida por nombre (intersección de `df_a.columns ∩ df_b.columns`). Decidimos NO hacerlo.
+
+**Razón:** dos datasets pueden tener `id` con significados completamente distintos (uno es row ID, otro es código municipal). Auto-merge produciría un resultado vacío o ruidoso sin que nadie se entere de por qué.
+
+**Solución:** la `join_keys` es **obligatoria** y explícita. Para N=2 puede ser un string; para N>2 un string (misma columna en todos) o lista de N-1 strings (per-pair). `None` solo válido si N=1.
+
+**Implicación:** el LLM o usuario debe DECIDIR conscientemente qué columna usar como bisagra. Si no sabe, primero consulta `get_metadata` de cada dataset.
+
+**Aplicabilidad:** cualquier merge/join entre fuentes externas. La regla "no infieras, exige explícito" es estándar en data engineering productiva (Airflow, dbt) — la copiamos acá.
+
+---
+
+### 💡 Short-circuit en cadenas de merges evita descargas inútiles
+
+**Contexto:** en una cadena `A⨝B⨝C⨝D⨝E`, si `A⨝B` queda vacío, seguir descargando C/D/E gasta red, memoria y tiempo. El resultado final será vacío de todas formas.
+
+**Solución:** después de cada merge intermedio, si el DataFrame resultante está vacío, retornar `[]` inmediatamente. Verificado con un test que usa `monkeypatch` para espiar las llamadas a SODA API y confirma que el tercer dataset NO se descarga si el primer merge ya colapsó.
+
+**Aplicabilidad:** cualquier pipeline ETL con joins encadenados. También aplicable a futuras tools que orquesten múltiples llamadas externas.
+
+---
+
+### 💡 Verificación previa al merge supera a manejo de errores post-merge
+
+**Contexto:** `pandas.merge` con una columna inexistente lanza un `KeyError` críptico. Mucho más útil verificar antes y dar un error que diga "el dataset 'vcjz-niiq' (posición 2) no tiene la columna 'cod_dpto', columnas disponibles: [...]".
+
+**Implementación:** `_check_column_in_df` validador previo a cada paso de merge. Lanza `ToolError` con el dataset_id, su rol en la cadena, y las primeras 15 columnas disponibles.
+
+**Aplicabilidad:** validaciones previas a operaciones costosas son universalmente preferibles a manejo de excepciones post-hoc. Más útil para el consumidor (humano o LLM) y más rápido para abortar.
+
+---
+
 ## Sprint 3 (May 2026)
 
 ### 🐛 Modelos LLM pequeños (3B) necesitan **valores de ejemplo**, no solo nombres de columna

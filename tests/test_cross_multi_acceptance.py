@@ -22,9 +22,7 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from mcp.server.fastmcp.exceptions import ToolError
-
 
 # ============================================================
 # Datasets reales que comparten `cod_dpto`:
@@ -58,7 +56,6 @@ def _unwrap(result):
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 async def test_cross_multi_zero_datasets_raises_useful_error():
     """N=0: error explícito, no caída silenciosa."""
     from mcp_server.server import mcp
@@ -71,7 +68,6 @@ async def test_cross_multi_zero_datasets_raises_useful_error():
     assert "vac" in str(exc_info.value).lower() or "0" in str(exc_info.value)
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_single_dataset_returns_rows_without_merge():
     """N=1: devuelve las filas del dataset, sin merge. `join_keys` puede ser None."""
@@ -87,7 +83,6 @@ async def test_cross_multi_single_dataset_returns_rows_without_merge():
     assert len(rows) <= 10, "per_dataset_limit debería capear"
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 async def test_cross_multi_rejects_more_than_five_datasets():
     """N>5: error explícito por seguridad (cap definido en Sprint extension)."""
     from mcp_server.server import mcp
@@ -109,7 +104,6 @@ async def test_cross_multi_rejects_more_than_five_datasets():
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_pairwise_with_shared_key():
     """N=2: comportamiento equivalente al Sprint 3 con la nueva firma."""
@@ -132,7 +126,6 @@ async def test_cross_multi_pairwise_with_shared_key():
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_three_datasets_with_common_key():
     """N=3 todas comparten `cod_dpto`. join_keys puede ser string único."""
@@ -158,7 +151,6 @@ async def test_cross_multi_three_datasets_with_common_key():
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_accepts_list_of_join_keys():
     """N=3 con `join_keys` como lista de N-1 elementos (per-pair)."""
@@ -181,7 +173,6 @@ async def test_cross_multi_accepts_list_of_join_keys():
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_invalid_key_in_middle_of_chain_errors():
     """N=3 donde el dataset del medio NO tiene la key. Error útil que identifica
@@ -208,14 +199,12 @@ async def test_cross_multi_invalid_key_in_middle_of_chain_errors():
 # ============================================================
 
 
-@pytest.mark.skip(reason="cross-multi WIP — implementar antes de mergear")
 @pytest.mark.live
 async def test_cross_multi_short_circuits_on_empty_intermediate_merge(monkeypatch):
     """Si A⨝B = [], NO se debe descargar C. Verifica con spy sobre SodaClient."""
-    from mcp_server.socrata.soda_client import SodaClient
     from mcp_server.server import mcp
+    from mcp_server.socrata.soda_client import SodaClient
 
-    original_query = SodaClient.query
     call_log: list[str] = []
 
     async def spy_query(self, dataset_id, **kwargs):
@@ -240,6 +229,5 @@ async def test_cross_multi_short_circuits_on_empty_intermediate_merge(monkeypatc
     rows = _unwrap(result)
     assert rows == [], "esperaba [] cuando el primer merge queda vacío"
     assert DS_MUNI_GEO not in call_log, (
-        f"short-circuit falló: se descargó {DS_MUNI_GEO} aunque A⨝B = []. "
-        f"Llamadas: {call_log}"
+        f"short-circuit falló: se descargó {DS_MUNI_GEO} aunque A⨝B = []. " f"Llamadas: {call_log}"
     )
