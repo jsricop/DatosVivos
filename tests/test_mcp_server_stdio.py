@@ -70,3 +70,26 @@ async def test_stdio_call_tool_end_to_end():
             assert len(rows) == 1
             assert rows[0]["cod_dpto"] == "05"
             assert int(rows[0]["n"]) == 125
+
+
+@pytest.mark.live
+@pytest.mark.integration
+async def test_stdio_call_cross_datasets_via_protocol():
+    """`cross_datasets` callable vía protocolo MCP stdio real (no solo in-process).
+
+    Cubre gap: hasta ahora cross_datasets via stdio no estaba probado end-to-end.
+    """
+    async with stdio_client(_build_params()) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool(
+                "cross_datasets",
+                {
+                    "dataset_ids": ["gdxc-w37w", "t7kp-7a7c"],
+                    "join_keys": "cod_dpto",
+                },
+            )
+            assert not result.isError
+            rows = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
+            assert rows, "cross_datasets vía stdio devolvió vacío"
+            assert "cod_dpto" in rows[0]

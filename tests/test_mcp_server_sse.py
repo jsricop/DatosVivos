@@ -151,3 +151,54 @@ async def test_sse_call_query_data_soql(mcp_server: str):
             # Antioquia (05) debe seguir siendo el top con 125 municipios
             assert rows[0]["cod_dpto"] == "05"
             assert int(rows[0]["n"]) == 125
+
+
+# ============================================================
+# Coverage gap fills: cross_datasets + search con Tier 2 sobre SSE
+# ============================================================
+
+
+@pytest.mark.live
+@pytest.mark.integration
+async def test_sse_call_cross_datasets_via_protocol(mcp_server: str):
+    """`cross_datasets` debe ser callable via el protocolo MCP SSE real,
+    no solo in-process. Cubre gap: hasta ahora cross_datasets se probaba con
+    mcp.call_tool directo; este test usa sse_client externo."""
+    async with sse_client(mcp_server) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool(
+                "cross_datasets",
+                {
+                    "dataset_ids": ["gdxc-w37w", "t7kp-7a7c"],
+                    "join_keys": "cod_dpto",
+                },
+            )
+            rows = _extract_blocks(result)
+            assert rows, "cross_datasets vía SSE devolvió vacío"
+            assert "cod_dpto" in rows[0], f"Esperaba columna cod_dpto en primer row: {rows[0]}"
+
+
+@pytest.mark.live
+@pytest.mark.integration
+async def test_sse_search_thematic_query_via_topic_fallback(mcp_server: str):
+    """Query temática que NO menciona entidad por nombre debe encontrar
+    resultados vía Tier 2 (topic keywords iterativo).
+
+    Cubre gap: el flujo Tier 2 estaba testeado in-process (`expand_with_topics_iterative`)
+    pero NO via el protocolo MCP SSE. Esta es la verificación end-to-end
+    del recall mejorado.
+    """
+    async with sse_client(mcp_server) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            # "Información sobre vacunación" no menciona MinSalud/INS por nombre.
+            # Tier 1 (acrónimos) no expande. Tier 2 debe encontrar entidades
+            # de salud por keyword matching.
+            result = await session.call_tool(
+                "search_datasets",
+                {"query": "información sobre vacunación", "limit": 5},
+            )
+            items = _extract_blocks(result)
+            assert items, "Esperaba resultados vía Tier 2 para query temática"
+            assert any("id" in r and "name" in r for r in items)

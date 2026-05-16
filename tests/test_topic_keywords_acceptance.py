@@ -221,6 +221,44 @@ async def test_discovery_iterative_returns_empty_when_all_groups_exhausted(monke
 # ============================================================
 
 
+async def test_analyzer_tier2_and_tier3_both_fail_returns_empty_with_narrative(monkeypatch):
+    """Edge case: Tier 1 no expande, Tier 2 iter exhausta vacíos, Tier 3 reformula
+    pero el resultado tampoco encuentra nada → AnalysisResult con datasets_used=[]
+    + narrativa explicativa (no crash, no None).
+
+    Cubre gap: el caso de fallo total no estaba testeado explícitamente.
+    """
+    from ai_engine.analyzer import Analyzer
+    from ai_engine.intent_classifier import IntentClassifier
+    from ai_engine.llm_backend import MockBackend
+    from ai_engine.vector_index import VectorIndex
+
+    # Mock LLM que reformula a algo que sigue sin encontrar nada
+    mock = MockBackend(default_response="zzqqxx987nonsense")
+    mock.add_response(prompt_contains="reformula", response="zzzz9999nope")
+
+    # Forzar que vector_index.search SIEMPRE devuelva [] (Tier 2/3 ambos fallan)
+    from ai_engine.vector_index import VectorIndex as VI
+
+    monkeypatch.setattr(VI, "search", lambda self, q, k=5: [])
+
+    analyzer = Analyzer(
+        vector_index=VectorIndex.load(),
+        intent_classifier=IntentClassifier(),
+        llm_backend=mock,
+    )
+    result = await analyzer.analyze("xyz nonsense plugh query")
+
+    # Esperamos respuesta estructurada, no crash:
+    assert result is not None
+    assert hasattr(result, "datasets_used") or "datasets_used" in result
+    datasets = result.datasets_used if hasattr(result, "datasets_used") else result["datasets_used"]
+    assert datasets == [], f"Esperaba lista vacía cuando todo falla, vi: {datasets}"
+    # Narrativa debe existir (no None, no string vacío)
+    narrative = result.narrative if hasattr(result, "narrative") else result.get("narrative", "")
+    assert isinstance(narrative, str) and len(narrative) > 0
+
+
 async def test_analyzer_invokes_llm_reformulation_when_topic_fallback_empty():
     """Si tiers 1 y 2 retornan [], el analyzer pide reformulación al LLM."""
     from ai_engine.analyzer import Analyzer
