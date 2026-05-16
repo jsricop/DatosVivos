@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from ..settings import settings
+from .acronyms import expand_query
 
 
 class DiscoveryClient:
@@ -48,7 +49,9 @@ class DiscoveryClient:
             "only": "dataset",
         }
         if query:
-            params["q"] = query
+            # Expandir acrónimos del sector público colombiano (MinTIC, DANE, etc.)
+            # antes de pegarle a Socrata. Mejora matching con `attribution`.
+            params["q"] = expand_query(query)
         headers = {"User-Agent": "DatosVivos/0.1 (+https://github.com/jsricop/DatosVivos)"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(self.base_url, params=params, headers=headers)
