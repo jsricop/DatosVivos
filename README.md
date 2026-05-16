@@ -73,6 +73,36 @@ docker run --rm -p 3000:3000 -e MCP_TRANSPORT=sse datosvivos-mcp:dev
 - `scripts/build_index.py` — stub vacío, se implementa en Sprint 2
 - Integración con Ollama, vector index, Streamlit — pendientes según cronograma
 
+## Seguridad y privacidad
+
+- DatosVivos opera **exclusivamente** sobre datos públicos de [datos.gov.co](https://www.datos.gov.co)
+- No accede, procesa ni expone información interna de la ANI ni de ninguna entidad del Estado
+- El modelo LLM corre **localmente** (Ollama) — ni consultas ciudadanas ni datos analizados salen del servidor
+- La VM productiva está detrás de VPN (FortiClient SSL) — no expuesta a internet público
+- Las credenciales viven en `.env` (`.gitignore`d) — nunca en código
+- El repositorio público en GitHub solo contiene código, no datos ni credenciales
+
+## Documentación
+
+- [`docs/architecture.md`](docs/architecture.md) — arquitectura de tres capas, APIs externas, infraestructura objetivo
+- [`docs/accessibility.md`](docs/accessibility.md) — modo accesible (voz in/out, WCAG 2.1, Ley 1618)
+- [`docs/glossary.md`](docs/glossary.md) — términos del dominio (DIVIPOLA, SoQL, MCP, etc.)
+- [`docs/lessons_learned.md`](docs/lessons_learned.md) — bugs no obvios y gotchas capturados durante desarrollo
+- [`docs/01..06_*.md`](docs/) — fases CRISP-ML(Q) (Sprint 5)
+
+## Referencias
+
+- [datos.gov.co](https://www.datos.gov.co) — Portal de datos abiertos de Colombia
+- [SODA API](https://dev.socrata.com/consumers/getting-started.html) — Documentación de la API de consulta
+- [Discovery API](https://socratadiscovery.docs.apiary.io/) — Documentación de búsqueda de datasets
+- [MCP Protocol](https://modelcontextprotocol.io/) — Especificación del Model Context Protocol
+- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — SDK oficial
+- [Ollama](https://ollama.ai) — Servidor de modelos LLM locales
+- [CRISP-ML(Q)](https://arxiv.org/abs/2003.05155) — Paper del marco metodológico
+- [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) — STT/TTS del navegador
+- [WCAG 2.1](https://www.w3.org/TR/WCAG21/) — Estándar de accesibilidad web
+- [Ley 1618 de 2013](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=52081) — Accesibilidad TIC en Colombia
+
 ## Licencia
 
 MIT — ver [LICENSE](LICENSE).
