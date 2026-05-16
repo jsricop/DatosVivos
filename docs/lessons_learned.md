@@ -110,7 +110,53 @@ items = [json.loads(b.text) for b in result.content if getattr(b, "text", None)]
 
 ---
 
-## Sprint 2 (en curso)
+## Sprint 3 (May 2026)
+
+### 🐛 Modelos LLM pequeños (3B) necesitan **valores de ejemplo**, no solo nombres de columna
+
+**Síntoma:** Qwen 2.5 Coder 3B generaba `WHERE cod_dpto = 'ANTIOQUIA'` cuando el ciudadano preguntaba *"¿cuántos municipios tiene Antioquia?"*. La query era sintácticamente válida pero semánticamente incorrecta: `cod_dpto` contiene códigos ('05'), no nombres ('ANTIOQUIA'). El SoQL devolvía 0 filas en vez de 125.
+
+**Causa raíz:** las descripciones de columnas en datos.gov.co están **mayormente vacías**. Un LLM pequeño no puede inferir solo del nombre `cod_dpto` que es un código y no un nombre. Un humano sí lo intuye pero el modelo no.
+
+**Solución:** `QueryGenerator` acepta `sample_rows` en el schema. Cuando están presentes, se inyectan en el prompt como "EJEMPLOS DE VALORES — Fila 1: cod_dpto='05', dpto='ANTIOQUIA', ...". Esto hace que la distinción código/nombre sea explícita.
+
+**Aplicabilidad:** cualquier pipeline NL→SQL con LLMs pequeños y esquemas con descripciones pobres. Si subimos a Qwen 7B en la VM, probablemente esto sea menos crítico pero igual mejora la calidad.
+
+---
+
+### 🐛 LLMs entrenados en SQL agregan `FROM tabla` por hábito; SoQL no lo usa
+
+**Síntoma:** Qwen generaba `SELECT count(*) FROM tabla WHERE ...` mientras que SoQL no usa cláusula `FROM` (el dataset es el endpoint URL). Socrata respondía 400.
+
+**Solución:** post-procesamiento en `_strip_from_clause()` que elimina `FROM <ident>` del SoQL antes de retornarlo. Regex simple, robusta a casos comunes.
+
+**Aplicabilidad:** cualquier consumo de SoQL generado por LLM. También útil filtrar otros artefactos comunes (`;` final, backticks de markdown, etc.).
+
+---
+
+### 🐛 Validar columnas referenciadas requiere stripping de aliases `AS xxx`
+
+**Síntoma:** mi validador de "columnas referenciadas deben estar en el esquema" rechazaba `SELECT count(*) AS total WHERE dpto='ANTIOQUIA'` porque `total` no estaba en el esquema. Pero `total` es un **alias** inventado por el LLM, no una columna existente.
+
+**Causa:** el regex extraía todos los tokens, incluyendo los que vienen después de `AS`.
+
+**Solución:** preprocesar el SoQL eliminando `\bAS\s+\w+\b` antes de extraer tokens.
+
+**Aplicabilidad:** cualquier sistema que valide AST de SQL/SoQL contra un esquema. Cuidado también con otros artefactos: tabla virtuales (CTEs `WITH x AS (...)`), subconsultas, etc.
+
+---
+
+### 💡 Datasets conceptualmente pares pueden NO compartir columnas
+
+**Contexto:** elegí `gdxc-w37w` (DIVIPOLA municipios) y `vcjz-niiq` (DIVIPOLA departamentos) como par de prueba para `cross_datasets`. Asumí que ambos usarían `cod_dpto`. Falso: `vcjz-niiq` usa `codigo_departamento`. Aunque son del mismo equipo (DANE) y conceptualmente representan lo mismo, las convenciones de naming difieren.
+
+**Lección:** **NUNCA asumir** la consistencia de naming entre datasets de datos.gov.co, ni siquiera entre datasets del mismo publicador. SIEMPRE verificar con `get_metadata` antes de cross.
+
+**Implicación para el motor de IA:** `cross_datasets` debería poder recibir dos columnas distintas (`join_left`, `join_right`) o hacer matching fuzzy. Por ahora pedimos columna idéntica; futura iteración puede aceptar dos.
+
+---
+
+## Sprint 2 (May 2026)
 
 ### 🐛 Embeddings tipo e5 floorean cosine similarity en ~0.7
 
