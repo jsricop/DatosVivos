@@ -52,6 +52,23 @@ def test_acronyms_entries_have_required_fields():
         assert entry["aliases"], f"aliases vacío: {entry}"
 
 
+def test_acronyms_thesaurus_coverage_at_least_90_percent():
+    """Al menos 90% de las entidades deben tener ≥3 aliases (tesauros reales,
+    no solo la sigla oficial). Esto evita regresión a un diccionario de solo siglas.
+
+    Las únicas excepciones aceptables son entidades muy menores o con sigla
+    suficientemente distintiva (que no admite formas coloquiales obvias).
+    """
+    from mcp_server.socrata.acronyms import ENTITIES
+
+    with_thesaurus = sum(1 for e in ENTITIES if len(e["aliases"]) >= 3)
+    coverage = with_thesaurus / len(ENTITIES)
+    assert coverage >= 0.90, (
+        f"Cobertura de tesauros insuficiente: {coverage:.0%} ({with_thesaurus}/{len(ENTITIES)}). "
+        f"Esperaba ≥ 90% con ≥3 aliases."
+    )
+
+
 def test_acronyms_includes_core_ministries():
     """Los ministerios principales deben estar presentes con sus variantes comunes."""
     from mcp_server.socrata.acronyms import ENTITIES

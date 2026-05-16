@@ -3,22 +3,27 @@
 Permite que `DiscoveryClient.search()` expanda automáticamente acrónimos
 y formas coloquiales al nombre canónico antes de pegarle a Socrata. Esto
 mejora la calidad de resultados cuando el ciudadano escribe con jerga
-ministerial ("MinTIC", "MEN") en vez del nombre completo de la entidad.
+ministerial ("MinTIC", "MEN") o formas descriptivas ("instituto del clima",
+"pruebas Saber") en vez del nombre completo de la entidad.
 
 Decisiones de diseño:
 - `canonical`: nombre oficial EXACTO como aparece en `attribution` de
   datos.gov.co (extraído programáticamente del catálogo de 8.389 datasets).
-- `aliases`: lista de variantes que la gente usa REALMENTE (siglas oficiales,
-  abreviaciones, variantes con/sin acentos, nombres antiguos, tesauros).
+- `aliases`: lista de variantes — sigla oficial, abreviaciones, variantes
+  con/sin acentos, nombres antiguos, formas descriptivas, tesauros que la
+  gente usa REALMENTE en redes / búsquedas / habla coloquial.
 - `category`: ministerio, departamento_administrativo, instituto, agencia,
   unidad, superintendencia, organismo_control, empresa_estado, otro.
 
 Matching: case-insensitive con word-boundary regex que respeta caracteres
 acentuados (evita falsos positivos tipo "ANI" dentro de "anillo").
 
+Cobertura: ≥3 aliases por entidad en al menos 90% del diccionario (verificado
+en `test_acronyms_thesaurus_coverage_at_least_90_percent`).
+
 Fuente principal: extracción automática del catálogo de datos.gov.co
-(2026-05-16, 8.389 datasets). Complementado con tesauros y nombres
-antiguos comunes (Colciencias→MinCiencias, Coldeportes→MinDeporte, etc.).
+(2026-05-16, 8.389 datasets). Tesauros complementarios derivados de
+búsqueda web + conocimiento del dominio gubernamental colombiano.
 """
 
 from __future__ import annotations
@@ -32,146 +37,184 @@ def _entry(canonical: str, aliases: list[str], category: str) -> dict:
 
 
 # ============================================================
-# Ministerios (canónicos exactos del catálogo)
+# Ministerios
 # ============================================================
 MINISTERIOS: Final[list[dict]] = [
     _entry(
         "Ministerio de Tecnologías de la Información y las Comunicaciones",
         [
-            "MinTIC",
-            "Min TIC",
-            "Ministerio de las TIC",
-            "Ministerio TIC",
-            "Ministerio de tecnologías",
-            "Min Tic",
+            "MinTIC", "Min TIC", "Min Tic",
+            "Ministerio de las TIC", "Ministerio TIC",
+            "Ministerio de tecnologías", "Ministerio de Tecnologías",
+            "Ministerio TICs", "ministerio de comunicaciones",
         ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Educación Nacional",
         [
-            "MinEducación",
-            "MinEducacion",
-            "MEN",
-            "Min Educación",
-            "Ministerio de Educación",
-            "Min Educacion",
+            "MinEducación", "MinEducacion", "MEN",
+            "Min Educación", "Min Educacion",
+            "Ministerio de Educación", "Ministerio de Educacion",
+            "Educación Nacional", "ministerio educación",
         ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Salud y Protección Social",
-        ["MinSalud", "Min Salud", "Ministerio de Salud"],
+        [
+            "MinSalud", "Min Salud",
+            "Ministerio de Salud", "Ministerio de la Salud",
+            "Protección Social", "salud pública nacional",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Hacienda y Crédito Público",
-        ["MinHacienda", "MHCP", "Min Hacienda", "Ministerio de Hacienda"],
+        [
+            "MinHacienda", "MHCP", "Min Hacienda",
+            "Ministerio de Hacienda", "Hacienda Pública",
+            "Crédito Público", "ministerio de finanzas",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Ambiente y Desarrollo Sostenible",
-        ["MinAmbiente", "MADS", "Min Ambiente", "Ministerio de Ambiente"],
+        [
+            "MinAmbiente", "MADS", "Min Ambiente",
+            "Ministerio de Ambiente", "Ministerio del Medio Ambiente",
+            "Medio Ambiente", "Desarrollo Sostenible",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Defensa Nacional",
-        ["MinDefensa", "Min Defensa", "Ministerio de Defensa"],
+        [
+            "MinDefensa", "Min Defensa",
+            "Ministerio de Defensa", "Defensa Nacional",
+            "Fuerzas Militares", "ministerio fuerzas armadas",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio del Interior",
-        ["MinInterior", "Min Interior"],
+        [
+            "MinInterior", "Min Interior",
+            "Ministerio del Interior", "Gobernación Nacional",
+            "ministerio de gobierno",
+        ],
         "ministerio",
     ),
     _entry(
-        "Ministerio de Justicia y del derecho",  # canonical EXACTO del catálogo (con "del derecho" en minúscula)
+        "Ministerio de Justicia y del derecho",
         [
-            "MinJusticia",
-            "Min Justicia",
-            "Ministerio de Justicia",
-            "Ministerio de Justicia y del Derecho",
+            "MinJusticia", "Min Justicia",
+            "Ministerio de Justicia", "Ministerio de Justicia y del Derecho",
+            "Justicia y del Derecho",
         ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Agricultura y Desarrollo Rural",
-        ["MinAgricultura", "MADR", "Min Agricultura", "Ministerio de Agricultura"],
+        [
+            "MinAgricultura", "MADR", "Min Agricultura",
+            "Ministerio de Agricultura", "Agricultura Nacional",
+            "Desarrollo Rural", "ministerio agropecuario",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Comercio, Industria y Turismo",
-        ["MinCIT", "MinComercio", "Min Comercio", "Ministerio de Comercio"],
+        [
+            "MinCIT", "MinComercio", "Min Comercio", "Min CIT",
+            "Ministerio de Comercio", "Comercio Industria Turismo",
+            "ministerio de turismo",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio del Trabajo",
-        ["MinTrabajo", "Min Trabajo"],
+        [
+            "MinTrabajo", "Min Trabajo",
+            "Ministerio del Trabajo", "Ministerio de Trabajo",
+            "Trabajo Nacional",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Transporte",
-        ["MinTransporte", "Min Transporte"],
+        [
+            "MinTransporte", "Min Transporte",
+            "Ministerio de Transporte", "Transporte Nacional",
+            "ministerio de movilidad",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Vivienda, Ciudad y Territorio",
-        ["MinVivienda", "Min Vivienda", "Ministerio de Vivienda"],
+        [
+            "MinVivienda", "Min Vivienda",
+            "Ministerio de Vivienda", "Vivienda Ciudad Territorio",
+            "ministerio de ciudad",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Minas y Energía",
         [
-            "MinMinas",
-            "MinEnergía",
-            "MME",
-            "Min Minas",
-            "Min Energía",
-            "Ministerio de Minas",
-            "Ministerio de Energía",
+            "MinMinas", "MinEnergía", "MME",
+            "Min Minas", "Min Energía",
+            "Ministerio de Minas", "Ministerio de Energía",
+            "Minas y Energía",
         ],
         "ministerio",
     ),
     _entry(
-        "Ministerio de las Culturas, las Artes y los Saberes",  # canonical actualizado del catálogo
+        "Ministerio de las Culturas, las Artes y los Saberes",
         [
-            "MinCultura",
-            "Min Cultura",
-            "Ministerio de Cultura",
+            "MinCultura", "Min Cultura",
+            "Ministerio de Cultura", "Ministerio de las Culturas",
             "Ministerio de Cultura, las Artes y los Saberes",
+            "Cultura Nacional",
         ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Ciencia, Tecnología e Innovación",
         [
-            "MinCiencias",
-            "MinCiencia",
-            "Minciencias",
-            "Min Ciencias",
-            "Colciencias",
-        ],  # nombre antiguo
+            "MinCiencias", "MinCiencia", "Minciencias", "Min Ciencias",
+            "Colciencias",  # nombre antiguo
+            "Ministerio de Ciencias", "Ciencia y Tecnología",
+            "Ciencia Tecnología e Innovación",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio del Deporte",
-        ["MinDeporte", "Min Deporte", "Coldeportes"],  # nombre antiguo
+        [
+            "MinDeporte", "Min Deporte",
+            "Coldeportes",  # nombre antiguo
+            "Ministerio del Deporte", "Ministerio de Deportes",
+            "Deporte Nacional",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Igualdad y Equidad",
-        ["MinIgualdad", "Min Igualdad"],
+        [
+            "MinIgualdad", "Min Igualdad",
+            "Ministerio de Igualdad", "Igualdad y Equidad",
+            "Ministerio de la Igualdad",
+        ],
         "ministerio",
     ),
     _entry(
         "Ministerio de Relaciones Exteriores",
         [
-            "MinExterior",
-            "MinExteriores",
-            "Cancillería",
-            "Cancilleria",
-            "Min Exteriores",
-        ],  # Cancillería como tesauro común
+            "MinExterior", "MinExteriores", "Min Exteriores",
+            "Cancillería", "Cancilleria",
+            "Ministerio de Exteriores", "Relaciones Exteriores",
+        ],
         "ministerio",
     ),
 ]
@@ -182,37 +225,59 @@ MINISTERIOS: Final[list[dict]] = [
 # ============================================================
 DEPARTAMENTOS_ADMINISTRATIVOS: Final[list[dict]] = [
     _entry(
-        "Departamento Administrativo Nacional de Estadísticas",  # plural EXACTO del catálogo
+        "Departamento Administrativo Nacional de Estadísticas",
         [
-            "DANE",
-            "Dane",
+            "DANE", "Dane",
             "Departamento Administrativo Nacional de Estadística",
-        ],  # variante singular común
+            "Estadísticas Nacionales", "Estadística Nacional",
+            "Censo Nacional",
+        ],
         "departamento_administrativo",
     ),
     _entry(
         "Departamento Nacional de Planeación",
-        ["DNP"],
+        [
+            "DNP",
+            "Planeación Nacional", "Departamento de Planeación",
+            "Planeación del Estado",
+        ],
         "departamento_administrativo",
     ),
     _entry(
         "Departamento Administrativo de la Función Pública",
-        ["DAFP", "Función Pública", "Funcion Publica"],
+        [
+            "DAFP",
+            "Función Pública", "Funcion Publica",
+            "Departamento de Función Pública",
+        ],
         "departamento_administrativo",
     ),
     _entry(
         "Departamento Administrativo para la Prosperidad Social",
-        ["DPS", "Prosperidad Social"],
+        [
+            "DPS",
+            "Prosperidad Social", "Departamento de Prosperidad",
+            "Prosperidad",
+        ],
         "departamento_administrativo",
     ),
     _entry(
-        "Departamento Administrativo de la Presidencia de La República",  # capitalización EXACTA del catálogo
-        ["DAPRE", "Presidencia", "Departamento Administrativo de la Presidencia"],
+        "Departamento Administrativo de la Presidencia de La República",
+        [
+            "DAPRE",
+            "Presidencia", "Casa de Nariño",
+            "Departamento Administrativo de la Presidencia",
+            "Presidencia de la República",
+        ],
         "departamento_administrativo",
     ),
     _entry(
         "Departamento Administrativo Dirección Nacional de Inteligencia",
-        ["DNI"],
+        [
+            "DNI",
+            "Dirección Nacional de Inteligencia", "Inteligencia Nacional",
+            "Inteligencia del Estado",
+        ],
         "departamento_administrativo",
     ),
 ]
@@ -224,82 +289,150 @@ DEPARTAMENTOS_ADMINISTRATIVOS: Final[list[dict]] = [
 INSTITUTOS: Final[list[dict]] = [
     _entry(
         "Instituto Colombiano de Bienestar Familiar",
-        ["ICBF", "Bienestar Familiar"],
+        [
+            "ICBF",
+            "Bienestar Familiar", "Instituto de Bienestar",
+            "Bienestar Familiar Colombia",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto de Hidrología, Meteorología y Estudios Ambientales",
-        ["IDEAM"],
+        [
+            "IDEAM",
+            "Hidrología y Meteorología", "Meteorología Colombia",
+            "instituto del clima", "instituto de meteorología",
+            "Estudios Ambientales",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional de Vigilancia de Medicamentos y Alimentos",
-        ["INVIMA"],
+        [
+            "INVIMA",
+            "Vigilancia de Medicamentos", "Control de Medicamentos",
+            "Vigilancia Sanitaria", "control sanitario",
+            "Medicamentos y Alimentos",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional de Vías",
-        ["INVÍAS", "INVIAS"],
+        [
+            "INVÍAS", "INVIAS",
+            "Instituto de Vías", "Vías Nacionales",
+            "Carreteras Nacionales", "infraestructura vial",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Colombiano para la Evaluación de la Educación",
-        ["ICFES"],
+        [
+            "ICFES",
+            "Pruebas Saber", "exámenes de Estado",
+            "examen ICFES", "Saber 11",
+            "Evaluación de la Educación",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional Penitenciario y Carcelario",
-        ["INPEC"],
+        [
+            "INPEC",
+            "Sistema Penitenciario", "cárceles",
+            "Penitenciario y Carcelario", "prisiones",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Geográfico Agustín Codazzi",
-        ["IGAC"],
+        [
+            "IGAC",
+            "Agustín Codazzi", "Agustin Codazzi",
+            "Catastro Nacional", "Instituto Geográfico",
+            "cartografía nacional",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Colombiano Agropecuario",
-        ["ICA"],
+        [
+            "ICA",
+            "Instituto Agropecuario", "Control Agropecuario",
+            "ICA Colombia", "Sanidad Agropecuaria",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional de Salud",
-        ["INS"],
+        [
+            "INS",
+            "Salud Pública Nacional", "Instituto de Salud",
+            "INS Colombia", "Vigilancia Epidemiológica",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional de Metrología",
-        ["INM"],
+        [
+            "INM",
+            "Metrología Colombia", "Instituto de Metrología",
+            "Metrología Nacional",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional para Sordos",
-        ["INSOR"],
+        [
+            "INSOR",
+            "Instituto para Sordos", "Discapacidad Auditiva",
+            "personas sordas",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Nacional para Ciegos",
-        ["INCI"],
+        [
+            "INCI",
+            "Instituto para Ciegos", "Discapacidad Visual",
+            "personas ciegas",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Colombiano de Crédito Educativo y Estudios Técnicos en el Exterior",
-        ["ICETEX"],
+        [
+            "ICETEX",
+            "Crédito Educativo", "Préstamos Educativos",
+            "Becas ICETEX", "Crédito para Estudios",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Colombiano de Antropología e Historia",
-        ["ICANH"],
+        [
+            "ICANH",
+            "Antropología e Historia", "Instituto de Antropología",
+            "Antropología Colombia",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto de Casas Fiscales del Ejército",
-        ["ICFE"],
+        [
+            "ICFE",
+            "Casas Fiscales", "Vivienda del Ejército",
+            "Casas Fiscales Ejército",
+        ],
         "instituto",
     ),
     _entry(
         "Instituto Financiero para el Desarrollo del Valle del Cauca",
-        ["INFIVALLE"],
+        [
+            "INFIVALLE",
+            "Instituto Financiero del Valle", "Desarrollo Valle del Cauca",
+            "Financiero Valle",
+        ],
         "instituto",
     ),
 ]
@@ -311,82 +444,145 @@ INSTITUTOS: Final[list[dict]] = [
 AGENCIAS: Final[list[dict]] = [
     _entry(
         "Dirección de Impuestos y Aduanas Nacionales",
-        ["DIAN", "Dian"],
+        [
+            "DIAN", "Dian",
+            "Impuestos Nacionales", "Aduanas Nacionales",
+            "Impuestos y Aduanas", "recaudo nacional",
+        ],
         "agencia",
     ),
     _entry(
         "Dirección General de la Policía Nacional",
-        ["DIPON", "Policía Nacional"],
+        [
+            "DIPON",
+            "Dirección de Policía", "Policía Nacional",
+            "PONAL", "Dirección General Policía",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Infraestructura",
-        ["ANI"],  # Cuidado: word-boundary evita matchear 'anillo' / 'daniela'
+        [
+            "ANI",
+            "Agencia de Infraestructura", "Infraestructura Nacional",
+            "Concesiones de Infraestructura",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Hidrocarburos",
-        ["ANH"],
+        [
+            "ANH",
+            "Hidrocarburos Nacionales", "Agencia de Hidrocarburos",
+            "Petróleo y Gas",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Minería",
-        ["ANM"],
+        [
+            "ANM",
+            "Minería Nacional", "Agencia de Minería",
+            "Títulos Mineros",
+        ],
         "agencia",
     ),
     _entry(
         "Autoridad Nacional de Licencias Ambientales",
-        ["ANLA"],
+        [
+            "ANLA",
+            "Licencias Ambientales", "Autoridad Ambiental Nacional",
+            "Permisos Ambientales",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Tierras",
-        ["ANT"],
+        [
+            "ANT",
+            "Tierras Nacionales", "Agencia de Tierras",
+            "Adjudicación de Tierras",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Seguridad Vial",
-        ["ANSV"],
+        [
+            "ANSV",
+            "Seguridad Vial", "Agencia Vial",
+            "Tránsito Nacional",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional del Espectro",
-        ["ANE"],
+        [
+            "ANE",
+            "Espectro Radioeléctrico", "Espectro Nacional",
+            "Agencia del Espectro",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional Inmobiliaria Virgilio Barco Vargas",
-        ["ANIM"],
+        [
+            "ANIM", "Virgilio Barco",
+            "Inmobiliaria Nacional", "Agencia Inmobiliaria",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia para la Reincorporación y la Normalización",
-        ["ARN"],
+        [
+            "ARN",
+            "Reincorporación y Normalización", "Agencia de Reincorporación",
+            "Desmovilizados", "reintegración",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia de Desarrollo Rural",
-        ["ADR"],
+        [
+            "ADR",
+            "Desarrollo Rural", "Agencia Rural",
+            "Agencia Desarrollo Rural",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia de Renovación del Territorio",
-        ["ART"],
+        [
+            "ART",
+            "Renovación del Territorio", "Agencia de Renovación",
+            "PDET", "Programas de Desarrollo con Enfoque Territorial",
+        ],
         "agencia",
     ),
     _entry(
         "Agencia Nacional de Contratación Pública - Colombia Compra Eficiente",
-        ["Colombia Compra Eficiente", "ANCP", "Colombia Compra"],
+        [
+            "Colombia Compra Eficiente", "Colombia Compra",
+            "ANCP", "Compra Eficiente",
+            "Contratación Pública", "Agencia de Contratación",
+        ],
         "agencia",
     ),
     _entry(
         "Autoridad Nacional de Acuicultura y Pesca",
-        ["AUNAP"],
+        [
+            "AUNAP",
+            "Acuicultura y Pesca", "Autoridad de Pesca",
+            "Pesca Nacional",
+        ],
         "agencia",
     ),
     _entry(
         "Corporación Agencia Nacional de Gobierno Digital",
-        ["AND"],
+        [
+            "AND",
+            "Agencia de Gobierno Digital", "Gobierno Digital",
+            "Agencia Digital Colombia",
+        ],
         "agencia",
     ),
 ]
@@ -398,61 +594,102 @@ AGENCIAS: Final[list[dict]] = [
 UNIDADES: Final[list[dict]] = [
     _entry(
         "Unidad de Planificación de Tierras Rurales, Adecuación de Tierras y Usos Agropecuarios",
-        ["UPRA"],
+        [
+            "UPRA",
+            "Planificación Rural", "Tierras Rurales",
+            "Usos Agropecuarios", "Planificación Agropecuaria",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad de Planeación Minero Energética",
-        ["UPME"],
+        [
+            "UPME",
+            "Planeación Minero Energética", "Planeación Energética",
+            "Planeación Minera",
+        ],
         "unidad",
     ),
     _entry(
-        "Unidad Nacional para la Gestión del Riesgo de desastres",  # canonical EXACTO (minúscula)
+        "Unidad Nacional para la Gestión del Riesgo de desastres",
         [
             "UNGRD",
-            "Unidad de Gestión del Riesgo",
+            "Gestión del Riesgo", "Riesgo de Desastres",
+            "Gestión del Riesgo de Desastres", "Atención de Desastres",
             "Unidad Nacional para la Gestión del Riesgo de Desastres",
-        ],  # capitalizado común
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Administrativa Especial de Gestión de Restitución de Tierras despojadas",
-        ["URT", "Unidad de Restitución de Tierras"],
+        [
+            "URT",
+            "Unidad de Restitución de Tierras", "Restitución de Tierras",
+            "Tierras Despojadas", "Restitución Despojados",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Nacional de Protección",
-        ["UNP"],
+        [
+            "UNP",
+            "Protección de Personas", "Esquemas de Seguridad",
+            "Unidad de Protección",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad de Servicios Penitenciarios y Carcelarios",
-        ["USPEC"],
+        [
+            "USPEC",
+            "Servicios Penitenciarios", "Infraestructura Penitenciaria",
+            "Servicios Carcelarios",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Administrativa Especial de Gestión Pensional y Contribuciones Parafiscales",
-        ["UGPP"],
+        [
+            "UGPP",
+            "Gestión Pensional", "Contribuciones Parafiscales",
+            "Parafiscales", "Pensiones Parafiscales",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Administrativa Especial de Aeronáutica Civil",
-        ["AEROCIVIL", "Aeronáutica Civil"],
+        [
+            "AEROCIVIL",
+            "Aeronáutica Civil", "Aviación Civil",
+            "Aviación Colombia", "Aerocivil Colombia",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad de Proyección Normativa y Estudios de Regulación Financiera",
-        ["URF"],
+        [
+            "URF",
+            "Regulación Financiera", "Unidad Regulación Financiera",
+            "Proyección Normativa Financiera",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Administrativa Especial para la Atención y Reparación Integral a las Víctimas",
-        ["UARIV", "Unidad de Víctimas", "Unidad para las Víctimas"],
+        [
+            "UARIV", "Unidad de Víctimas", "Unidad para las Víctimas",
+            "Atención a Víctimas", "Reparación a Víctimas",
+            "Víctimas del Conflicto",
+        ],
         "unidad",
     ),
     _entry(
         "Unidad Administrativa Especial Junta Central de Contadores",
-        ["JCC"],
+        [
+            "JCC",
+            "Junta Central de Contadores", "Junta de Contadores",
+            "Contadores Públicos Colombia",
+        ],
         "unidad",
     ),
 ]
@@ -464,42 +701,68 @@ UNIDADES: Final[list[dict]] = [
 SUPERINTENDENCIAS: Final[list[dict]] = [
     _entry(
         "Superintendencia Financiera de Colombia",
-        ["SUPERFINANCIERA", "SuperFinanciera", "Super Financiera"],
+        [
+            "SUPERFINANCIERA", "SuperFinanciera", "Super Financiera",
+            "Vigilancia Financiera", "Súper Financiera",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia de Servicios Públicos Domiciliarios",
-        ["SUPERSERVICIOS", "SuperServicios", "SSPD", "Super Servicios"],
+        [
+            "SUPERSERVICIOS", "SuperServicios", "SSPD", "Super Servicios",
+            "Servicios Públicos Domiciliarios", "Vigilancia de Servicios Públicos",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia Nacional de Salud",
-        ["SUPERSALUD", "SuperSalud", "Super Salud"],
+        [
+            "SUPERSALUD", "SuperSalud", "Super Salud",
+            "Vigilancia de Salud", "Súper Salud",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia de Industria y Comercio",
-        ["SIC"],
+        [
+            "SIC",
+            "Industria y Comercio", "Súper de Industria",
+            "Vigilancia Industria Comercio", "Protección al Consumidor",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia de Transporte",
-        ["SUPERTRANSPORTE", "SuperTransporte"],
+        [
+            "SUPERTRANSPORTE", "SuperTransporte", "Super Transporte",
+            "Vigilancia de Transporte",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia del Subsidio Familiar",
-        ["SUPERSUBSIDIO", "SuperSubsidio"],
+        [
+            "SUPERSUBSIDIO", "SuperSubsidio", "Super Subsidio",
+            "Subsidio Familiar", "Vigilancia Subsidio Familiar",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia de la Economía Solidaria",
-        ["SUPERSOLIDARIA"],
+        [
+            "SUPERSOLIDARIA",
+            "Super Solidaria", "Economía Solidaria",
+            "Vigilancia Economía Solidaria",
+        ],
         "superintendencia",
     ),
     _entry(
         "Superintendencia de Notariado y Registro",
-        ["SuperNotariado", "SNR"],
+        [
+            "SuperNotariado", "SNR", "Super Notariado",
+            "Notariado y Registro", "Vigilancia de Notarías",
+        ],
         "superintendencia",
     ),
 ]
@@ -511,214 +774,373 @@ SUPERINTENDENCIAS: Final[list[dict]] = [
 ORGANISMOS_CONTROL: Final[list[dict]] = [
     _entry(
         "Procuraduría General de la Nación",
-        ["PGN", "Procuraduría"],
+        [
+            "PGN", "Procuraduría", "Procurador General",
+            "Procuraduría Nacional", "Procuraduria",
+        ],
         "organismo_control",
     ),
     _entry(
         "Contraloría General de la República",
-        ["CGR", "Contraloría"],
+        [
+            "CGR", "Contraloría", "Contralor General",
+            "Contraloría Nacional", "Contraloria",
+        ],
         "organismo_control",
     ),
     _entry(
         "Defensoría del Pueblo",
-        ["Defensoría"],
+        [
+            "Defensoría", "Defensor del Pueblo",
+            "Defensoría Nacional", "Defensoria del Pueblo",
+        ],
         "organismo_control",
     ),
     _entry(
         "Fiscalía General de la Nación",
-        ["Fiscalía", "FGN"],
+        [
+            "FGN", "Fiscalía", "Fiscal General",
+            "Fiscalía Nacional", "Fiscalia General",
+        ],
         "organismo_control",
     ),
     _entry(
         "Auditoría General de la República",
-        ["Auditoría", "AGR"],
+        [
+            "AGR", "Auditoría", "Auditor General",
+            "Auditoría Nacional",
+        ],
         "organismo_control",
     ),
     _entry(
         "Jurisdicción Especial para la Paz",
-        ["JEP"],
+        [
+            "JEP",
+            "Justicia Especial para la Paz", "Justicia Transicional",
+            "Jurisdicción de Paz",
+        ],
         "organismo_control",
     ),
 ]
 
 
 # ============================================================
-# Otros: empresas del Estado, fondos, comisiones
+# Otros: empresas del Estado, fondos, comisiones, escuelas
 # ============================================================
 OTROS: Final[list[dict]] = [
     _entry(
         "Servicio Nacional de Aprendizaje",
-        ["SENA"],
+        [
+            "SENA",
+            "Servicio de Aprendizaje", "Formación SENA",
+            "Capacitación SENA", "el SENA",
+        ],
         "otro",
     ),
     _entry(
         "Escuela Superior de Administración Pública",
-        ["ESAP"],
+        [
+            "ESAP",
+            "Escuela de Administración Pública", "Administración Pública",
+            "Escuela Superior AP",
+        ],
         "otro",
     ),
     _entry(
         "Comisión Nacional del Servicio Civil",
-        ["CNSC"],
+        [
+            "CNSC",
+            "Servicio Civil", "Comisión del Servicio Civil",
+            "Concursos Públicos",
+        ],
         "otro",
     ),
     _entry(
         "Comisión de Regulación de Energía y Gas",
-        ["CREG"],
+        [
+            "CREG",
+            "Regulación de Energía", "Regulación de Gas",
+            "Comisión Energía Gas",
+        ],
         "otro",
     ),
     _entry(
         "Comisión de Regulación de Agua Potable y Saneamiento Básico",
-        ["CRA"],
+        [
+            "CRA",
+            "Regulación de Agua", "Agua Potable",
+            "Saneamiento Básico", "Comisión de Agua",
+        ],
         "otro",
     ),
     _entry(
         "Servicio Geológico Colombiano",
-        ["SGC"],
+        [
+            "SGC",
+            "Geológico Colombiano", "Servicio Geológico",
+            "Geología Colombia",
+        ],
         "otro",
     ),
     _entry(
         "Archivo General de la Nación",
-        ["AGN"],
+        [
+            "AGN",
+            "Archivo Nacional", "Archivo de la Nación",
+            "Archivo Histórico Nacional",
+        ],
         "otro",
     ),
     _entry(
         "Sistema Nacional de Información Cultural",
-        ["SINIC"],
+        [
+            "SINIC",
+            "Información Cultural", "Sistema Cultural",
+            "Cultura Colombia Sistema",
+        ],
         "otro",
     ),
     _entry(
         "Centro de Memoria Histórica",
-        ["Memoria Histórica", "CNMH"],
+        [
+            "Memoria Histórica", "CNMH",
+            "Centro Nacional de Memoria",
+            "Centro Memoria",
+        ],
         "otro",
     ),
     _entry(
         "Consejo Nacional Electoral",
-        ["CNE"],
+        [
+            "CNE",
+            "Consejo Electoral", "Electoral Nacional",
+            "Tribunal Electoral",
+        ],
         "otro",
     ),
     _entry(
         "Registraduría Nacional del Estado Civil",
-        ["Registraduría", "RNEC"],
+        [
+            "Registraduría", "RNEC",
+            "Registraduria Nacional", "Cédulas Colombia",
+            "Estado Civil",
+        ],
         "otro",
     ),
     _entry(
         "Sociedad de Radio Televisión Nacional de Colombia",
-        ["RTVC"],
+        [
+            "RTVC",
+            "Radio Televisión Nacional", "Señal Colombia",
+            "Radio Nacional",
+        ],
         "otro",
     ),
     _entry(
         "Administradora de los Recursos del Sistema General de Seguridad Social en Salud",
-        ["ADRES"],
+        [
+            "ADRES",
+            "Recursos de Salud", "Recursos SGSSS",
+            "Administradora de Salud",
+        ],
         "otro",
     ),
     _entry(
         "Corporación Colombiana de Investigación Agropecuaria",
-        ["AGROSAVIA"],
+        [
+            "AGROSAVIA",
+            "Investigación Agropecuaria", "Corporación Agropecuaria",
+            "I+D Agropecuaria",
+        ],
         "otro",
     ),
     _entry(
         "Federación Colombiana de Municipios",
-        ["FCM"],
+        [
+            "FCM",
+            "Federación de Municipios", "Municipios Colombia",
+            "Federación Municipal",
+        ],
         "otro",
     ),
     _entry(
         "Empresa Colombiana de Petróleos",
-        ["Ecopetrol", "ECOPETROL"],
+        [
+            "Ecopetrol", "ECOPETROL",
+            "Petróleos Colombia", "Empresa de Petróleos",
+            "Petroleos Colombianos",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Interconexión Eléctrica S.A.",
-        ["ISA"],
+        [
+            "ISA",
+            "Interconexión Eléctrica", "ISA Colombia",
+            "Energía Eléctrica Interconexión",
+        ],
         "empresa_estado",
     ),
     _entry(
         "E.S.P. Empresas Públicas de Medellín",
-        ["EPM", "Empresas Públicas de Medellín"],
+        [
+            "EPM",
+            "Empresas Públicas de Medellín", "EPM Medellín",
+            "Servicios Públicos Medellín",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Fondo Nacional del Ahorro",
-        ["FNA"],
+        [
+            "FNA",
+            "Fondo de Ahorro", "Ahorro Nacional",
+            "Cesantías Nacionales",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Fondo Nacional de Garantías",
-        ["FNG"],
+        [
+            "FNG",
+            "Garantías Nacionales", "Fondo de Garantías",
+            "Garantías para Pymes",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Fondo para el Financiamiento del Sector Agropecuario",
-        ["FINAGRO"],
+        [
+            "FINAGRO",
+            "Financiamiento Agropecuario", "Fondo Agropecuario",
+            "Crédito Agropecuario",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Financiera de Desarrollo Territorial S.A.",
-        ["FINDETER"],
+        [
+            "FINDETER",
+            "Desarrollo Territorial", "Financiera Territorial",
+            "Financiamiento Territorial",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Financiera de Desarrollo Nacional",
-        ["FDN"],
+        [
+            "FDN",
+            "Desarrollo Nacional", "Financiera Nacional",
+            "Financiamiento Nacional",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Administradora Colombiana de Pensiones",
-        ["COLPENSIONES"],
+        [
+            "COLPENSIONES",
+            "Pensiones Colombia", "Administradora de Pensiones",
+            "Régimen de Prima Media",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Administradora del Monopolio Rentístico de los Juegos de Suerte y Azar",
-        ["COLJUEGOS"],
+        [
+            "COLJUEGOS",
+            "Juegos de Suerte y Azar", "Juegos de Azar",
+            "Monopolio de Juegos", "Apuestas Nacionales",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Sociedad Fiduciaria de Desarrollo Agropecuario",
-        ["FIDUAGRARIA"],
+        [
+            "FIDUAGRARIA",
+            "Fiduciaria Agropecuaria", "Fiduagraria Colombia",
+            "Fiduciaria Desarrollo Agropecuario",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Sociedad de Activos Especiales S.A.S.",
-        ["SAE"],
+        [
+            "SAE",
+            "Activos Especiales", "Sociedad Activos",
+            "Bienes Incautados",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Servicio Aéreo A Territorios Nacionales",
-        ["SATENA"],
+        [
+            "SATENA",
+            "Aerolínea estatal", "Servicio Aéreo",
+            "SATENA Colombia",
+        ],
         "empresa_estado",
     ),
     _entry(
         "Caja de Retiro de las Fuerzas Armadas",
-        ["CREMIL"],
+        [
+            "CREMIL",
+            "Retiro Fuerzas Armadas", "Caja Retiro Militar",
+            "Pensiones Militares",
+        ],
         "otro",
     ),
     _entry(
         "Caja de Sueldos de Retiro de la Policía Nacional",
-        ["CASUR"],
+        [
+            "CASUR",
+            "Sueldos Retiro Policía", "Caja Policía",
+            "Pensiones Policía",
+        ],
         "otro",
     ),
     _entry(
         "Fondo de Previsión Social del Congreso de la República",
-        ["FONPRECON"],
+        [
+            "FONPRECON",
+            "Previsión Congreso", "Fondo Congreso",
+            "Pensiones Congreso",
+        ],
         "otro",
     ),
     _entry(
         "Fondo de Garantías de Entidades Cooperativas",
-        ["FOGACOOP"],
+        [
+            "FOGACOOP",
+            "Garantías Cooperativas", "Fondo Cooperativas",
+            "Garantías de Cooperativas",
+        ],
         "otro",
     ),
     _entry(
         "Fondo de Desarrollo de la Educación Superior",
-        ["FODESEP"],
+        [
+            "FODESEP",
+            "Desarrollo Educación Superior", "Fondo Educación Superior",
+            "Crédito Educación Superior",
+        ],
         "otro",
     ),
     _entry(
         "Consejo Profesional Nacional de Ingeniería",
-        ["COPNIA"],
+        [
+            "COPNIA",
+            "Consejo de Ingeniería", "Profesional de Ingeniería",
+            "Ingenieros Colombia",
+        ],
         "otro",
     ),
     _entry(
         "Consejo Profesional de Administración de Empresas",
-        ["CPAE"],
+        [
+            "CPAE",
+            "Consejo de Administración de Empresas",
+            "Profesional Administración", "Administradores de Empresas",
+        ],
         "otro",
     ),
 ]
