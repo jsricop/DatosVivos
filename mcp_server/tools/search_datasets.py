@@ -5,6 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..socrata.discovery_client import DiscoveryClient
+from ._errors import call_socrata
 
 
 def _shape(result: dict[str, Any]) -> dict[str, Any]:
@@ -39,5 +40,8 @@ def register(mcp: FastMCP) -> None:
             columns_count, rows_count, category y permalink.
         """
         client = DiscoveryClient()
-        results = await client.search(query=query, limit=limit)
+        results = await call_socrata(
+            client.search(query=query, limit=limit),
+            context=f"search_datasets(query={query!r})",
+        )
         return [_shape(r) for r in results]

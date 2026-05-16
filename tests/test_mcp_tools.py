@@ -7,6 +7,7 @@ Dataset de referencia: `gdxc-w37w` (DIVIPOLA-Códigos municipios) — 1.122 fila
 """
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 from mcp_server.server import mcp
 
@@ -85,3 +86,51 @@ async def test_query_data_caps_at_max_limit():
         {"dataset_id": DIVIPOLA_DATASET_ID, "limit": 50000},
     )
     assert len(rows) <= 5000
+
+
+# === Error paths — verifican que el LLM consumidor reciba mensajes útiles ===
+
+
+@pytest.mark.live
+async def test_get_metadata_invalid_id_raises_useful_error():
+    """Un dataset_id que no existe debe producir ToolError con HTTP 404 + mensaje real."""
+    with pytest.raises(ToolError) as exc_info:
+        await _call("get_metadata", {"dataset_id": "xxxx-xxxx"})
+    msg = str(exc_info.value)
+    assert "404" in msg, f"Esperaba '404' en el mensaje, vi: {msg!r}"
+    assert (
+        "xxxx-xxxx" in msg
+    ), "El mensaje debe incluir el dataset_id para que el LLM sepa qué falló"
+
+
+@pytest.mark.live
+async def test_query_data_malformed_soql_raises_useful_error():
+    """SoQL inválido debe llegar al LLM con el mensaje de Socrata, no opaco."""
+    with pytest.raises(ToolError) as exc_info:
+        await _call(
+            "query_data",
+            {"dataset_id": DIVIPOLA_DATASET_ID, "soql_query": "SELECT WHERE FROM"},
+        )
+    msg = str(exc_info.value)
+    assert "400" in msg
+    # El mensaje útil de Socrata debe estar presente — no un genérico "Bad Request"
+    assert (
+        "SoQL" in msg or "parse" in msg or "Expected" in msg
+    ), f"Mensaje no incluye detalle del SoQL: {msg!r}"
+
+
+@pytest.mark.live
+async def test_search_datasets_no_matches_returns_empty_list():
+    """Búsqueda sin matches NO es un error — es una lista vacía."""
+    results = await _call("search_datasets", {"query": "xxxqfdhg9874ttt_no_match", "limit": 5})
+    assert results == []
+
+
+async def test_cross_datasets_is_not_registered():
+    """cross_datasets es Sprint 3 — debe NO aparecer en list_tools."""
+    tools = await mcp.list_tools()
+    names = {t.name for t in tools}
+    assert (
+        "cross_datasets" not in names
+    ), f"cross_datasets se registró antes de tiempo (Sprint 3). Tools actuales: {names}"
+    assert names == {"search_datasets", "get_metadata", "query_data"}

@@ -5,6 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..socrata.metadata_client import MetadataClient
+from ._errors import call_socrata
 
 
 def _shape_column(col: dict[str, Any]) -> dict[str, Any]:
@@ -48,5 +49,8 @@ def register(mcp: FastMCP) -> None:
             rows_count, created_at, updated_at.
         """
         client = MetadataClient()
-        meta = await client.get(dataset_id)
+        meta = await call_socrata(
+            client.get(dataset_id),
+            context=f"get_metadata({dataset_id!r})",
+        )
         return _shape(meta)

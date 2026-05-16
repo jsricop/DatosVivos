@@ -5,6 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..socrata.soda_client import SodaClient
+from ._errors import call_socrata
 
 MAX_LIMIT = 5000
 
@@ -35,9 +36,12 @@ def register(mcp: FastMCP) -> None:
         if limit > MAX_LIMIT:
             limit = MAX_LIMIT
         client = SodaClient()
-        return await client.query(
-            dataset_id=dataset_id,
-            soql_query=soql_query,
-            limit=limit,
-            offset=offset,
+        return await call_socrata(
+            client.query(
+                dataset_id=dataset_id,
+                soql_query=soql_query,
+                limit=limit,
+                offset=offset,
+            ),
+            context=f"query_data({dataset_id!r})",
         )
