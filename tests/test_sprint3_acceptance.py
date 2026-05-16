@@ -102,11 +102,7 @@ async def test_cross_datasets_merges_by_join_key():
 
     result = await mcp.call_tool(
         "cross_datasets",
-        {
-            "dataset_a_id": DATASET_MUNICIPIOS,
-            "dataset_b_id": DATASET_DEPARTAMENTOS,
-            "join_key": JOIN_KEY,
-        },
+        {"dataset_ids": [DATASET_MUNICIPIOS, DATASET_DEPARTAMENTOS], "join_keys": JOIN_KEY},
     )
     blocks = _unwrap_tool_result(result)
     assert blocks, "cross_datasets devolvió vacío"
@@ -126,9 +122,8 @@ async def test_cross_datasets_invalid_join_key_raises_useful_error():
         await mcp.call_tool(
             "cross_datasets",
             {
-                "dataset_a_id": DATASET_MUNICIPIOS,
-                "dataset_b_id": DATASET_DEPARTAMENTOS,
-                "join_key": "columna_que_no_existe_xyz",
+                "dataset_ids": [DATASET_MUNICIPIOS, DATASET_DEPARTAMENTOS],
+                "join_keys": "columna_que_no_existe_xyz",
             },
         )
     msg = str(exc_info.value)
@@ -143,11 +138,7 @@ async def test_cross_datasets_caps_per_dataset_rows():
     # Sin pasar limit explícito, default debe ser razonable (≤ 5.000 por lado)
     result = await mcp.call_tool(
         "cross_datasets",
-        {
-            "dataset_a_id": DATASET_MUNICIPIOS,
-            "dataset_b_id": DATASET_DEPARTAMENTOS,
-            "join_key": JOIN_KEY,
-        },
+        {"dataset_ids": [DATASET_MUNICIPIOS, DATASET_DEPARTAMENTOS], "join_keys": JOIN_KEY},
     )
     blocks = _unwrap_tool_result(result)
     # Cap total: 5.000 filas merged como máximo (protección contra ataques de memoria)
@@ -174,18 +165,19 @@ async def test_cross_datasets_callable_via_sse_transport():
     """Cliente MCP externo (SSE) puede llamar cross_datasets end-to-end."""
     # Reusa la fixture del archivo SSE
 
-
     # Iniciamos un server stdio inline para simplicidad (la fixture SSE vive en otro archivo)
     # Si este test es muy pesado, se puede usar in-process call_tool.
     from mcp_server.server import mcp as in_proc_mcp
 
     # In-process verification de que la tool acepta los args esperados
+    # NOTA (§6.6): API actualizada a dataset_ids: list[str] + join_keys
+    # (extensión multi-dataset, ver tests/test_cross_multi_acceptance.py).
+    # Aserciones del contrato verificado no cambian.
     result = await in_proc_mcp.call_tool(
         "cross_datasets",
         {
-            "dataset_a_id": DATASET_MUNICIPIOS,
-            "dataset_b_id": DATASET_DEPARTAMENTOS,
-            "join_key": JOIN_KEY,
+            "dataset_ids": [DATASET_MUNICIPIOS, DATASET_DEPARTAMENTOS],
+            "join_keys": JOIN_KEY,
             "select_columns": [JOIN_KEY, "dpto", "nom_mpio"],
         },
     )
