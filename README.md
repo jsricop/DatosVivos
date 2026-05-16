@@ -24,7 +24,7 @@ Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-tra
 |---|---|---|
 | MCP Server (3 tools sobre datos.gov.co) | 1 | ✅ Funcional, 16 tests verdes |
 | Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional, 11 tests verdes |
-| `cross_datasets` + Ollama + analyzer end-to-end | 3 | ✅ Funcional, 16 tests verdes |
+| `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional, 16+8 tests verdes |
 | Streamlit + Power BI + accesibilidad | 4 | 🔜 |
 | Docs CRISP-ML(Q) | 5 | 🔜 |
 
@@ -86,8 +86,10 @@ python -m scripts.build_index --output ./custom     # output custom
 ## Lo que NO funciona aún
 
 - `docker compose up` — los servicios `api`, `streamlit`, `nginx` son placeholders hasta Sprint 4
-- Integración con Ollama, generación de SoQL, Streamlit — pendientes según cronograma
-- Tool `cross_datasets` — Sprint 3
+- Interfaz Streamlit ciudadana — Sprint 4
+- Dashboard Power BI conectado a PostgreSQL — Sprint 4
+- Modo de accesibilidad (Web Speech API) — Sprint 4
+- Documentación CRISP-ML(Q) completa — Sprint 5
 
 ## Convenciones de desarrollo
 
