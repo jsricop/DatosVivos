@@ -1,4 +1,8 @@
-"""Tools MCP expuestas: search_datasets, get_metadata, query_data, cross_datasets."""
+"""Tools MCP del Sprint 1: search_datasets, get_metadata, query_data.
+
+`cross_datasets` está planeada para Sprint 3 (Jun 2-15) y por eso NO se registra aquí.
+El archivo `cross_datasets.py` es un stub hasta entonces.
+"""
 
 from mcp.server.fastmcp import FastMCP
 
