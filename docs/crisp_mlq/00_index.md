@@ -28,6 +28,8 @@ Seguimos la metodología **CRISP-ML(Q)** — *CRoss-Industry Standard Process fo
 | [06](./06_deployment.md) | Deployment | ¿Cómo se despliega y opera en producción? |
 | [07](./07_mcp_integrations.md) | **Capítulo especial: MCP e integraciones** | ¿Cómo conectar este agente con Claude, Gemini u otros LLMs? |
 | [08](./08_mintic_checklist.md) | Checklist de criterios MinTIC | ¿Qué pide el concurso y dónde está la evidencia de cada criterio? |
+| [09](./09_pitch_sustentacion.md) | Guion de pitch para sustentación | Demo en 5 minutos con preguntas anticipadas |
+| [10](./10_acta_cierre.md) | Acta de cierre del MVP | Estado final, métricas, gaps abiertos |
 
 ## Cómo verificar lo que afirmamos
 

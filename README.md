@@ -14,6 +14,10 @@ Incluye un **modo de accesibilidad** para personas con discapacidad visual: entr
 | **Checklist de criterios del concurso con evidencia** | [`docs/crisp_mlq/08_mintic_checklist.md`](docs/crisp_mlq/08_mintic_checklist.md) |
 | **Metodología CRISP-ML(Q) completa (8 documentos)** | [`docs/crisp_mlq/`](docs/crisp_mlq/) |
 | **Capítulo especial: MCP + Claude + Gemini + clientes propios** | [`docs/crisp_mlq/07_mcp_integrations.md`](docs/crisp_mlq/07_mcp_integrations.md) |
+| **Guion de pitch para sustentación (5 min)** | [`docs/crisp_mlq/09_pitch_sustentacion.md`](docs/crisp_mlq/09_pitch_sustentacion.md) |
+| **Acta de cierre del MVP** | [`docs/crisp_mlq/10_acta_cierre.md`](docs/crisp_mlq/10_acta_cierre.md) |
+| **Decisiones de arquitectura (ADRs 001-008)** | [`docs/adr/`](docs/adr/) |
+| **Historial de cambios** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Limitaciones honestas y bugs documentados** | [`docs/lessons_learned.md`](docs/lessons_learned.md) + sección "Lo que NO funciona" del cap. 05 |
 
 Cada documento tiene tres lentes: 🏛️ jurado MinTIC · 🛠️ ciudadanía técnica · 👥 ciudadanía general.

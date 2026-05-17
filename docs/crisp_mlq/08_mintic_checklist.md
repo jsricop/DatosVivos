@@ -83,7 +83,7 @@
 
 1. **Publicación pública** — pendiente coordinación con MinTIC del proceso (`datos.gov.co` y `herramientas.datos.gov.co/usos`).
 2. **Pitch / video** — entregable de sustentación, no del repo.
-3. **Test fallido conocido del Qwen 3B** — visible en `test_sprint3_acceptance.py`. Mitigación: upgrade a 7B en producción si hardware lo permite.
+3. ~~**Test fallido conocido del Qwen 3B**~~ — **cerrado 2026-05-16**: prompt endurecido con few-shot examples + `max_retries=2` + feedback específico cuando la columna inventada parece alias agregado (`cantidad_*`, `total_*`). Verificado: 3/3 corridas consecutivas del test golden pasan en 2-8 s c/u.
 4. **Demo público con TLS** — la VM corre por VPN; falta exponerla con dominio HTTPS antes de sustentación.
 
 ## Cómo el jurado puede verificar todo

@@ -90,10 +90,12 @@ Documentados con cariño porque cada uno se convirtió en aprendizaje permanente
 
 Documentamos para que el jurado y los usuarios sepan a qué atenerse:
 
-1. **Qwen 3B flakiness ocasional**: en `tests/test_sprint3_acceptance.py::test_query_generator_produces_executable_soql_for_golden_question`, ~10% de las corridas el modelo inventa una columna `cantidad_municipios` que no existe, reintenta, y termina con `SELECT * LIMIT 1` que no usa GROUP BY. Soluciones reales:
-   - Upgrade a Qwen 2.5 Coder **7B** (4x memoria pero mucha más coherencia).
-   - Validador determinista pre-execute que rechace SoQL sin las columnas requeridas para el intent.
-   - **Test queda visible**, no oculto — es información honesta para el jurado y para futuros mantenedores.
+1. ~~**Qwen 3B flakiness ocasional**~~ — **cerrado 2026-05-16**: el test golden pasa de forma estable tras:
+   - Endurecer `PROMPT_TEMPLATE` con tres ejemplos canónicos (count filtrado, count agrupado, filtro con orden).
+   - Subir `max_retries` de 1 a 2 (tres intentos totales).
+   - Feedback específico al LLM cuando la columna inventada matchea `cantidad_*` / `total_*` / `num_*`: "esos no son nombres de columna, son alias de `count(*)`".
+   - 3 corridas consecutivas verdes en 2-8 s. Documentado en `ai_engine/query_generator.py`.
+   - **Honestidad:** sigue siendo posible que un modelo 3B fluctúe; recomendamos Qwen 7B en producción si el hardware lo permite. La mitigación no elimina riesgo, lo reduce.
 
 2. **Campo `tags` del catálogo Socrata mal poblado**: ver capítulo 02. Mitigado con topic_keywords propios.
 
