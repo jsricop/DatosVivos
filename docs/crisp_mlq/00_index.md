@@ -27,6 +27,7 @@ Seguimos la metodología **CRISP-ML(Q)** — *CRoss-Industry Standard Process fo
 | [05](./05_evaluation.md) | Evaluation | ¿Cómo sabemos que funciona y qué limitaciones tiene? |
 | [06](./06_deployment.md) | Deployment | ¿Cómo se despliega y opera en producción? |
 | [07](./07_mcp_integrations.md) | **Capítulo especial: MCP e integraciones** | ¿Cómo conectar este agente con Claude, Gemini u otros LLMs? |
+| [08](./08_mintic_checklist.md) | Checklist de criterios MinTIC | ¿Qué pide el concurso y dónde está la evidencia de cada criterio? |
 
 ## Cómo verificar lo que afirmamos
 
