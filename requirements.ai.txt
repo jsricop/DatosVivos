@@ -1,0 +1,11 @@
+# Motor de IA (ai_engine + scripts/build_index)
+# Capa 2: embeddings, índice vectorial, clasificador de intención
+
+sentence-transformers>=3.0.0
+chromadb>=0.5.0
+numpy>=1.26.0
+
+# Comparte httpx con MCP Server (para llamar Discovery API desde build_index)
+httpx>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0

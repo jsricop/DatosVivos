@@ -1,8 +1,24 @@
-# Dockerfile para el MCP Server.
-# Pendiente de definir durante Sprint 1.
+# Dockerfile para el MCP Server (Capa 1).
+# Construye una imagen mínima Python 3.11 que sirve las tools MCP sobre datos.gov.co.
+
 FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
-# COPY requirements.mcp.txt .
-# RUN pip install --no-cache-dir -r requirements.mcp.txt
-# COPY mcp_server/ ./mcp_server/
-# CMD ["python", "-m", "mcp_server.server"]
+
+# Dependencias de runtime
+COPY requirements.mcp.txt .
+RUN pip install -r requirements.mcp.txt
+
+# Código fuente
+COPY mcp_server/ ./mcp_server/
+
+# Puerto del MCP server (SSE)
+EXPOSE 3000
+
+# Entry point — lee MCP_TRANSPORT del entorno (sse | stdio)
+CMD ["python", "-m", "mcp_server.server"]

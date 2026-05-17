@@ -6,41 +6,133 @@ Incluye un **modo de accesibilidad** para personas con discapacidad visual: entr
 
 > **Concurso "Datos al Ecosistema 2026: IA para Colombia"** — Reto #07 (Innovación y Tecnología). Equipo: Oficina de Tecnología de la **ANI** (Agencia Nacional de Infraestructura).
 
-## Arquitectura
+## Arquitectura objetivo
 
 Tres capas:
 
-1. **MCP Server** — expone 4 tools (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`) sobre las APIs de Socrata de datos.gov.co
-2. **Motor de IA** — clasificador de intención (embeddings) + índice vectorial de metadatos + generador local (Ollama / Qwen 2.5 7B)
-3. **Interfaces** — Streamlit para ciudadanos (chat + Plotly + Folium + voz), Power BI para analítica de uso
+1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
+2. **Motor de IA** — clasificador de intención (embeddings) + índice vectorial de metadatos + generador local (Ollama / Qwen 2.5 7B). **Sprints 2-3.**
+3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + voz). **Sprint 4.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
 
-## Stack
+## Stack objetivo
 
 Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-transformers · ChromaDB · PostgreSQL 16 · Streamlit · Plotly · Folium · Docker Compose · Nginx
+
+## Estado actual (2026-05-16)
+
+| Capa | Sprint | Estado |
+|---|---|---|
+| MCP Server (4 tools sobre datos.gov.co) | 1 + 3 | ✅ Funcional, tests verdes |
+| Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional |
+| `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
+| Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
+| Streamlit + accesibilidad (sin Power BI) | 4 | 🔜 En curso |
+| Docs CRISP-ML(Q) | 5 | 🔜 |
 
 ## Estructura
 
 ```
-mcp_server/   Capa 1 — MCP Server + clientes Socrata
-ai_engine/    Capa 2 — Clasificador, índice vectorial, LLM backend
-app/          Capa 3 — Interfaz Streamlit + accesibilidad
-api/          FastAPI backend (endpoints internos)
-db/           Schema PostgreSQL + migraciones
-scripts/      Indexación, mantenimiento
-docs/         Documentación CRISP-ML(Q)
-tests/        Pruebas pytest
+mcp_server/   Capa 1 — MCP Server + clientes Socrata    (Sprint 1: ✅)
+ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3: ✅)
+app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: 🔜)
+db/           Schema PostgreSQL (referencia)             (sprint posterior)
+scripts/      Indexación, mantenimiento                  (Sprint 2)
+docs/         Documentación CRISP-ML(Q)                  (Sprint 5)
+tests/        Pruebas pytest                             (continuo)
 ```
 
-## Setup
-
-Requiere VM con Docker, Docker Compose y Ollama. Ver `docs/06_deployment.md` para el detalle.
+## Lo que funciona hoy
 
 ```bash
+# 1. Clonar y preparar entorno
+git clone https://github.com/jsricop/DatosVivos.git
+cd DatosVivos
+python3.11 -m venv .venv && source .venv/bin/activate
+
+# Para el MCP Server (Sprint 1)
+pip install -r requirements.mcp.txt -r requirements-dev.txt
+
+# Adicionalmente, para el motor de IA (Sprint 2: índice vectorial + clasificador, Sprint 3: orquestación)
+pip install -r requirements.ai.txt
+
+# Sprint 3 requiere Ollama corriendo local para tests con LLM real:
+#   brew install ollama && ollama serve &
+#   ollama pull qwen2.5-coder:3b
+# (Sin Ollama, los tests dependientes se saltan con skipif. Suite no-LLM corre normal.)
+
+# 2. Configurar entorno (opcional para el MCP Server — funciona con defaults)
 cp .env.example .env
-# editar .env
-docker compose up -d
-docker compose exec api python scripts/build_index.py
+# editar .env si necesitas un SOCRATA_APP_TOKEN para mayor rate limit
+
+# 3. Correr los tests
+pytest                              # toda la suite
+pytest tests/test_mcp_tools.py      # solo Sprint 1
+pytest tests/test_sprint2_acceptance.py  # solo Sprint 2 (requiere índice)
+
+# 4. Levantar el MCP Server (elige un transporte)
+MCP_TRANSPORT=stdio python -m mcp_server.server     # para hosts MCP locales
+MCP_TRANSPORT=sse   python -m mcp_server.server     # HTTP/SSE en :3000
+
+# 5. Build y run del MCP Server vía Docker
+docker build -f Dockerfile.mcp -t datosvivos-mcp:dev .
+docker run --rm -p 3000:3000 -e MCP_TRANSPORT=sse datosvivos-mcp:dev
+
+# 6. Construir el índice vectorial del catálogo (Sprint 2, ~10 min para ~8k datasets)
+python -m scripts.build_index                       # build completo
+python -m scripts.build_index --limit 500           # build parcial (dev/test)
+python -m scripts.build_index --output ./custom     # output custom
 ```
+
+## Lo que NO funciona aún
+
+- `docker compose up` — los servicios `streamlit`, `nginx` son placeholders hasta Sprint 4
+- Interfaz Streamlit ciudadana — Sprint 4 (en curso)
+- Modo de accesibilidad (Web Speech API) — Sprint 4
+- Documentación CRISP-ML(Q) completa — Sprint 5
+- Power BI / logging persistente — fuera del scope, integración externa opcional
+
+## Convenciones de desarrollo
+
+Si vas a contribuir código, dos disciplinas obligatorias:
+
+### Test-first para features de sprint
+Los tests con criterios de aceptación se escriben **antes** del código de producción. Cada sprint con criterios medibles (accuracy, latencia, cobertura) tiene un archivo `tests/test_sprintN_acceptance.py` con todos los tests `@pytest.mark.skip`. Se va quitando el `@skip` a medida que cada feature se implementa. **Los tests no se modifican** durante el sprint; si fallan, se corrige el código. Ejemplo activo: [`tests/test_sprint2_acceptance.py`](tests/test_sprint2_acceptance.py).
+
+### Doc-first para cambios visibles
+Toda PR que afecte interfaz pública (comandos, contratos de tools, arquitectura, dependencias) debe actualizar la documentación en el mismo PR. Sin docs, no se mergea. Checklist específico por tipo de cambio: ver MAIN.md §6.5 (interno) o pregúntale a un maintainer.
+
+### Convención de commits
+Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`. Cada commit debe cerrar con `Co-Authored-By: ANI Team & Claude <noreply@anthropic.com>`. Ver historial reciente para ejemplos.
+
+## Seguridad y privacidad
+
+- DatosVivos opera **exclusivamente** sobre datos públicos de [datos.gov.co](https://www.datos.gov.co)
+- No accede, procesa ni expone información interna de la ANI ni de ninguna entidad del Estado
+- El modelo LLM corre **localmente** (Ollama) — ni consultas ciudadanas ni datos analizados salen del servidor
+- La VM productiva está detrás de VPN (FortiClient SSL) — no expuesta a internet público
+- Las credenciales viven en `.env` (`.gitignore`d) — nunca en código
+- El repositorio público en GitHub solo contiene código, no datos ni credenciales
+
+## Documentación
+
+- [`docs/architecture.md`](docs/architecture.md) — arquitectura de tres capas, APIs externas, infraestructura objetivo
+- [`docs/accessibility.md`](docs/accessibility.md) — modo accesible (voz in/out, WCAG 2.1, Ley 1618)
+- [`docs/glossary.md`](docs/glossary.md) — términos del dominio (DIVIPOLA, SoQL, MCP, etc.)
+- [`docs/lessons_learned.md`](docs/lessons_learned.md) — bugs no obvios y gotchas capturados durante desarrollo
+- [`docs/01..06_*.md`](docs/) — fases CRISP-ML(Q) (Sprint 5)
+
+## Referencias
+
+- [datos.gov.co](https://www.datos.gov.co) — Portal de datos abiertos de Colombia
+- [SODA API](https://dev.socrata.com/consumers/getting-started.html) — Documentación de la API de consulta
+- [Discovery API](https://socratadiscovery.docs.apiary.io/) — Documentación de búsqueda de datasets
+- [MCP Protocol](https://modelcontextprotocol.io/) — Especificación del Model Context Protocol
+- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — SDK oficial
+- [Ollama](https://ollama.ai) — Servidor de modelos LLM locales
+- [CRISP-ML(Q)](https://arxiv.org/abs/2003.05155) — Paper del marco metodológico
+- [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) — STT/TTS del navegador
+- [WCAG 2.1](https://www.w3.org/TR/WCAG21/) — Estándar de accesibilidad web
+- [Ley 1618 de 2013](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=52081) — Accesibilidad TIC en Colombia
 
 ## Licencia
 
