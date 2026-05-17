@@ -1,5 +1,5 @@
 # 02 — Data Understanding
 
-Fase 2 de CRISP-ML(Q). Caracterización del catálogo de datos.gov.co.
+Este documento se trasladó a la carpeta canónica de CRISP-ML(Q):
 
-> Pendiente de redacción durante Sprint 5.
+→ [`crisp_mlq/02_data_understanding.md`](./crisp_mlq/02_data_understanding.md)

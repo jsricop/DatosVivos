@@ -27,7 +27,7 @@ Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-tra
 | `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
 | Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
 | Streamlit + accesibilidad (sin Power BI) | 4 | 🔜 En curso |
-| Docs CRISP-ML(Q) | 5 | 🔜 |
+| Docs CRISP-ML(Q) + capítulo MCP | 5 | ✅ Redactados en `docs/crisp_mlq/` |
 
 ## Estructura
 
@@ -88,7 +88,6 @@ python -m scripts.build_index --output ./custom     # output custom
 - `docker compose up` — los servicios `streamlit`, `nginx` son placeholders hasta Sprint 4
 - Interfaz Streamlit ciudadana — Sprint 4 (en curso)
 - Modo de accesibilidad (Web Speech API) — Sprint 4
-- Documentación CRISP-ML(Q) completa — Sprint 5
 - Power BI / logging persistente — fuera del scope, integración externa opcional
 
 ## Convenciones de desarrollo
@@ -119,7 +118,7 @@ Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `cho
 - [`docs/accessibility.md`](docs/accessibility.md) — modo accesible (voz in/out, WCAG 2.1, Ley 1618)
 - [`docs/glossary.md`](docs/glossary.md) — términos del dominio (DIVIPOLA, SoQL, MCP, etc.)
 - [`docs/lessons_learned.md`](docs/lessons_learned.md) — bugs no obvios y gotchas capturados durante desarrollo
-- [`docs/01..06_*.md`](docs/) — fases CRISP-ML(Q) (Sprint 5)
+- [`docs/crisp_mlq/`](docs/crisp_mlq/) — fases CRISP-ML(Q) + capítulo especial MCP (Sprint 5)
 
 ## Referencias
 

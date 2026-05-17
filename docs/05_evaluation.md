@@ -1,5 +1,5 @@
 # 05 — Evaluation
 
-Fase 5 de CRISP-ML(Q). Métricas, validación y robustez.
+Este documento se trasladó a la carpeta canónica de CRISP-ML(Q):
 
-> Pendiente de redacción durante Sprint 5.
+→ [`crisp_mlq/05_evaluation.md`](./crisp_mlq/05_evaluation.md)
