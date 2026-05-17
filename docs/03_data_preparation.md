@@ -1,5 +1,5 @@
 # 03 — Data Preparation
 
-Fase 3 de CRISP-ML(Q). Limpieza de metadatos y normalización de claves territoriales.
+Este documento se trasladó a la carpeta canónica de CRISP-ML(Q):
 
-> Pendiente de redacción durante Sprint 5.
+→ [`crisp_mlq/03_data_preparation.md`](./crisp_mlq/03_data_preparation.md)

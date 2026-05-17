@@ -41,7 +41,14 @@ PROMPT_TEMPLATE = """Eres un experto en SoQL (Socrata Query Language), el dialec
 REGLAS ESTRICTAS:
 - SoQL NO usa cláusula `FROM` (el dataset es la URL). Genera solo `SELECT ... WHERE ... GROUP BY ... ORDER BY ... LIMIT ...`.
 - Usa ÚNICAMENTE las columnas listadas abajo. NO inventes nombres de columnas.
+- Para CONTAR registros usa `count(*) AS n` (o cualquier alias), NUNCA un nombre de columna inventado como `cantidad_x` o `total_x` — esos no existen.
+- Para FILTRAR por valor de una columna usa `WHERE columna = 'valor'` con el valor REAL visto en los ejemplos.
 - Devuelve SOLO la query SoQL, sin explicación, sin markdown, sin comentarios.
+
+EJEMPLOS de SoQL bien formada:
+- Conteo total filtrado: `SELECT count(*) AS n WHERE cod_dpto = '05'`
+- Conteo agrupado: `SELECT cod_dpto, count(*) AS n GROUP BY cod_dpto ORDER BY n DESC LIMIT 5`
+- Filtrado con orden: `SELECT * WHERE dpto = 'ANTIOQUIA' ORDER BY nom_mpio LIMIT 100`
 
 COLUMNAS DISPONIBLES en el dataset:
 {columns}
@@ -144,7 +151,7 @@ def _extract_referenced_columns(soql: str) -> set[str]:
 class QueryGenerator:
     """Convierte pregunta NL + esquema → SoQL ejecutable."""
 
-    def __init__(self, backend: LLMBackend, max_retries: int = 1) -> None:
+    def __init__(self, backend: LLMBackend, max_retries: int = 2) -> None:
         self.backend = backend
         self.max_retries = max_retries
 
@@ -210,6 +217,17 @@ class QueryGenerator:
                 attempt + 1,
                 invalid,
             )
+            # Si las columnas inventadas parecen alias agregados (cantidad_*, total_*,
+            # num_*, conteo_*), Qwen 3B confundió "necesito contar X" con "hay una
+            # columna llamada cantidad_X". Damos pista explícita para que use count(*).
+            aggregate_hint = ""
+            invalid_lower = {c.lower() for c in invalid}
+            aggregate_patterns = ("cantidad_", "total_", "num_", "conteo_", "count_")
+            if any(c.startswith(aggregate_patterns) for c in invalid_lower):
+                aggregate_hint = (
+                    " Las columnas como `cantidad_X` NO existen — son alias que se "
+                    "definen con `count(*) AS cantidad_X`. Usa `count(*)` con alias."
+                )
             prompt = (
                 PROMPT_TEMPLATE.format(
                     columns=self._format_columns(schema),
@@ -217,7 +235,7 @@ class QueryGenerator:
                     question=question,
                 )
                 + f"\n\nERROR: el intento anterior usó columnas inexistentes {sorted(invalid)}. "
-                "Usa SOLO las columnas listadas arriba."
+                f"Usa SOLO las columnas listadas arriba.{aggregate_hint}"
             )
 
         # Tras agotar reintentos: devolver el último intento, pero si trae

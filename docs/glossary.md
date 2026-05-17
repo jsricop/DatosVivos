@@ -61,14 +61,14 @@ Retrieval-Augmented Generation. Patrón donde antes de generar respuesta, el LLM
 ### Ollama
 Servidor local de modelos LLM que permite correr modelos cuantizados (GGUF) en CPU/GPU sin enviar datos a APIs externas. Lo usamos en Sprint 3 para servir Qwen y Llama.
 
-### Qwen 2.5 Coder 7B (Q4_K_M)
-Modelo LLM de Alibaba, especializado en código y consultas estructuradas. 7B parámetros, cuantización Q4_K_M (~5 GB RAM). Modelo primario de DatosVivos para generar SoQL.
+### Qwen 2.5 Coder (3B / 7B, Q4_K_M)
+Modelo LLM de Alibaba, especializado en código y consultas estructuradas. **Default operativo: 3B (~2 GB RAM)** para correr en hardware modesto del Estado; **upgrade documentado: 7B (~5 GB RAM)** vía `OLLAMA_MODEL` env var cuando hay GPU/RAM disponible. Genera SoQL, narrativa y reformulaciones Tier 3.
 
 ### Llama 3 8B (Q4_K_M)
-Modelo LLM de Meta. Fallback de Qwen. Mejor en narrativa en español.
+Modelo LLM de Meta. Alternativa de fallback considerada para narrativa en español. No es default; documentado como swap posible via `OLLAMA_MODEL`.
 
-### sentence-transformers / multilingual-e5-base
-Modelo de embeddings multilingüe (Microsoft) que mapea texto a vectores de 768 dimensiones. Lo usamos para el clasificador de intención y el índice vectorial.
+### sentence-transformers / multilingual-e5-large
+Modelo de embeddings multilingüe (Microsoft, familia `intfloat/multilingual-e5`) que mapea texto a vectores de **1024 dimensiones**. Lo usamos para el clasificador de intención (centroides) y el índice vectorial de datasets.
 
 ### ChromaDB
 Base de datos vectorial open-source. Persistencia en disco. Búsqueda por similitud coseno. Alternativa considerada: FAISS (ver ADR-005).
@@ -83,6 +83,24 @@ Métrica de búsqueda: fracción de resultados relevantes en los primeros k reto
 
 ### Intent classification
 Clasificación de la intención de una pregunta NL en un conjunto fijo de categorías. En DatosVivos: `search`, `descriptive`, `comparative`, `temporal`, `cross_source`.
+
+## Búsqueda multi-tier (ADR-007)
+
+### 3-tier search
+Estrategia de búsqueda en cascada implementada en `mcp_server/socrata/discovery_client.py` + `topic_keywords.py` + `ai_engine/analyzer.py`. El ciudadano rara vez nombra a la entidad publicadora; los tres niveles compensan:
+
+1. **Tier 1 — Acrónimos** (`acronyms.py`, 117 entidades / 562 aliases). Si la query menciona "DANE", se expande a "Departamento Administrativo Nacional de Estadística" antes de pegarle a Socrata.
+2. **Tier 2 — Topic keywords iterativos** (`topic_keywords.py`, ~3 050 keywords). Si Tier 1 + Socrata directo retornan vacío, se itera grupos de 2 entidades temáticamente afines ordenadas por overlap.
+3. **Tier 3 — Reformulación por LLM** (`analyzer._llm_reformulate`). Como último recurso, el LLM produce 3-5 keywords alternativas y se reintenta la búsqueda.
+
+### Topic keywords
+Diccionario de keywords temáticos por entidad. Generado data-driven desde el corpus indexado (TF-IDF sobre nombre + descripción + columnas) + suplementos manuales para casos críticos. Persistido en `mcp_server/socrata/topic_keywords_data.py`.
+
+### Cross-datasets (N=1..5)
+Tool MCP `cross_datasets` que integra entre 1 y 5 datasets vía `pandas.merge`. Soporta join por una o varias claves (típicamente `cod_dpto` o `cod_mpio`). Guardia anti-falsos-positivos: si los datasets no comparten valores en la clave, devuelve 0 filas en lugar de inventar joins.
+
+### Golden assertion
+Hecho del mundo real verificable contra fuente oficial, usado como criterio de aceptación en tests. Ejemplo: *Antioquia tiene 125 municipios en DIVIPOLA* — verificable contra el dataset `gdxc-w37w` del DANE.
 
 ## Concurso / contexto
 

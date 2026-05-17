@@ -6,17 +6,33 @@ Incluye un **modo de accesibilidad** para personas con discapacidad visual: entr
 
 > **Concurso "Datos al Ecosistema 2026: IA para Colombia"** — Reto #07 (Innovación y Tecnología). Equipo: Oficina de Tecnología de la **ANI** (Agencia Nacional de Infraestructura).
 
-## Arquitectura objetivo
+## 🏛️ Para el jurado MinTIC
+
+| Lo que buscas | Dónde está |
+|---|---|
+| **Resumen y propuesta en una página** | [`docs/crisp_mlq/00_index.md`](docs/crisp_mlq/00_index.md) |
+| **Checklist de criterios del concurso con evidencia** | [`docs/crisp_mlq/08_mintic_checklist.md`](docs/crisp_mlq/08_mintic_checklist.md) |
+| **Metodología CRISP-ML(Q) completa (8 documentos)** | [`docs/crisp_mlq/`](docs/crisp_mlq/) |
+| **Capítulo especial: MCP + Claude + Gemini + clientes propios** | [`docs/crisp_mlq/07_mcp_integrations.md`](docs/crisp_mlq/07_mcp_integrations.md) |
+| **Guion de pitch para sustentación (5 min)** | [`docs/crisp_mlq/09_pitch_sustentacion.md`](docs/crisp_mlq/09_pitch_sustentacion.md) |
+| **Acta de cierre del MVP** | [`docs/crisp_mlq/10_acta_cierre.md`](docs/crisp_mlq/10_acta_cierre.md) |
+| **Decisiones de arquitectura (ADRs 001-008)** | [`docs/adr/`](docs/adr/) |
+| **Historial de cambios** | [`CHANGELOG.md`](CHANGELOG.md) |
+| **Limitaciones honestas y bugs documentados** | [`docs/lessons_learned.md`](docs/lessons_learned.md) + sección "Lo que NO funciona" del cap. 05 |
+
+Cada documento tiene tres lentes: 🏛️ jurado MinTIC · 🛠️ ciudadanía técnica · 👥 ciudadanía general.
+
+## Arquitectura
 
 Tres capas:
 
 1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
-2. **Motor de IA** — clasificador de intención (embeddings) + índice vectorial de metadatos + generador local (Ollama / Qwen 2.5 7B). **Sprints 2-3.**
-3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + voz). **Sprint 4.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
+2. **Motor de IA** — clasificador de intención (embeddings `multilingual-e5-large`) + índice vectorial de metadatos (ChromaDB, 8 389 datasets) + generador local (Ollama / Qwen 2.5 Coder 3B default, 7B opcional). Búsqueda 3-tier con acrónimos + topic keywords + reformulación LLM. **Sprints 2-3.**
+3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + Web Speech API). **Sprint 4.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
 
-## Stack objetivo
+## Stack
 
-Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-transformers · ChromaDB · PostgreSQL 16 · Streamlit · Plotly · Folium · Docker Compose · Nginx
+Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · sentence-transformers `multilingual-e5-large` · ChromaDB · Streamlit · Plotly · Folium · `streamlit-folium` · Web Speech API · Docker Compose · Nginx (producción)
 
 ## Estado actual (2026-05-16)
 
@@ -26,15 +42,15 @@ Python 3.11+ · FastAPI · MCP SDK · Ollama (Qwen 2.5 Coder 7B) · sentence-tra
 | Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional |
 | `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
 | Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
-| Streamlit + accesibilidad (sin Power BI) | 4 | 🔜 En curso |
-| Docs CRISP-ML(Q) | 5 | 🔜 |
+| Streamlit + accesibilidad (sin Power BI) | 4 | ✅ Funcional, 16 tests verdes |
+| Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | 5 | ✅ Redactados en `docs/crisp_mlq/` |
 
 ## Estructura
 
 ```
 mcp_server/   Capa 1 — MCP Server + clientes Socrata    (Sprint 1: ✅)
 ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3: ✅)
-app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: 🔜)
+app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: ✅)
 db/           Schema PostgreSQL (referencia)             (sprint posterior)
 scripts/      Indexación, mantenimiento                  (Sprint 2)
 docs/         Documentación CRISP-ML(Q)                  (Sprint 5)
@@ -83,13 +99,12 @@ python -m scripts.build_index --limit 500           # build parcial (dev/test)
 python -m scripts.build_index --output ./custom     # output custom
 ```
 
-## Lo que NO funciona aún
+## Pendientes / fuera de scope
 
-- `docker compose up` — los servicios `streamlit`, `nginx` son placeholders hasta Sprint 4
-- Interfaz Streamlit ciudadana — Sprint 4 (en curso)
-- Modo de accesibilidad (Web Speech API) — Sprint 4
-- Documentación CRISP-ML(Q) completa — Sprint 5
-- Power BI / logging persistente — fuera del scope, integración externa opcional
+- **Demo público con TLS** — la VM corre tras VPN; falta dominio público con Nginx + Let's Encrypt antes de sustentación.
+- **Publicación en `datos.gov.co` y `herramientas.datos.gov.co/usos`** — coordinación con MinTIC, FASE 8 del Sprint 5.
+- **PostgreSQL logging persistente** — schema definido en `db/init.sql` como referencia, no activado.
+- **Power BI / dashboards analíticos** — fuera del entregable, integraciones externas opcionales.
 
 ## Convenciones de desarrollo
 
@@ -119,7 +134,7 @@ Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `cho
 - [`docs/accessibility.md`](docs/accessibility.md) — modo accesible (voz in/out, WCAG 2.1, Ley 1618)
 - [`docs/glossary.md`](docs/glossary.md) — términos del dominio (DIVIPOLA, SoQL, MCP, etc.)
 - [`docs/lessons_learned.md`](docs/lessons_learned.md) — bugs no obvios y gotchas capturados durante desarrollo
-- [`docs/01..06_*.md`](docs/) — fases CRISP-ML(Q) (Sprint 5)
+- [`docs/crisp_mlq/`](docs/crisp_mlq/) — fases CRISP-ML(Q) + capítulo especial MCP (Sprint 5)
 
 ## Referencias
 

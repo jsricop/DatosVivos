@@ -1,5 +1,5 @@
 # 01 — Business Understanding
 
-Fase 1 de CRISP-ML(Q). Define el problema, los stakeholders, los KPIs y la justificación de usar ML.
+Este documento se trasladó a la carpeta canónica de CRISP-ML(Q):
 
-> Pendiente de redacción durante Sprint 5.
+→ [`crisp_mlq/01_business_understanding.md`](./crisp_mlq/01_business_understanding.md)
