@@ -490,8 +490,17 @@ class Analyzer:
 
         raw_clean = (raw or "").strip().upper()
         if raw_clean.startswith("NINGUNO") or raw_clean.startswith("NONE"):
-            log.info("Rerank LLM dice 'NINGUNO' — devuelvo lista vacía para forzar Tier 3.")
-            return []
+            # Antes devolvíamos []; en sesión exploratoria 2026-05-18 detectamos
+            # falsos negativos del LLM 3B (decía 'NINGUNO' aunque el retrieval
+            # traía datasets relevantes — caso P6 'Cuántas instituciones de
+            # salud hay en Chocó' devolvió 0 datasets de la nada).
+            # Mitigación: conservar el top-1 con disclaimer. El threshold del
+            # vector index (min_score=0.83) ya filtró ruido antes de llegar acá.
+            log.info(
+                "Rerank LLM dice 'NINGUNO'; conservando top-1 (el LLM 3B "
+                "tiende a falsos negativos)."
+            )
+            return hits[:1]
 
         m = re.search(r"\d+", raw_clean)
         if not m:
