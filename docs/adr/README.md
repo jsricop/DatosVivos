@@ -16,6 +16,8 @@ Formato: cada ADR documenta **decisión + razón + trade-off** en formato breve.
 | [006](./006-web-speech-api.md) | Web Speech API del navegador para accesibilidad | Aceptada |
 | [007](./007-busqueda-3-tiers.md) | Búsqueda con fallback en 3 tiers (acrónimos + topic keywords + LLM) | Aceptada |
 | [008](./008-scope-sin-powerbi.md) | Sprint 4 sin Power BI: scope solo Streamlit + accesibilidad | Aceptada |
+| [009](./009-cifras-pandas-whitelist.md) | Cifras solo desde pandas; LLM interpreta pero no inventa números | Aceptada |
+| [010](./010-geo-resolver.md) | GeoResolver con DIVIPOLA + plantillas SoQL deterministas para comparativa | Aceptada |
 
 ## Sobre los estados
 
