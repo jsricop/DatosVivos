@@ -395,10 +395,12 @@ class GeoResolver:
         comparison_mode, top_n = self._detect_comparison_mode(question, groupby)
 
         # Si es ranking pero no hay groupby explícito, derivar de plurales
-        # ("Top 5 departamentos…" → cod_dpto).
+        # ("Top 5 departamentos…" → cod_dpto; "Top 10 ciudades…" → cod_mpio).
         if comparison_mode == "ranking" and not groupby:
             ql = question.lower()
-            if "municipios" in ql:
+            # ciudad/ciudades es sinónimo común de municipio en lenguaje
+            # cotidiano del ciudadano colombiano.
+            if "municipios" in ql or "ciudades" in ql or "ciudad" in ql:
                 groupby = "cod_mpio"
             elif "departamentos" in ql or "territorios" in ql:
                 groupby = "cod_dpto"
@@ -576,66 +578,147 @@ class GeoResolver:
 # ----------------------------------------------------------------------
 
 
+# Patrones de columna territorial en datos.gov.co (heterogéneo).
+_DPTO_CODE_COLS = (
+    "cod_dpto",
+    "codigo_dpto",
+    "codigo_departamento",
+    "codigo_dane_departamento",
+)
+_DPTO_NAME_COLS = (
+    "departamento",
+    "depa_nombre",
+    "depto",
+    "nom_dpto",
+    "departamento_hecho",
+    "departamento_del_hecho_dane",
+    "departamento_del_hecho",
+)
+_MPIO_CODE_COLS = (
+    "cod_mpio",
+    "codigo_mpio",
+    "codigo_municipio",
+    "codigo_dane_municipio",
+)
+_MPIO_NAME_COLS = (
+    "municipio",
+    "nom_mpio",
+    "mpio_nombre",
+    "municipio_hecho",
+    "municipio_del_hecho_dane",
+    "municipio_del_hecho",
+    "nombremunicipio",
+)
+
+
+def _find_geo_column(columns: set[str], level: str) -> tuple[str | None, bool]:
+    """Devuelve (column_name, is_code) o (None, False).
+
+    Prioriza columnas de código (códigos DIVIPOLA) sobre nombre.
+    `columns` debe estar en lowercase.
+    """
+    code_patterns = _DPTO_CODE_COLS if level == "dpto" else _MPIO_CODE_COLS
+    name_patterns = _DPTO_NAME_COLS if level == "dpto" else _MPIO_NAME_COLS
+    for p in code_patterns:
+        if p in columns:
+            return p, True
+    for p in name_patterns:
+        if p in columns:
+            return p, False
+    return None, False
+
+
+def _name_variants(name: str) -> list[str]:
+    """Devuelve variantes del nombre para matching case-insensitive sin tildes.
+
+    Ej: 'Medellín' → ['medellin', 'medellín'].
+    """
+    if not name:
+        return []
+    bare = _normalize(name)  # lowercase + sin tildes
+    return sorted({bare, name.lower()})
+
+
 def build_comparison_soql(
     ctx: GeoContext | None,
     columns: set[str],
 ) -> str | None:
     """Construye SoQL determinista para comparativas, sin pasar por LLM.
 
+    Soporta columnas-código (`cod_dpto`, `codigo_dane_departamento`) y
+    columnas-nombre (`departamento`, `municipio`, `departamento_del_hecho_dane`).
+    Para columnas-nombre usa `lower(col) IN (...)` con variantes sin tildes.
+
     Args:
         ctx: GeoContext con `comparison_mode` seteado.
         columns: nombres de columnas (lowercase) disponibles en el dataset.
 
     Returns:
-        SoQL ejecutable o `None` si no aplica (sin ctx, sin mode, o sin
-        columnas territoriales requeridas).
-
-    Reglas:
-    - mode="vs": `WHERE cod_dpto IN (...) GROUP BY cod_dpto` (o `cod_mpio`).
-    - mode="ranking": `GROUP BY cod_dpto ORDER BY count(*) DESC LIMIT N`.
-    - mode="vs_national": un SoQL agrupado por `cod_dpto` para que stats
-      pueda comparar el local target contra el resto. (Variante simple sin
-      necesidad de 2 queries.)
+        SoQL ejecutable o `None` si no aplica.
     """
     if ctx is None or ctx.comparison_mode is None:
         return None
 
     columns_lower = {c.lower() for c in columns}
 
-    # Determinar nivel y columna de territorio.
-    levels = {t.level for t in ctx.targets}
-    if "mpio" in levels and "cod_mpio" in columns_lower:
-        geo_col = "cod_mpio"
-        codes = [t.code for t in ctx.targets if t.level == "mpio" and t.code]
-    elif "dpto" in levels and "cod_dpto" in columns_lower:
-        geo_col = "cod_dpto"
-        codes = [t.code for t in ctx.targets if t.level == "dpto" and t.code]
-    elif ctx.comparison_mode == "ranking":
-        # Ranking sin targets específicos: necesita la columna de groupby.
-        if ctx.groupby and ctx.groupby in columns_lower:
-            geo_col = ctx.groupby
-            codes = []
-        else:
-            # Heurística: preferir cod_dpto si está disponible.
-            if "cod_dpto" in columns_lower:
-                geo_col = "cod_dpto"
-                codes = []
-            elif "cod_mpio" in columns_lower:
-                geo_col = "cod_mpio"
-                codes = []
-            else:
-                return None
-    else:
-        # No hay columna territorial → no podemos construir plantilla.
+    # Decidir nivel de la consulta: si los targets mpio están presentes y el
+    # dataset tiene una columna mpio, preferir mpio. Si no, usar dpto.
+    mpio_targets = [t for t in ctx.targets if t.level == "mpio"]
+    dpto_targets = [t for t in ctx.targets if t.level == "dpto"]
+
+    geo_col: str | None = None
+    is_code = False
+    targets_for_filter: list[GeoTarget] = []
+
+    if mpio_targets:
+        geo_col, is_code = _find_geo_column(columns_lower, "mpio")
+        targets_for_filter = mpio_targets
+    if not geo_col and dpto_targets:
+        geo_col, is_code = _find_geo_column(columns_lower, "dpto")
+        targets_for_filter = dpto_targets
+    if not geo_col and ctx.comparison_mode == "ranking":
+        # Ranking sin targets específicos: derivar de groupby o heurística.
+        groupby = (ctx.groupby or "").lower()
+        if groupby == "cod_mpio":
+            geo_col, is_code = _find_geo_column(columns_lower, "mpio")
+        elif groupby == "cod_dpto":
+            geo_col, is_code = _find_geo_column(columns_lower, "dpto")
+        if not geo_col:
+            for level in ("dpto", "mpio"):
+                geo_col, is_code = _find_geo_column(columns_lower, level)
+                if geo_col:
+                    break
+    if not geo_col:
         return None
 
-    if ctx.comparison_mode == "vs":
-        if len(codes) < 2:
+    # --- Construir WHERE ---
+    def _build_in_clause(targets: list[GeoTarget]) -> str | None:
+        if not targets:
             return None
-        in_list = ", ".join(f"'{c}'" for c in codes)
+        if is_code:
+            codes = [t.code for t in targets if t.code]
+            if not codes:
+                return None
+            in_list = ", ".join(f"'{c}'" for c in codes)
+            return f"{geo_col} IN ({in_list})"
+        # Columna-nombre: usar lower() + variantes sin tildes.
+        variants: set[str] = set()
+        for t in targets:
+            variants.update(_name_variants(t.name))
+        if not variants:
+            return None
+        in_list = ", ".join(f"'{v}'" for v in sorted(variants))
+        return f"lower({geo_col}) IN ({in_list})"
+
+    if ctx.comparison_mode == "vs":
+        if len(targets_for_filter) < 2:
+            return None
+        where = _build_in_clause(targets_for_filter)
+        if not where:
+            return None
         return (
             f"SELECT {geo_col}, count(*) AS n "
-            f"WHERE {geo_col} IN ({in_list}) "
+            f"WHERE {where} "
             f"GROUP BY {geo_col} "
             f"ORDER BY n DESC"
         )
@@ -650,8 +733,8 @@ def build_comparison_soql(
         )
 
     if ctx.comparison_mode == "vs_national":
-        # Trae todos los grupos; stats_computer mostrará el target específico
-        # vs el resto. Si en futuro queremos 2 queries paralelas, refactorizar.
+        # GROUP BY territorio sin WHERE — stats_computer compara el local
+        # target contra el resto. Útil cuando hay un solo target subnacional.
         return (
             f"SELECT {geo_col}, count(*) AS n "
             f"GROUP BY {geo_col} "

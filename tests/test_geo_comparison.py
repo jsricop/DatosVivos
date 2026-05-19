@@ -190,3 +190,59 @@ def test_build_soql_returns_none_when_no_comparison_mode():
     ctx = r.resolve("Datos sobre clima")  # devuelve None
     soql = build_comparison_soql(ctx, columns={"cod_dpto"})
     assert soql is None  # ctx None → None
+
+
+# ============================================================
+# D. Plantillas con columnas-nombre (no solo códigos DIVIPOLA)
+# ============================================================
+
+
+def test_build_soql_vs_dos_mpios_con_columna_nombre():
+    """Dataset con `municipio` (string) en lugar de `cod_mpio` → IN con lower()."""
+    from ai_engine.geo_resolver import GeoResolver, build_comparison_soql
+
+    r = GeoResolver()
+    ctx = r.resolve("Compara Medellín con Cali en seguridad")
+    assert ctx is not None
+    soql = build_comparison_soql(ctx, columns={"municipio", "articulo", "literal"})
+    assert soql is not None
+    assert "municipio" in soql.lower()
+    # case-insensitive con lower()
+    assert "lower(" in soql.lower() or "lower " in soql.lower()
+    # variantes sin tildes
+    assert "'medellin'" in soql.lower() or "'medellín'" in soql.lower()
+    assert "'cali'" in soql.lower()
+
+
+def test_build_soql_vs_dos_dptos_con_columna_dane_larga():
+    """Dataset con `departamento_del_hecho_dane` → matchea como dpto-nombre."""
+    from ai_engine.geo_resolver import GeoResolver, build_comparison_soql
+
+    r = GeoResolver()
+    ctx = r.resolve("Compara Antioquia y Valle del Cauca en mortalidad")
+    soql = build_comparison_soql(
+        ctx,
+        columns={"departamento_del_hecho_dane", "edad", "sexo"},
+    )
+    assert soql is not None
+    assert "departamento_del_hecho_dane" in soql.lower()
+    # Sin tildes en variantes
+    assert "antioquia" in soql.lower()
+    assert "valle" in soql.lower()
+
+
+# ============================================================
+# E. Sinónimo "ciudades" como groupby ranking
+# ============================================================
+
+
+def test_top_n_ciudades_activa_groupby_mpio():
+    """'Top 10 ciudades con más X' debe activar comparison_mode=ranking + groupby=cod_mpio."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Top 10 ciudades con más homicidios")
+    assert ctx is not None
+    assert ctx.comparison_mode == "ranking"
+    assert ctx.groupby == "cod_mpio"
+    assert ctx.top_n == 10
