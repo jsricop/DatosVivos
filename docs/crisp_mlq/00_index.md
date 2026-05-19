@@ -29,15 +29,17 @@ Seguimos la metodología **CRISP-ML(Q)** — *CRoss-Industry Standard Process fo
 | [07](./07_mcp_integrations.md) | **Capítulo especial: MCP e integraciones** | ¿Cómo conectar este agente con Claude, Gemini u otros LLMs? |
 | [08](./08_mintic_checklist.md) | Checklist de criterios MinTIC | ¿Qué pide el concurso y dónde está la evidencia de cada criterio? |
 | [09](./09_pitch_sustentacion.md) | Guion de pitch para sustentación | Demo en 5 minutos con preguntas anticipadas |
-| [10](./10_acta_cierre.md) | Acta de cierre del MVP | Estado final, métricas, gaps abiertos |
+| [10](./10_acta_cierre.md) | Acta de cierre del Sprint 6 (Beta-1) | Estado final, métricas, gaps abiertos |
+| 11 | [Roadmap post-Beta `PROD_IMPROV.md`](../PROD_IMPROV.md) | 10 mejoras priorizadas para iteraciones después de Beta-1 |
 
 ## Cómo verificar lo que afirmamos
 
 Cada decisión y resultado en estos documentos está respaldado por código real en este repositorio:
 
 - 📂 **Código fuente:** `mcp_server/`, `ai_engine/`, `app/`, `scripts/`
-- 🧪 **Tests:** `tests/` (más de 80 tests, incluyendo aceptación por sprint)
-- 📜 **Documentación viva:** [architecture.md](../architecture.md), [accessibility.md](../accessibility.md), [glossary.md](../glossary.md), [lessons_learned.md](../lessons_learned.md)
+- 🧪 **Tests:** `tests/` (**127+ tests**, incluyendo 95+ de aceptación congelada por sprint y 45 nuevos del Sprint 6: `test_stats_computer.py`, `test_number_validator.py`, `test_geo_resolver.py`, `test_geo_comparison.py`)
+- 📜 **Documentación viva:** [architecture.md](../architecture.md), [accessibility.md](../accessibility.md), [glossary.md](../glossary.md), [lessons_learned.md](../lessons_learned.md), [PROD_IMPROV.md](../PROD_IMPROV.md)
+- 🗂️ **ADRs:** 10 decisiones de arquitectura registradas (incluye ADR-009 cifras pandas y ADR-010 GeoResolver del Sprint 6)
 - 🏷️ **ADRs:** decisiones de arquitectura registradas en `MAIN.md §9` (privado del equipo)
 
 ## Resumen de la propuesta en una página

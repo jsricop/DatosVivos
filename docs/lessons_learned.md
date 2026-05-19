@@ -277,3 +277,90 @@ Si nada supera ambos filtros, `search()` retorna `[]` — preferible para el LLM
 **Aplicabilidad:** todos los Sprints 2-5. Sprint 1 ya cerrado con la deuda (capturada aquí). El archivo `tests/test_sprint2_acceptance.py` es el primer ejemplo de la práctica.
 
 ---
+
+### 🔒 Las instrucciones negativas al LLM 3B no son suficientes
+
+**Contexto:** En el journey 30 preguntas (2026-05-18), incluimos en el prompt del LLM la regla *"NO inventes ningún número que no esté en las filas"*. Aun así Qwen 2.5 Coder 3B narró *"92 municipios"* cuando los rows decían `n=0`, y *"39 presuntos homicidios"* cuando había 50 filas. El modelo ignora consistentemente las prohibiciones cuando el contexto le sugiere una cifra plausible.
+
+**Lección:** confiar en el LLM para no alucinar es un error de diseño cuando se trata de cifras. La única garantía operativa es **separar el cálculo del texto** y validar la salida post-hoc.
+
+**Solución implementada (ADR-009):**
+1. `StatsComputer` calcula con pandas todas las cifras deterministas y produce `whitelist_numbers`.
+2. El LLM recibe los rows + la ficha de cifras autorizadas y solo interpreta cualitativamente.
+3. `_validate_numbers` extrae cada cifra de la salida del LLM, normaliza es-CO, y censura la **oración entera** si la cifra no está en `whitelist ∪ derived_numbers`.
+
+**Resultado:** en el journey final (2026-05-19) cero alucinaciones detectadas en 30/30 preguntas. 0 oraciones censuradas (el LLM aprendió a respetar la whitelist con prompts pre-cargados).
+
+**Aplicabilidad:** cualquier sistema con LLM 3B-7B que muestre cifras al usuario final. Para LLMs de 70B+ la tasa de alucinación cae, pero el patrón "calcular en código + validar la salida" sigue siendo defensa en profundidad.
+
+---
+
+### 🗺️ Plantillas deterministas vencen al LLM en SoQL estructurado
+
+**Contexto:** Para queries comparativas multi-target (`"compara A y B"`, `"top N ciudades"`, `"X respecto al nacional"`), pedirle al `QueryGenerator` LLM 3B que construya el SoQL con `IN (...)` fallaba el ~70% de las veces: inventaba columnas, errores de sintaxis, o devolvía vacío.
+
+**Lección:** cuando la estructura del SoQL es predecible (basta combinar códigos + plantilla), el LLM es la herramienta equivocada. Las plantillas deterministas son 100% confiables, reproducibles y testeables.
+
+**Solución implementada (ADR-010):**
+- `geo_resolver.build_comparison_soql(ctx, columns)` construye el SoQL para `comparison_mode in {"vs", "ranking", "vs_national"}` con los códigos DIVIPOLA o nombres canónicos del `GeoContext`. Sin LLM.
+- Reconoce columnas-código (`cod_dpto`) y columnas-nombre (`departamento_del_hecho_dane`) en datasets heterogéneos de Socrata.
+- Fallback al `QueryGenerator` LLM solo si la plantilla no aplica (columna territorial ausente).
+
+**Resultado:** en el journey final, las preguntas que disparan `comparison_mode` ejecutan SoQL exitoso con altísima confiabilidad.
+
+**Aplicabilidad:** cualquier patrón de query estructurada con parámetros conocidos. SQL ad-hoc para reports, filtros geográficos, breakdowns por dimensión, etc.
+
+---
+
+### ♻️ El re-ranker LLM 3B tiene falsos negativos consistentes
+
+**Contexto:** Tras agregar un re-ranker LLM (le pasamos los top-K candidatos del retrieval y le pedimos elegir el mejor), detectamos que Qwen 3B responde `"NINGUNO"` con frecuencia incluso cuando los hits son relevantes (caso P6 *"Cuántas instituciones de salud hay en Chocó"* trajo dataset correcto en iter1 → 0 datasets en iter2 — distinta corrida, mismo input).
+
+**Lección:** los LLMs pequeños tienen baja recall en tareas de selección binaria. Tienden al *"safe answer"* (descartar todo).
+
+**Solución implementada (commit `eadab82`):**
+- Si el LLM dice `"NINGUNO"`, **conservar el top-1** del retrieval en lugar de devolver lista vacía. El threshold del vector index (`min_score=0.83`) ya garantiza calidad mínima.
+- Sin riesgo de regresión adversarial: casos como `"Quiero saber sobre Ecuador"` están protegidos antes por la lista negra de países en `GeoResolver`.
+
+**Aplicabilidad:** cualquier flujo donde un LLM 3-7B clasifica/ranquea opciones. Validar siempre que la decisión "no aplica" no sea un falso negativo.
+
+---
+
+### ⏱️ Timeouts duros en operaciones que pueden colgarse
+
+**Contexto:** El caso adversarial `"Quiero saber sobre Ecuador"` se atascó **67 minutos** en `_llm_reformulate` (Tier 3) — la combinación de Discovery API + LLM con prompt sin respuesta natural creó un bucle de espera.
+
+**Lección:** cualquier llamada externa (LLM, API HTTP, cliente Socrata) debe tener timeout duro a nivel del orquestador. No basta con timeouts internos de las librerías — quedan ignorados si la lib hace retry interno.
+
+**Solución implementada:**
+- `analyzer._llm_reformulate` con `asyncio.wait_for(timeout=60.0)`.
+- `analyzer._retrieve` con `asyncio.wait_for` de 5 s sobre Discovery API.
+- Cualquier excepción cae a fallback determinista en lugar de propagar.
+
+**Aplicabilidad:** todo agente de IA que orqueste llamadas externas. El timeout es un contrato de SLA con el usuario.
+
+---
+
+### 🧪 La estocasticidad del LLM contamina las comparaciones de iteraciones
+
+**Contexto:** Durante las 3 iteraciones de la sesión exploratoria (12 preguntas cada una), detectamos variaciones de ±10% del SoQL ejecutado entre runs con código idéntico. La causa raíz combinada: (a) re-ranker LLM con temperatura > 0 puede devolver índices distintos, (b) Discovery API puede tener latencias variables que afectan el boost, (c) el LLM 3B alterna entre formulaciones de SoQL distintas.
+
+**Lección:** para evaluar mejoras reales hay que **promediar varios runs** o adoptar componentes deterministas. Una sola corrida es señal ruidosa.
+
+**Práctica adoptada:** comparar siempre métricas agregadas (suma sobre 30 preguntas), no caso-por-caso individual. Identificar regresiones reales = ≥2 métricas globales bajan en runs consecutivos. Las "regresiones" en un solo caso son ruido en ~95% de los casos.
+
+**Aplicabilidad:** cualquier sistema con LLM no-determinista en el camino crítico. Considerar re-ranker semántico (embeddings + cosine) como reemplazo determinista del re-ranker LLM en Beta-2.
+
+---
+
+### 📐 Plan-first ahorra retrabajo en decisiones de diseño no triviales
+
+**Contexto:** Antes de implementar cifras pandas, planteé al usuario dos opciones extremas (radical: LLM no ve los rows; sin protección: LLM ve y validamos). Tras discutir el espacio de soluciones, el usuario eligió la opción balanceada (LLM ve rows + whitelist + post-validación). Si hubiera implementado la radical sin consultar, el resultado habría sido demasiado frío (LLM solo describe el dataset, no interpreta).
+
+**Lección:** cuando hay decisiones de diseño con tradeoffs reales, presentar el espacio de opciones con costos/beneficios explícitos **antes** de implementar. El usuario invierte 30 segundos en decidir y nos ahorra horas de implementación equivocada.
+
+**Práctica adoptada:** `AskUserQuestion` con tabla comparativa (no opciones genéricas como "¿OK?") cuando la decisión tiene impacto en arquitectura o UX. Plantear cada opción con: qué hace, qué cuesta, qué riesgo trae.
+
+**Aplicabilidad:** plan-mode general. Especialmente útil cuando trabajamos con un par (no asistente), donde la negociación de diseño es parte del valor.
+
+---

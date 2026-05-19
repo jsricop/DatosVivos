@@ -102,6 +102,55 @@ Tool MCP `cross_datasets` que integra entre 1 y 5 datasets vía `pandas.merge`. 
 ### Golden assertion
 Hecho del mundo real verificable contra fuente oficial, usado como criterio de aceptación en tests. Ejemplo: *Antioquia tiene 125 municipios en DIVIPOLA* — verificable contra el dataset `gdxc-w37w` del DANE.
 
+## Cifras verificadas y validador de alucinaciones (ADR-009)
+
+### StatsComputer
+Módulo `ai_engine/stats_computer.py`. Calcula determinísticamente con pandas los estadísticos a partir de los rows reales devueltos por Socrata. Devuelve un `Statistics` con `total_rows`, `column_summaries` (uno por columna con kind = numeric|categorical|datetime|id), `aggregate_hits` (líneas de agregados detectados del SoQL), `summary_lines` (texto es-CO listo para mostrar), `whitelist_numbers` y `derived_numbers`.
+
+### Statistics
+Dataclass frozen con todos los productos del `StatsComputer.compute()`. Expuesto en `AnalysisResult.statistics`. El bloque "📊 Datos verificados" que ve el ciudadano se construye a partir de sus `summary_lines`.
+
+### whitelist_numbers
+Conjunto (`frozenset[str]`) de cifras que el LLM puede citar en su narrativa interpretativa. Se construye en `_build_whitelist` con: cada valor numérico literal de los rows + cada agregado calculado (count, min, max, mean, sum) + conteos y porcentajes top-N + año/fecha min/max para columnas temporales. Las cifras se normalizan canónicamente con `_normalize_number` para que "125.000" (es-CO miles) y "125000" se traten como la misma.
+
+### derived_numbers
+Conjunto análogo de cifras "derivadas razonables": deltas max-min, ratios top-N, número de períodos en series temporales, porcentajes redondeados (±0.5). Permite al LLM citar combinaciones evidentes sin que el validador las censure.
+
+### Post-validador de cifras
+`ai_engine/analyzer.py::_validate_numbers(text, stats)`. Extrae cada cifra del texto LLM con regex (excluye IDs como `gdxc-w37w`), normaliza es-CO, y censura la **oración entera** que contenga una cifra fuera de `whitelist ∪ derived`. Si todas las oraciones se censuran, fallback determinista "Consulta el bloque de datos verificados a continuación".
+
+### Normalización es-CO de números
+Heurística pragmática implementada en `_normalize_number`: si el último separador (.,) es seguido por **3 dígitos**, se trata como **miles** (`125.000` → `125000`). Si es seguido por 1-2 dígitos, se trata como **decimal** (`12.5` → `12.5`). Esto invierte la convención inglesa pero refleja el uso es-CO predominante en datos públicos colombianos.
+
+## Geolocalización y comparativa multi-target (ADR-010)
+
+### GeoResolver
+Módulo `ai_engine/geo_resolver.py`. Detecta menciones a territorios colombianos en la pregunta del ciudadano y devuelve un `GeoContext` canónico. Cobertura inicial: 32 departamentos + Bogotá D.C. con sinónimos comunes + 39 capitales y mpios grandes. Fuzzy match con `difflib` (cutoff 0.78). Protección contra falsos positivos: lista negra de países extranjeros.
+
+### GeoTarget
+Dataclass frozen con `name`, `code` (DIVIPOLA o None si nivel nacional) y `level` (`"national"` | `"dpto"` | `"mpio"`). El `GeoContext.targets` es una lista de hasta 5 targets, usada para comparativas multi-target.
+
+### GeoContext
+Contexto geográfico resuelto. Expone `targets`, `comparison_mode`, `groupby`, `scope`, `confidence`, `notes`, `top_n`. Accessors retrocompatibles `dpto_code`/`dpto_name`/`mpio_code`/`mpio_name` que infieren del primer target del tipo correspondiente.
+
+### comparison_mode
+Tipo de comparativa detectada por GeoResolver. Valores:
+- `"vs"`: dos o más territorios a comparar (`"compara A y B"`, `"A vs B"`).
+- `"ranking"`: top-N o ranking (`"top 10 ciudades con más X"`).
+- `"vs_national"`: target local vs agregado nacional (`"X respecto al promedio nacional"`).
+- `None`: no es comparativa.
+
+### Plantillas SoQL deterministas
+Función `build_comparison_soql(ctx, columns)` en `geo_resolver.py`. Para `comparison_mode` no-None, construye el SoQL **sin pasar por LLM** usando los códigos/nombres del `GeoContext`. Reconoce columnas-código (`cod_dpto`, `codigo_dane_departamento`) y columnas-nombre (`departamento_del_hecho_dane`, `municipio`) con `lower(col) IN (...)` y variantes sin tildes.
+
+### Regla anti-capital
+Si la pregunta usa plural genérico (`"municipios"`, `"departamentos"`) Y nombra un dpto pero NO un mpio explícito, el resolver descarta los matches de mpios que sean capitales del dpto mencionado. Evita que `"municipios de Antioquia"` colapse a `Medellín`.
+
+## Telemetría operativa Beta-1
+
+### Telemetría CSV
+Logger best-effort en `ai_engine/telemetry.py`. Persiste cada consulta en `data/telemetry/queries.csv` con schema fijo: `timestamp_iso, question, intent, datasets_used, soql_executed, rows_count, censored_count, elapsed_s, had_statistics`. Errores silenciosos (telemetría no debe tumbar el flujo). Migración planificada a PostgreSQL en `PROD_IMPROV.md#7`.
+
 ## Concurso / contexto
 
 ### Datos al Ecosistema 2026

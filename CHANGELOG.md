@@ -6,6 +6,56 @@ Formato adaptado de [Keep a Changelog](https://keepachangelog.com/). Categorías
 
 ---
 
+## [Sprint 6 — Beta-1: cifras verificadas + GeoResolver + comparativa] — 2026-05-19
+
+Sprint dedicado al endurecimiento del motor para lanzamiento beta. Foco: cero alucinaciones de cifras, trazabilidad por enlaces, comparativas geográficas multi-target y telemetría operativa. Push directo a `develop` con 8 commits granulares (`4aaecae` → `eadab82`) para rollback quirúrgico.
+
+### Agregado
+- **`ai_engine/stats_computer.py`** (290 LoC): cálculo determinista de estadísticas con pandas. `Statistics` expone `summary_lines` (texto es-CO), `whitelist_numbers` (cifras autorizadas), `derived_numbers` (ratios y deltas). Auto-cast de strings SODA a numérico/fecha (pandas 3.0 / PyArrow). Helper `_normalize_number` con heurística es-CO (3 dígitos finales = miles, 1-2 = decimal).
+- **`ai_engine/geo_resolver.py`** (485 LoC): detección de territorios colombianos con DIVIPOLA. 32 departamentos + Bogotá D.C. con sinónimos comunes. 39 capitales y municipios grandes. Fuzzy match con `difflib` (cutoff 0.78). Multi-target: `GeoContext.targets: list[GeoTarget]` + `comparison_mode` (`vs`/`ranking`/`vs_national`/None). Plantillas SoQL deterministas via `build_comparison_soql()` que reconoce columnas-código y columnas-nombre (`cod_dpto`, `departamento_del_hecho_dane`, `municipio`, etc.).
+- **`ai_engine/telemetry.py`** (68 LoC): logger CSV append-only para fase beta. Schema fijo: timestamp, question, intent, datasets_used, soql_executed, rows_count, censored_count, elapsed_s, had_statistics. Best-effort: errores no rompen el flujo principal.
+- **`scripts/exploratory_session.py`**: batería de 12 preguntas fuera del journey congelado para detectar gaps no cubiertos.
+- **Tests congelados** (45 nuevos):
+  - `test_stats_computer.py` (8): aggregations, auto-cast, normalización es-CO, determinismo.
+  - `test_number_validator.py` (8): whitelist, censura por oración, formato es-CO, IDs alfanuméricos, fallback.
+  - `test_geo_resolver.py` (13): matriz de 5 patrones, sinónimos, fuzzy, anti-falsos-positivos.
+  - `test_geo_comparison.py` (16): multi-target, comparison_mode, plantillas SoQL, columnas-nombre.
+- **`docs/PROD_IMPROV.md`**: roadmap post-beta con 10 mejoras priorizadas (LLM 7B, cache local, cobertura mpios, ranking implícito, validación geo de rows, etc.).
+- **ADRs 009 y 010**: cifras pandas + whitelist; GeoResolver DIVIPOLA + plantillas SoQL deterministas.
+
+### Cambiado
+- **`ai_engine/analyzer.py`**: integración completa de StatsComputer + GeoResolver + plantillas SoQL. `_narrate_with_data` ahora:
+  - Si 0 filas → respuesta determinista sin LLM.
+  - Si filas → LLM recibe rows + ficha de cifras autorizadas; toda cifra de la salida se valida contra whitelist; oraciones con cifras no autorizadas se censuran.
+- `_narrate_no_matches` → ahora es **determinista**, sin LLM (corrige alucinación P30 'Ecuador' que inventaba datasets ecuatorianos).
+- `_llm_reformulate` → timeout duro de 60 s (corrige caso P30 que se atascó 67 min en versión previa).
+- `_rerank_with_llm` → cuando dice 'NINGUNO' conserva el top-1 (en vez de descartar todo, lo que provocaba falsos negativos del LLM 3B — corrige regresión P6 'Chocó').
+- Retrieval híbrido vector + Discovery API con timeout 5 s + GEO_BOOST adicional cuando geo_ctx resuelve un territorio mencionado en metadata.
+- `AnalysisResult` expone tres campos nuevos: `dataset_references` (id + name + entity + url página + url JSON), `statistics: Statistics`, `geo_context: GeoContext`.
+- **`app/pages/chat.py`**: nuevo bloque visible "📚 Fuentes consultadas (verifícalo tú mismo)" con enlaces clicables a `https://www.datos.gov.co/d/{id}` y al endpoint JSON SODA. Disclaimer beta en header. Telemetría por consulta.
+- **`scripts/user_journey_test.py`**: ampliado de 8 a **30 preguntas en 10 categorías** (geo simple, salud, educación, contratación, seguridad, economía, ambiente, comparativa, temporal, adversarial). Métricas nuevas: SoQL ejecutado, cifras verificadas pandas, oraciones censuradas.
+
+### Corregido
+- **Alucinación de cifras** (`"92 municipios"`, `"39 homicidios"`, etc.): toda cifra ahora viene exclusivamente de cálculo pandas sobre rows reales. Validador post-LLM censura oraciones con números fuera de whitelist.
+- **Alucinación de datasets** (caso adversarial 'Ecuador'): la respuesta sin matches ahora es texto fijo, sin invocar LLM.
+- **Crash `IndexError`** cuando rerank devolvía `[]` y el flujo accedía `hits[0]`: ahora la lista vacía cae al branch de no_matches determinista. Eliminó 3 crashes del journey.
+- **Bug del overlap "Cauca" ⊂ "Valle del Cauca"**: dedup de matches por rango contenido.
+- **Regla anti-capital**: si la pregunta usa plural genérico ("municipios", "departamentos") y nombra un dpto, NO se infiere el municipio capital (resuelve "¿cuántos municipios tiene Antioquia?" sin colapsar a Medellín).
+
+### Métricas finales del journey 30 preguntas (2026-05-19)
+
+| Métrica | Pre-Sprint 6 | Sprint 6 final | Δ |
+|---|---|---|---|
+| Tiempo total | 5218 s | 626 s | **−88%** |
+| Completadas sin crash | 27/30 | 30/30 | +3 |
+| Sin palabras prohibidas | 30/30 | 30/30 | mantenido |
+| SoQL ejecutado | 12/30 | 16/30 | +33% |
+| Cifras verificadas pandas | 12/30 | 16/30 | +33% |
+| Oraciones censuradas | 2 | 0 | −100% |
+| Suite tests verdes | 24 | 55 | +129% |
+
+---
+
 ## [Sprint 5 — Documentación CRISP-ML(Q)] — 2026-05-16
 
 PR [#12](https://github.com/jsricop/DatosVivos/pull/12).

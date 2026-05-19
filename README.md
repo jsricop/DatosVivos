@@ -27,14 +27,14 @@ Cada documento tiene tres lentes: 🏛️ jurado MinTIC · 🛠️ ciudadanía t
 Tres capas:
 
 1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
-2. **Motor de IA** — clasificador de intención (embeddings `multilingual-e5-large`) + índice vectorial de metadatos (ChromaDB, 8 389 datasets) + generador local (Ollama / Qwen 2.5 Coder 3B default, 7B opcional). Búsqueda 3-tier con acrónimos + topic keywords + reformulación LLM. **Sprints 2-3.**
-3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + Web Speech API). **Sprint 4.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
+2. **Motor de IA** — clasificador de intención (embeddings `multilingual-e5-large`) + índice vectorial de metadatos (ChromaDB, 8 389 datasets) + generador local (Ollama / Qwen 2.5 Coder 3B default, 7B opcional). Búsqueda 3-tier (acrónimos + topic keywords + reformulación LLM), GeoResolver con DIVIPOLA, plantillas SoQL deterministas para comparativas, validador whitelist anti-alucinación de cifras. **Sprints 2-3 + Sprint 6 endurecimiento Beta-1.**
+3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + Web Speech API + enlaces verificables a cada dataset citado + telemetría CSV). **Sprint 4 + Sprint 6.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
 
 ## Stack
 
-Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · sentence-transformers `multilingual-e5-large` · ChromaDB · Streamlit · Plotly · Folium · `streamlit-folium` · Web Speech API · Docker Compose · Nginx (producción)
+Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · sentence-transformers `multilingual-e5-large` · ChromaDB · pandas 3.0 (auto-cast + estadísticas deterministas) · Streamlit · Plotly · Folium · `streamlit-folium` · Web Speech API · Docker Compose · Nginx (producción)
 
-## Estado actual (2026-05-16)
+## Estado actual (2026-05-19)
 
 | Capa | Sprint | Estado |
 |---|---|---|
@@ -44,6 +44,16 @@ Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · 
 | Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
 | Streamlit + accesibilidad (sin Power BI) | 4 | ✅ Funcional, 16 tests verdes |
 | Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | 5 | ✅ Redactados en `docs/crisp_mlq/` |
+| **Cifras pandas + whitelist anti-alucinación** | **6** | **✅ 55 tests verdes; 30/30 sin alucinaciones en journey** |
+| **GeoResolver DIVIPOLA + comparativa multi-target** | **6** | **✅ plantillas SoQL deterministas; tests congelados** |
+| **Telemetría CSV + disclaimer beta + enlaces verificables** | **6** | **✅ activa por defecto** |
+
+## Garantías para el ciudadano (Beta-1)
+
+- **Cero cifras inventadas**: toda cuantificación que aparece en una respuesta se calcula con pandas sobre los rows reales devueltos por Socrata. Si el LLM intenta colar un número fuera de la lista blanca, esa oración se censura antes de mostrarse.
+- **Trazabilidad por enlace**: cada respuesta incluye los IDs de los datasets consultados + un link clicable a `https://www.datos.gov.co/d/{id}` (página humana) y al endpoint JSON SODA (para reusar los datos).
+- **Honestidad sobre límites**: si no encontramos datasets relevantes, lo decimos con un mensaje fijo. No inventamos datasets ficticios ni datos de otros países.
+- **Geolocalización estricta**: cuando preguntás sobre un departamento o municipio, usamos códigos DIVIPOLA oficiales y plantillas SoQL deterministas (no le pedimos al LLM que "adivine" el filtro).
 
 ## Estructura
 

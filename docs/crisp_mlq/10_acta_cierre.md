@@ -1,6 +1,6 @@
-# 10 — Acta de cierre del Sprint 5 y del MVP
+# 10 — Acta de cierre del Sprint 6 (Beta-1) y del MVP
 
-**Fecha de cierre:** 2026-05-16
+**Fecha de cierre:** 2026-05-19
 **Equipo:** ANI (Agencia Nacional de Infraestructura) — Oficina de Tecnología
 **Concurso:** Datos al Ecosistema 2026: IA para Colombia — Reto #07
 **Repositorio:** https://github.com/jsricop/DatosVivos
@@ -10,14 +10,15 @@
 
 | Sprint | Entregable | Estado |
 |---|---|---|
-| 1 | MCP Server + 3 tools sobre datos.gov.co | ✅ |
+| 1 | MCP Server + 4 tools sobre datos.gov.co | ✅ |
 | 2 | Motor de IA local (índice vectorial + clasificador) | ✅ |
 | 3 | `cross_datasets` + Ollama + analyzer end-to-end | ✅ |
 | Extensión | 3-tier search (acrónimos + topic keywords + LLM) | ✅ |
 | 4 | UI Streamlit + accesibilidad (sin Power BI) | ✅ |
 | 5 | Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | ✅ |
+| **6 (Beta-1)** | **Cifras pandas + GeoResolver + comparativa + telemetría** | **✅** |
 
-## Métricas finales del MVP
+## Métricas finales del MVP (Sprint 6 — Beta-1)
 
 | Métrica | Valor |
 |---|---|
@@ -26,13 +27,26 @@
 | Aliases de acrónimos | **562** |
 | Topic keywords | **~3 050** |
 | Tools MCP expuestas | **4** |
-| Tests automatizados | **82** (suite no-integration) |
-| Tests de aceptación congelados por sprint | **4 sprints, 50+ tests** |
-| ADRs registrados | **8** (públicos en `docs/adr/`) |
-| Documentos CRISP-ML(Q) | **9** + checklist + pitch + acta |
-| Lecciones aprendidas documentadas | **10+** |
-| Líneas de Python | ~5 000 |
-| Líneas de documentación | ~3 500 |
+| Tests automatizados | **127+** (incluye 45 nuevos del Sprint 6: stats, validator, geo, comparison) |
+| Tests de aceptación congelados | **5 sprints, 95+ tests** |
+| ADRs registrados | **10** (públicos en `docs/adr/`, incluye ADR-009 y ADR-010) |
+| Documentos CRISP-ML(Q) | **9** + checklist + pitch + acta + roadmap `PROD_IMPROV.md` |
+| Lecciones aprendidas documentadas | **15+** |
+| Líneas de Python | ~6 800 |
+| Líneas de documentación | ~5 000 |
+
+## Métricas del journey final (2026-05-19, 30 preguntas con Ollama real)
+
+| Métrica | Valor |
+|---|---|
+| Preguntas completadas sin crash | **30/30** |
+| Sin palabras prohibidas en narrativa | **30/30** |
+| Oraciones censuradas por validador whitelist | **0** |
+| SoQL ejecutado contra Socrata | **16/30** |
+| Con cifras verificadas por pandas | **16/30** |
+| Tiempo medio por pregunta | **~21 s** |
+| Tiempo total | **626 s (10.4 min)** |
+| Mejora vs baseline (5 218 s) | **−88%** |
 
 ## Cumplimiento de disciplinas adoptadas
 
@@ -50,11 +64,12 @@
 
 ## Gaps abiertos honestos (declarados al jurado)
 
-Todos los gaps cerrables localmente se cerraron antes del 2026-05-16. Quedan únicamente:
+Todos los gaps cerrables localmente se cerraron antes del 2026-05-19. Quedan únicamente:
 
-1. **PostgreSQL logging persistente** — fuera de scope del Sprint 4. Schema definido en `db/init.sql` como referencia. Activable cuando se decida instrumentar telemetría real.
-2. **Power BI / dashboards analíticos** — fuera de scope del entregable ([ADR-008](../adr/008-scope-sin-powerbi.md)). Conectable a PostgreSQL cuando se active el logging.
-3. **Demo público con TLS** — pendiente publicación.
+1. **Telemetría persistente PostgreSQL** — en Beta-1 logueamos en CSV append-only (`data/telemetry/queries.csv`). Migración a PostgreSQL planificada cuando supere 10k consultas. Ver [`PROD_IMPROV.md#7`](../PROD_IMPROV.md#7-migrar-telemetría-csv--postgresql).
+2. **Power BI / dashboards analíticos** — fuera de scope del entregable ([ADR-008](../adr/008-scope-sin-powerbi.md)). Conectable a PostgreSQL cuando se active la telemetría persistente.
+3. **Demo público con TLS** — pendiente exposición de la VM con dominio HTTPS.
+4. **Mejoras incrementales post-Beta** — declaradas en [`docs/PROD_IMPROV.md`](../PROD_IMPROV.md) con prioridad y criterios de éxito: LLM 7B, cache de datasets, cobertura completa de mpios DIVIPOLA, detección de ranking implícito, validación geo de rows, etc.
 
 ## Lecciones aprendidas en proceso
 
@@ -62,6 +77,11 @@ Todos los gaps cerrables localmente se cerraron antes del 2026-05-16. Quedan ún
 - El bug del campo `tags` de Socrata (mal poblado con `columns_field_name`) **no se hubiera detectado sin auditar el catálogo a fondo**. La fase Data Understanding pagó dividendos.
 - **El usuario no menciona entidades por nombre** — diseñar 3-tier search desde el inicio hubiera ahorrado un retrabajo de Sprint 2 a Sprint 3. Captured en [ADR-007](../adr/007-busqueda-3-tiers.md).
 - **El error operativo del PR #11 a main** (en vez de develop) se corrigió por fast-forward sin pérdida de cambios. Lección: pasar `--base develop` explícito en `gh pr create`. PR #12 ya lo aplica.
+- **Las instrucciones negativas al LLM 3B no son suficientes** — Qwen 3B ignora "no inventes cifras" cuando le pasamos los rows. La solución estructural es separar el cálculo (pandas) de la prosa (LLM) y validar post-hoc. Capturado en [ADR-009](../adr/009-cifras-pandas-whitelist.md).
+- **Las plantillas deterministas vencen al LLM en SoQL estructurado** — para queries comparativas (vs / ranking / vs_national) el LLM 3B falla el 70% por inventar columnas. Una plantilla con `IN (...)` es 100% confiable y reproducible. Capturado en [ADR-010](../adr/010-geo-resolver.md).
+- **El re-ranker LLM 3B tiene falsos negativos consistentes** — dice 'NINGUNO' aunque haya datasets relevantes. Mitigación: conservar el top-1 del retrieval, no descartar todo. Commit `eadab82`.
+- **La estocasticidad del LLM y de Discovery API añade ±10% de ruido entre runs idénticos** — para evaluación rigurosa hace falta promediar varios runs o adoptar componentes deterministas (re-ranker semántico).
+- **El plan-first con `AskUserQuestion` ahorra retrabajo cuando hay decisiones de diseño no triviales** (radical vs balanceado en cifras pandas). El usuario decide con tradeoffs explícitos antes de que se invierta esfuerzo de implementación.
 
 ## Anexo: cómo el equipo auditor puede verificar todo
 

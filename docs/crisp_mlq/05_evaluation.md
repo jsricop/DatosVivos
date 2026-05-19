@@ -103,7 +103,51 @@ Documentamos para que el jurado y los usuarios sepan a qué atenerse:
 
 4. **`cross_datasets` requiere que los datasets compartan la clave de join**. No detectamos automáticamente cuando dos datasets *no son cruzables*; el LLM puede pedir un cruce que devuelve 0 filas. Esto es por diseño: no nos arriesgamos a inventar joins por columnas con el mismo nombre pero distinto significado.
 
-5. **No instrumentamos logging persistente en PostgreSQL**. Fuera de scope del Sprint 4. El schema existe en `db/init.sql` como referencia para un sprint posterior.
+5. **No instrumentamos logging persistente en PostgreSQL** en Beta-1. La telemetría se persiste en CSV append-only (`data/telemetry/queries.csv`); el schema PostgreSQL existe en `db/init.sql` y la migración está planificada en [`PROD_IMPROV.md#7`](../PROD_IMPROV.md#7-migrar-telemetría-csv--postgresql).
+
+---
+
+## 🎯 Sprint 6 (Beta-1) — endurecimiento previo al lanzamiento
+
+Tras detectar **alucinaciones consistentes de cifras** en el journey con Qwen 3B (cifras inventadas como "92 municipios" cuando los rows decían `n=0`), se aplicó un endurecimiento integral cuyo principio rector es: **el LLM no inventa números; pandas calcula, el LLM interpreta**. Detalles en [ADR-009](../adr/009-cifras-pandas-whitelist.md) y [ADR-010](../adr/010-geo-resolver.md).
+
+### Mitigaciones aplicadas
+
+1. **`ai_engine/stats_computer.py`** — todo cálculo cuantitativo viene de pandas sobre los rows reales. `Statistics.whitelist_numbers` define qué cifras puede citar el LLM.
+2. **`ai_engine/analyzer.py::_validate_numbers`** — extrae cifras de la salida del LLM, las normaliza es-CO, y censura la oración entera si la cifra no está en whitelist.
+3. **`ai_engine/geo_resolver.py`** — detecta territorios DIVIPOLA y produce `GeoContext` con `targets`, `comparison_mode` (`vs`/`ranking`/`vs_national`) y reglas anti-falsos-positivos (países extranjeros, regla anti-capital con plural genérico).
+4. **Plantillas SoQL deterministas** (`build_comparison_soql`) — para comparativas se construye el SoQL **sin** pasar por LLM. Reconoce columnas-código y columnas-nombre.
+5. **`_narrate_no_matches` determinista** — cuando 0 datasets, texto fijo en español; cero margen para que el LLM invente datasets ficticios (caso adversarial "Ecuador").
+6. **Timeout duro de 60 s en `_llm_reformulate`** — antes un caso adversarial se atascó 67 minutos.
+7. **`_rerank_with_llm` conserva top-1 si dice 'NINGUNO'** — corrige falsos negativos del LLM 3B (regresión P6 "Chocó" en iter2 de la sesión exploratoria).
+8. **Telemetría CSV** — cada consulta logguea intent, datasets, soql, rows, censuras, latencia.
+
+### Métricas finales del journey 30 preguntas (2026-05-19)
+
+| Métrica | Pre-Sprint 6 | Sprint 6 final | Δ |
+|---|---|---|---|
+| Tiempo total | 5 218 s | **626 s** | **−88%** |
+| Completadas sin crash | 27/30 | 30/30 | +3 |
+| Sin palabras prohibidas | 30/30 | 30/30 | mantenido |
+| SoQL ejecutado contra Socrata | 12/30 | 16/30 | +33% |
+| Con cifras verificadas pandas | 12/30 | 16/30 | +33% |
+| Oraciones censuradas por whitelist | 2 | **0** | −100% |
+
+### Tests congelados nuevos (Sprint 6)
+
+- `tests/test_stats_computer.py` — 8 frozen (aggregations, auto-cast, normalización es-CO, determinismo).
+- `tests/test_number_validator.py` — 8 frozen (whitelist, censura por oración, formato es-CO, IDs alfanuméricos, fallback).
+- `tests/test_geo_resolver.py` — 13 frozen (matriz de 5 patrones, sinónimos, fuzzy, anti-falsos-positivos).
+- `tests/test_geo_comparison.py` — 16 frozen (multi-target, comparison_mode, plantillas SoQL, columnas-nombre).
+
+Total **45 tests congelados nuevos**. Suite crítica completa: **55 verdes** (10 Sprint 3 + 8 stats + 8 validator + 13 geo + 16 comparison).
+
+### Riesgos residuales (declarados al jurado)
+
+1. **Atribución incorrecta de cifra correcta**: el LLM puede decir "125 departamentos" cuando son "125 municipios" — la cifra está en whitelist pero la categoría conceptual está mal. Mitigación parcial: el bloque "📊 Datos verificados" debajo de la narrativa siempre etiqueta correctamente. Mejora planificada en [`PROD_IMPROV.md#5`](../PROD_IMPROV.md#5-validación-geográfica-de-rows-anti-atribución-incorrecta).
+2. **Cobertura de municipios DIVIPOLA limitada a ~39** (capitales + grandes). Resolución completa de ~1100 mpios queda en [`PROD_IMPROV.md#3`](../PROD_IMPROV.md#3-cobertura-completa-de-municipios-divipola).
+3. **Comparativas implícitas no detectadas** ("qué departamento tiene más X" sin "top N" explícito) — [`PROD_IMPROV.md#4`](../PROD_IMPROV.md#4-detección-de-comparativa-implícita).
+4. **Estocasticidad del re-ranker LLM 3B** — varía ±10% del SoQL ejecutado entre runs idénticos. Mitigado conservando top-1; eliminación completa requiere LLM 7B o re-ranker semántico ([`PROD_IMPROV.md#8`](../PROD_IMPROV.md#8-re-ranker-más-estable)).
 
 ### Reproducibilidad
 

@@ -17,10 +17,12 @@
 |---|---|---|---|
 | 1.1 | Aplicación funcional sobre datos abiertos colombianos | ✅ | UI Streamlit corriendo (`app/`), MCP server consultando `datos.gov.co` (`mcp_server/`). |
 | 1.2 | Uso de lenguaje natural por parte del ciudadano | ✅ | Chat con `st.chat_input`, NL → SoQL en `ai_engine/query_generator.py`. |
-| 1.3 | Respuestas verificables (con trazabilidad de fuente) | ✅ | `AnalysisResult` expone `datasets_used`, `soql_executed`. Cada respuesta cita `dataset_id` y permalink. |
+| 1.3 | Respuestas verificables (con trazabilidad de fuente) | ✅ | `AnalysisResult` expone `datasets_used`, `dataset_references` (URLs página + JSON SODA), `soql_executed`, `statistics` (Sprint 6). Toda cifra es reproducible ejecutando el SoQL citado. **Cero alucinaciones detectadas** en journey 30 preguntas (2026-05-19). Validador `_validate_numbers` censura toda cifra fuera de la whitelist pandas. Ver [ADR-009](../adr/009-cifras-pandas-whitelist.md). |
 | 1.4 | Cobertura no trivial del catálogo | ✅ | 8 389 datasets indexados via `scripts/build_index.py`. |
 | 1.5 | Visualizaciones (cuando aplica) | ✅ | Plotly (`chart_renderer.py`) auto-detecta líneas/barras/scatter. Folium (`map_renderer.py`) para geo. |
 | 1.6 | Cruces entre datasets | ✅ | Tool `cross_datasets` (N=1..5) con guardia anti-FP. Tests `test_cross_multi_acceptance.py`. |
+| 1.7 | **Geolocalización canónica DIVIPOLA** (Sprint 6) | ✅ | `ai_engine/geo_resolver.py` con 32 dptos + 39 mpios + sinónimos + fuzzy. Plantillas SoQL deterministas para comparativa (vs / ranking / vs_national). Ver [ADR-010](../adr/010-geo-resolver.md). |
+| 1.8 | **Cifras estadísticas deterministas** (Sprint 6) | ✅ | `ai_engine/stats_computer.py` con pandas + whitelist auditable. 0 cifras alucinadas en evaluación con LLM real. |
 
 ## Categoría 2 — Accesibilidad (Ley 1618 / WCAG 2.1)
 
@@ -79,12 +81,16 @@
 | 7.3 | Demo accesible al jurado | 🔜 | URL pública con TLS pendiente — VM lista por VPN. |
 | 7.4 | Video / pitch deck | 🔜 | Por producir antes de sustentación (Jul 14-17). |
 
-## Gaps abiertos al cierre del Sprint 5 FASE 0-8
+## Gaps abiertos al cierre del Sprint 6 (Beta-1 — 2026-05-19)
 
 1. **Publicación pública** — pendiente coordinación con MinTIC del proceso (`datos.gov.co` y `herramientas.datos.gov.co/usos`).
 2. **Pitch / video** — entregable de sustentación, no del repo.
-3. ~~**Test fallido conocido del Qwen 3B**~~ — **cerrado 2026-05-16**: prompt endurecido con few-shot examples + `max_retries=2` + feedback específico cuando la columna inventada parece alias agregado (`cantidad_*`, `total_*`). Verificado: 3/3 corridas consecutivas del test golden pasan en 2-8 s c/u.
-4. **Demo público con TLS** — la VM corre por VPN; falta exponerla con dominio HTTPS antes de sustentación.
+3. ~~**Test fallido conocido del Qwen 3B**~~ — **cerrado 2026-05-16**: prompt endurecido + `max_retries=2` + feedback de alias agregado.
+4. ~~**Alucinaciones de cifras en narrativa**~~ — **cerrado 2026-05-19** (Sprint 6, ADR-009): cifras solo desde pandas + post-validador whitelist. 0 alucinaciones en journey 30 preguntas.
+5. ~~**Crash `IndexError` cuando rerank vacío**~~ — **cerrado 2026-05-19** (Sprint 6): fallback a `_deterministic_no_matches`. 30/30 completadas sin crash.
+6. ~~**`Tier 3 reformulación` se atascaba minutos**~~ — **cerrado 2026-05-19** (Sprint 6): timeout duro 60 s.
+7. **Demo público con TLS** — la VM corre por VPN; falta exponerla con dominio HTTPS antes de sustentación.
+8. **Mejoras post-Beta-1** — declaradas en [`docs/PROD_IMPROV.md`](../PROD_IMPROV.md): LLM 7B, cache de datasets, cobertura completa de mpios, ranking implícito, validación geo de rows, multi-query vs_national, etc.
 
 ## Cómo el jurado puede verificar todo
 
