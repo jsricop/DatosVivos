@@ -5,8 +5,10 @@
 # Qué hace:
 #   - Crea un servicio systemd `datosvivos-tunnel` que corre `cloudflared
 #     tunnel --url http://localhost:8501` en background con Restart=always.
-#   - El tunnel inicia conexión SALIENTE a Cloudflare por TCP/443 (no requiere
-#     abrir ningún puerto entrante en el firewall de ANI).
+#   - El tunnel inicia conexión SALIENTE a Cloudflare por **TCP/7844**
+#     (puerto oficial — requiere autorización en firewalls corporativos
+#     que solo abran 443). Forzamos --protocol http2 para evitar QUIC
+#     sobre UDP/7844 que muchos firewalls bloquean por default.
 #   - Cloudflare genera una URL pública aleatoria `https://xxx.trycloudflare.com`
 #     con cert TLS válido y enruta a la Streamlit interna.
 #
@@ -64,6 +66,7 @@ Type=simple
 User=nobody
 ExecStart=/usr/local/bin/cloudflared tunnel \\
   --url ${LOCAL_URL} \\
+  --protocol http2 \\
   --no-autoupdate \\
   --loglevel info
 Restart=always
