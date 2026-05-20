@@ -25,6 +25,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from ai_engine.geo_resolver_data import MUNICIPIOS_DIVIPOLA
+
 # ----------------------------------------------------------------------
 # Diccionario DIVIPOLA
 # ----------------------------------------------------------------------
@@ -67,7 +69,10 @@ DEPARTAMENTOS: list[tuple[str, str, list[str]]] = [
     ("Vichada", "99", []),
 ]
 
-# Capitales departamentales (cod_mpio = cod_dpto + "001" usualmente).
+# Capitales departamentales hardcoded (lista corta, mantenida explícitamente
+# para que la regla "anti-capital" sepa exactamente qué mpios saltarse cuando
+# la pregunta usa plural genérico). El catálogo completo de ~1100 mpios vive
+# en `geo_resolver_data.MUNICIPIOS_DIVIPOLA`.
 # (mpio_name, mpio_code, dpto_code)
 CAPITALES: list[tuple[str, str, str]] = [
     ("Leticia", "91001", "91"),
@@ -114,6 +119,13 @@ CAPITALES: list[tuple[str, str, str]] = [
 
 # Países extranjeros que comparten nombre o se parecen — protección contra falsos positivos.
 PAISES_EXTRANJEROS = {"ecuador", "peru", "venezuela", "brasil", "panama", "mexico", "chile", "argentina"}
+
+# Nombres de mpio que NUNCA se matchean directamente porque se confunden con
+# entidades de mayor jerarquía (país, depto). Quienes quieran el mpio específico
+# pueden agregar nombre+depto ("Colombia, Huila") y se resolverá vía dpto.
+_MPIO_BLACKLIST: set[str] = {
+    "colombia",  # mpio en Huila — choca con país Colombia
+}
 
 
 @dataclass(frozen=True)
@@ -224,6 +236,36 @@ def _build_lookups() -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, s
             dpto[_normalize(syn)] = (canonical, code)
 
     mpio: dict[str, tuple[str, str, str]] = {}
+    # Primero el catálogo completo DIVIPOLA (~1122 mpios extraídos de gdxc-w37w).
+    for name, mcode, dcode in MUNICIPIOS_DIVIPOLA:
+        key = _normalize(name)
+        if key in _MPIO_BLACKLIST:
+            continue
+        mpio[key] = (name, mcode, dcode)
+    # Alias coloquial: para nombres con patrón "X de Y" (ej. "San Andrés
+    # de Tumaco" → "Tumaco") agregar el sufijo después de " de " como alias.
+    # Refleja el uso cotidiano del ciudadano. Reglas:
+    # - Solo si el alias no existe ya como mpio (no sobreescribimos un mpio real).
+    # - Solo si el alias NO es nombre de un dpto (evita "Santa Fé de Antioquia"
+    #   → "antioquia" choque con el dpto Antioquia).
+    # - Mínimo 4 caracteres (evita aliases ultra-genéricos).
+    for name, mcode, dcode in MUNICIPIOS_DIVIPOLA:
+        key = _normalize(name)
+        if key in _MPIO_BLACKLIST:
+            continue
+        if " de " not in key:
+            continue
+        _, _, after_de = key.partition(" de ")
+        after_de = after_de.strip()
+        if (
+            after_de
+            and len(after_de) >= 4
+            and after_de not in mpio
+            and after_de not in dpto       # ← clave: no chocar con dptos
+            and after_de not in _MPIO_BLACKLIST
+        ):
+            mpio[after_de] = (name, mcode, dcode)
+    # CAPITALES sobreescribe si hay diferencias de nombre canónico.
     for name, mcode, dcode in CAPITALES:
         mpio[_normalize(name)] = (name, mcode, dcode)
     return dpto, mpio
@@ -410,7 +452,9 @@ class GeoResolver:
         dpto_hits = _find_dpto(norm)
 
         # Fuzzy fallback si no hay match exacto pero hay tokens largos.
-        if not mpio_hits and not dpto_hits:
+        # Si la pregunta es nacional (menciona Colombia), NO hacer fuzzy:
+        # palabras como "colombia" matchean falsamente con "Cómbita" (mpio Boyacá).
+        if not mpio_hits and not dpto_hits and not national:
             mpio_hits, dpto_hits = self._fuzzy_search(norm)
 
         # REGLA ANTI-CAPITAL (fix P1 2026-05-18):

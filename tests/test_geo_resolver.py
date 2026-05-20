@@ -143,6 +143,41 @@ def test_resolver_devuelve_scope_subnacional_con_dpto():
     assert ctx.dpto_code == "25"
 
 
+def test_cobertura_completa_municipios_divipola():
+    """Tras cargar DIVIPOLA completo, resolvemos mpios menores que antes no
+    estaban hardcoded en los 39 originales.
+
+    Casos elegidos para representar variedad: distintos dptos, no-capitales,
+    con tildes, palabras múltiples, nombres compuestos.
+    """
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+
+    # (pregunta, mpio_code esperado, dpto_code esperado)
+    casos = [
+        ("Datos sobre Caicedonia", "76122", "76"),       # Valle del Cauca
+        ("Estadísticas de Marsella", "66440", "66"),     # Risaralda
+        ("Información de El Doncello", "18247", "18"),   # Caquetá
+        ("Datos en Yumbo", "76892", "76"),               # Valle del Cauca (mpio grande no-capital)
+        ("Población de Chinchiná", "17174", "17"),       # Caldas
+        ("Educación en Ipiales", "52356", "52"),         # Nariño
+        ("Servicios de Tumaco", "52835", "52"),          # Nariño (San Andrés de Tumaco)
+        ("Vivienda en Palmira", "76520", "76"),          # Valle del Cauca
+    ]
+    for pregunta, mpio_esperado, dpto_esperado in casos:
+        ctx = r.resolve(pregunta)
+        assert ctx is not None, f"No resolvió: {pregunta!r}"
+        assert ctx.mpio_code == mpio_esperado, (
+            f"Pregunta {pregunta!r}: esperaba mpio={mpio_esperado}, "
+            f"obtuvo {ctx.mpio_code}"
+        )
+        assert ctx.dpto_code == dpto_esperado, (
+            f"Pregunta {pregunta!r}: esperaba dpto={dpto_esperado}, "
+            f"obtuvo {ctx.dpto_code}"
+        )
+
+
 def test_multiples_dptos_se_incluyen_como_targets():
     """Comparativa 'Antioquia y Valle' debe incluir ambos como targets.
 
