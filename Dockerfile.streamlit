@@ -23,11 +23,13 @@ RUN pip install -r requirements.mcp.txt \
 COPY mcp_server/ ./mcp_server/
 COPY ai_engine/ ./ai_engine/
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 COPY .streamlit/ ./.streamlit/
 
 # Índice vectorial: se monta como volumen en producción (artefacto pre-built),
-# o se construye on-demand vía scripts/build_index.py. No se copia aquí
-# para mantener la imagen ligera.
+# o se construye on-demand vía `python -m scripts.build_index` desde el
+# container (con el directorio scripts/ copiado arriba). No se copia el
+# índice aquí para mantener la imagen ligera.
 
 EXPOSE 8501
 
