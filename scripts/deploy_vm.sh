@@ -23,6 +23,12 @@ DOCKER_BRIDGE_IP="172.17.0.1"
 DOH_PORT="5053"
 LOG_DIR="${HOME}/datosvivos-logs"
 
+# UID/GID del usuario host — los pasamos como build-args a los Dockerfiles
+# para que `appuser` dentro del container tenga los mismos IDs.
+# Esto evita problemas de permisos en bind mounts de ./data al container.
+export APP_UID="$(id -u)"
+export APP_GID="$(id -g)"
+
 if [[ "${EUID}" -eq 0 ]]; then
   echo "❌ No ejecutar como root. Usá: bash $0"
   exit 1
@@ -235,20 +241,33 @@ fi
 echo ""
 echo "==> 7. Índice vectorial (vía container streamlit, ~10 min)"
 # ────────────────────────────────────────────────────────────────────
+# Reset de data/ si tiene ownership de root (de un build viejo donde el container
+# corría como root). El nuevo Dockerfile usa appuser con UID/GID del host.
+if [[ -d "${REPO_DIR}/data/vector_index" ]] && \
+   [[ "$(stat -c '%U' "${REPO_DIR}/data/vector_index" 2>/dev/null)" != "${USER}" ]]; then
+  echo "   limpiando data/ con ownership viejo de root..."
+  sudo rm -rf "${REPO_DIR}/data/vector_index"
+fi
+mkdir -p "${REPO_DIR}/data"
+sudo chown -R "${USER}:${USER}" "${REPO_DIR}/data" 2>/dev/null || true
+
 if [[ -d "${REPO_DIR}/data/vector_index" ]] && [[ "$(find "${REPO_DIR}/data/vector_index" -name 'chroma*' 2>/dev/null | wc -l)" -gt 0 ]]; then
   echo "   índice ya existe ✅ (saltando build)"
 else
-  echo "   construyendo imagen streamlit (build) — puede tardar 5 min..."
+  echo "   construyendo imagen streamlit (build) con APP_UID=${APP_UID} — puede tardar 5 min..."
   cd "${REPO_DIR}"
-  ${USE_SUDO_DOCKER:+sudo} docker compose build streamlit 2>&1 | tail -5
+  ${USE_SUDO_DOCKER:+sudo} APP_UID=${APP_UID} APP_GID=${APP_GID} \
+    docker compose build \
+      --build-arg APP_UID=${APP_UID} \
+      --build-arg APP_GID=${APP_GID} \
+      streamlit 2>&1 | tail -5
 
   echo "   lanzando build_index en container (background)..."
-  mkdir -p "${REPO_DIR}/data"
-  ${USE_SUDO_DOCKER:+sudo} docker compose run --rm --no-deps \
-    -v "${REPO_DIR}/data:/app/data" \
-    --entrypoint "" \
-    streamlit \
-    python -m scripts.build_index > "${LOG_DIR}/build_index.log" 2>&1 &
+  ${USE_SUDO_DOCKER:+sudo} APP_UID=${APP_UID} APP_GID=${APP_GID} \
+    docker compose run --rm --no-deps \
+      --entrypoint "" \
+      streamlit \
+      python -m scripts.build_index > "${LOG_DIR}/build_index.log" 2>&1 &
   BUILD_PID=$!
   echo "   PID=${BUILD_PID}, log en ${LOG_DIR}/build_index.log"
   echo "   seguir progreso con: tail -f ${LOG_DIR}/build_index.log"
@@ -260,7 +279,13 @@ echo "==> 8. Levantar servicios mcp-server + streamlit"
 # ────────────────────────────────────────────────────────────────────
 echo "   (esperaremos a que termine el índice antes de iniciar streamlit)"
 echo "   por ahora levantamos mcp-server..."
-${USE_SUDO_DOCKER:+sudo} docker compose up -d mcp-server
+${USE_SUDO_DOCKER:+sudo} APP_UID=${APP_UID} APP_GID=${APP_GID} \
+  docker compose build \
+    --build-arg APP_UID=${APP_UID} \
+    --build-arg APP_GID=${APP_GID} \
+    mcp-server 2>&1 | tail -3
+${USE_SUDO_DOCKER:+sudo} APP_UID=${APP_UID} APP_GID=${APP_GID} \
+  docker compose up -d mcp-server
 sleep 5
 ${USE_SUDO_DOCKER:+sudo} docker compose ps
 
