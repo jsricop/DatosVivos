@@ -11,7 +11,7 @@
 #
 # Idempotente — re-ejecutable sin daño.
 #
-# Uso (en la VM, como usuario jrico, NO con sudo):
+# Uso (en la VM, como usuario regular NO root, NO con sudo):
 #   bash deploy_vm.sh
 #
 set -euo pipefail
@@ -202,7 +202,7 @@ echo "==> 6. .env de producción"
 # ────────────────────────────────────────────────────────────────────
 if [[ ! -f "${REPO_DIR}/.env" ]]; then
   cat > "${REPO_DIR}/.env" <<EOF
-# DatosVivos — Beta-1 producción en VM ANI (stgul24dbde).
+# DatosVivos — Beta-1 producción.
 # Generado por scripts/deploy_vm.sh.
 
 # Ollama: en host, accesible via bridge docker

@@ -2,12 +2,11 @@
 #
 # setup_doh_vm.sh — Configura DNS-over-HTTPS en la VM de ANI con dnscrypt-proxy.
 #
-# Por qué: la VM tiene salida TCP/443 abierta a internet (post-ticket
-# infraestructura ANI 2026-05-19) pero los DNS internos `192.168.200.150`
-# y `192.168.200.250` no resuelven dominios públicos, y UDP/53 saliente
-# a `1.1.1.1`/`8.8.8.8` está bloqueado. Como TCP/443 sí funciona, se
-# instala `dnscrypt-proxy` como resolver local que hace DoH (DNS-over-HTTPS)
-# a Cloudflare/Quad9/etc por HTTPS.
+# Por qué: en entornos corporativos donde la VM tiene salida TCP/443 abierta
+# a internet pero los DNS internos NO resuelven dominios públicos, y UDP/53
+# saliente a resolvers públicos está bloqueado. Como TCP/443 sí funciona,
+# se instala `dnscrypt-proxy` como resolver local que hace DoH (DNS-over-HTTPS)
+# a Cloudflare/Quad9/Google por HTTPS.
 #
 # NOTA HISTÓRICA: en 2026-05-20 detectamos que `cloudflared proxy-dns`
 # (que era nuestra primera opción) fue deprecado por Cloudflare en la
@@ -143,7 +142,7 @@ echo "==> 4. Configurando systemd-resolved para usar el DoH local"
 mkdir -p /etc/systemd/resolved.conf.d
 cat > /etc/systemd/resolved.conf.d/datosvivos-doh.conf <<EOF
 # DatosVivos — DNS-over-HTTPS via dnscrypt-proxy local (127.0.0.1:${LISTEN_PORT}).
-# Reemplaza los DNS internos (192.168.200.x) para resolver dominios públicos
+# Reemplaza los DNS internos corporativos para resolver dominios públicos
 # sin abrir UDP/53 saliente. Reversible con:
 #   sudo systemctl disable --now dnscrypt-proxy
 #   sudo rm /etc/systemd/resolved.conf.d/datosvivos-doh.conf
