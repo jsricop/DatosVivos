@@ -42,6 +42,10 @@ services:
       MCP_SERVER_URL: http://mcp-server:3000/sse
       LLM_BACKEND: ${LLM_BACKEND:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Streamlit por default solo pone /app/app en sys.path (el dir del script
+      # principal). Necesitamos /app para que `from ai_engine.X import Y` y
+      # `from mcp_server.X import Y` funcionen desde cualquier página.
+      PYTHONPATH: /app
     ports:
       - "8501:8501"
     volumes:
