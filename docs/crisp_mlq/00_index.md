@@ -36,11 +36,15 @@ Seguimos la metodología **CRISP-ML(Q)** — *CRoss-Industry Standard Process fo
 
 Cada decisión y resultado en estos documentos está respaldado por código real en este repositorio:
 
-- 📂 **Código fuente:** `mcp_server/`, `ai_engine/`, `app/`, `scripts/`
+- 📂 **Código fuente:** `mcp_server/`, `ai_engine/`, `app/` (legacy Streamlit), `web/` (Next.js Beta-2), `api/` (FastAPI), `scripts/`
 - 🧪 **Tests:** `tests/` (**127+ tests**, incluyendo 95+ de aceptación congelada por sprint y 45 nuevos del Sprint 6: `test_stats_computer.py`, `test_number_validator.py`, `test_geo_resolver.py`, `test_geo_comparison.py`)
-- 📜 **Documentación viva:** [architecture.md](../architecture.md), [accessibility.md](../accessibility.md), [glossary.md](../glossary.md), [lessons_learned.md](../lessons_learned.md), [PROD_IMPROV.md](../PROD_IMPROV.md)
-- 🗂️ **ADRs:** 10 decisiones de arquitectura registradas (incluye ADR-009 cifras pandas y ADR-010 GeoResolver del Sprint 6)
+- 📜 **Documentación viva:** [architecture.md](../architecture.md), [accessibility.md](../accessibility.md), [BRAND.md](../BRAND.md), [glossary.md](../glossary.md), [lessons_learned.md](../lessons_learned.md), [PROD_IMPROV.md](../PROD_IMPROV.md)
+- 🗂️ **ADRs:** 13 decisiones de arquitectura registradas (incluye ADR-009 cifras pandas, ADR-010 GeoResolver del Sprint 6, y ADR-011/012/013 del rebranding Beta-2)
 - 🏷️ **ADRs:** decisiones de arquitectura registradas en `MAIN.md §9` (privado del equipo)
+
+### Documento canónico de marca (Beta-2)
+
+[`docs/BRAND.md`](../BRAND.md) es la fuente de verdad para la identidad visual del frontend Next.js: paletas en tres modos (claro/oscuro/alto contraste), tipografía IBM Plex, tokens de forma, iconografía sin emojis, componentes nucleares, wordmark `Datos|Vivos`, tagline *"Datos del Estado, en tus palabras."*, y lista negra de tropes prohibidos. Las decisiones estructurales detrás de este documento viven en [ADR-011](../adr/011-migracion-streamlit-a-nextjs.md), [ADR-012](../adr/012-civic-editorial-design-system.md) y [ADR-013](../adr/013-fastapi-sse-vs-mcp-http.md).
 
 ## Resumen de la propuesta en una página
 
