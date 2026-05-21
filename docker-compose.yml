@@ -1,14 +1,16 @@
 # DatosVivos — Docker Compose
 #
-# Estado (Beta-2, rebrand civic-editorial):
+# Estado (Beta-2 + módulo BI ejecutivo):
 #   - mcp-server  → ✅ funcional (Sprint 1)        — clientes MCP externos
 #   - api         → ✅ FastAPI + SSE (ADR-013)     — backend de la SPA
 #   - web         → ✅ Next.js 15 (ADR-011)        — frontend Civic Editorial
+#   - postgres    → ✅ ACTIVO (ADR-014)            — telemetría + catálogo para PowerBI
 #   - streamlit   → ⚙️ legacy (profile=legacy)     — disponible 30 días tras cutover
 #   - ollama      → ⚠️ opcional, recomendado en host para no duplicar memoria
 #   - nginx       → ✅ reverse proxy con routing / → web · /legacy → streamlit · /api → api
 #
 # Comandos comunes (local):
+#   docker compose up postgres -d                  # solo BD
 #   docker compose up mcp-server api web nginx     # stack completo Beta-2
 #   docker compose --profile legacy up streamlit   # solo si necesitas la UI vieja
 #
@@ -30,6 +32,24 @@ services:
     ports:
       - "3000:3000"
 
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-datosvivos}
+      POSTGRES_USER: ${POSTGRES_USER:-dv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?postgres password required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dv} -d ${POSTGRES_DB:-datosvivos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -43,13 +63,17 @@ services:
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://dv:${POSTGRES_PASSWORD}@postgres:5432/datosvivos}
       PYTHONPATH: /app
     ports:
       - "8000:8000"
     volumes:
       - ./data:/app/data
     depends_on:
-      - mcp-server
+      mcp-server:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   web:
     build:
@@ -107,6 +131,6 @@ services:
   #   volumes:
   #     - ollama_models:/root/.ollama
 
-# Volúmenes persistentes (se descomentarán cuando los servicios se habiliten)
-# volumes:
-#   ollama_models:
+volumes:
+  postgres_data:
+  # ollama_models:
