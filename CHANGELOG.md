@@ -6,6 +6,31 @@ Formato adaptado de [Keep a Changelog](https://keepachangelog.com/). Categorías
 
 ---
 
+## [Beta-2 — UI/UX clarity pass: ColorModeToggle + Chip cards + QueryBuilderBar] — 2026-05-21
+
+Iteración de claridad de affordance en la home Next.js basada en feedback del usuario (screenshot 2026-05-21): el selector de modo se leía como tres palabras corridas en el header y los chips parecían decorativos. Sin cambios al motor IA ni a la API.
+
+### Agregado
+- **`web/src/components/QueryBuilderBar.tsx`** (~100 LoC): nueva barra con `<aside role="status" aria-live="polite">` que aparece **solo si hay chips seleccionados**. Lista chips removibles agrupados por eje (TEMA/TIPO/TERRITORIO/ENTIDAD) + botón "Buscar →" que navega a `/buscar?<axis>=<value>...`. Da feedback visible de "construcción de consulta" antes de ejecutar.
+- Iconos `sun` y `moon` en `web/src/components/Icon.tsx` (outline only, `currentColor`, stroke 1.5, viewBox 24×24 — cumple BRAND.md §6.2). Set MVP pasa de 16 a 18 iconos.
+- Microcopia debajo del HeroSearch en home: *"O construye tu consulta con los filtros de abajo. Cada selección se va sumando a la barra inferior."* — crea conexión mental input ↔ chips.
+
+### Cambiado
+- **`web/src/components/ColorModeToggle.tsx`**: label visible "Apariencia" en `font-mono uppercase text-caption text-ink-muted` (oculto en mobile <640px para no romper header). Cada modo usa **icono distintivo** (sun/moon/contrast) en lugar de tres `contrast` iguales. `aria-labelledby="color-mode-label"` agregado para asociar label al group. Persistencia `datosvivos:theme` y anti-FOUC sin cambios.
+- **`web/src/components/ChipGroup.tsx`**: wrapper `<fieldset>` ahora es **tarjeta visual** con borde `1px solid var(--hairline)` + fondo `var(--bg-elev)/60` + padding `pt-4 pb-5 px-5`. Legend con kicker mono anclado en el borde superior. Hint `description` movido a `<p>` debajo del legend en lugar de inline.
+- **`web/src/components/HomeSearchPanel.tsx`**: integra QueryBuilderBar (handler `clearOne(axis, value)`) y wrapping de grid con microcopia. `gap-y` de la grilla de tarjetas pasa de 7 a 5 (más aire vertical compensa el borde adicional).
+- **`docs/BRAND.md` §6.2**: tabla de iconos actualizada a 18 entradas con `sun`/`moon`.
+- **`docs/BRAND.md` §8.3**: spec de `ChipGroup` actualizada — explícita la tarjeta visual con borde.
+- **`docs/BRAND.md` §8.3-bis**: nueva sección con spec de `QueryBuilderBar`.
+- **`docs/BRAND.md` §8.11**: spec de `ColorModeToggle` actualizada — label "Apariencia", `aria-labelledby`, iconos distintivos por modo.
+
+### Verificación
+- Local: `cd web && npm run build` compila sin errores en mis archivos (`pg`-error preexistente en `auth.ts`, no introducido por este PR).
+- Type-check: `npx tsc --noEmit -p tsconfig.json` sin errores en los archivos modificados.
+- Manual smoke en producción tras deploy: ver `https://datosvivos.co/` desktop (label visible) y mobile (label oculto, control compacto).
+
+---
+
 ## [Sprint 6 — Beta-1: cifras verificadas + GeoResolver + comparativa] — 2026-05-19
 
 Sprint dedicado al endurecimiento del motor para lanzamiento beta. Foco: cero alucinaciones de cifras, trazabilidad por enlaces, comparativas geográficas multi-target y telemetría operativa. Push directo a `develop` con 8 commits granulares (`4aaecae` → `eadab82`) para rollback quirúrgico.

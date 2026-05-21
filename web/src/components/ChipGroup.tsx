@@ -53,15 +53,15 @@ export function ChipGroup({
   }
 
   return (
-    <fieldset className="border-0 m-0 p-0">
-      <legend className="text-kicker mb-3 p-0">
+    <fieldset className="border border-hairline rounded-[var(--radius-1)] bg-bg-elev/60 px-5 pt-4 pb-5 m-0">
+      <legend className="text-kicker px-1.5">
         {KICKER_BY_AXIS[axis]}
-        {description ? (
-          <span className="ml-3 font-sans text-caption font-normal text-ink-muted normal-case tracking-normal">
-            {description}
-          </span>
-        ) : null}
       </legend>
+      {description ? (
+        <p className="font-sans text-caption text-ink-muted mb-3 -mt-1">
+          {description}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {options.length === 0 ? (
           <span className="font-sans text-caption text-ink-muted">
