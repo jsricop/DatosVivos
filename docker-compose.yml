@@ -1,18 +1,18 @@
 # DatosVivos — Docker Compose
 #
-# Estado actual (Sprint 4):
-#   - mcp-server  → ✅ funcional (Sprint 1)
-#   - streamlit   → ✅ funcional (Sprint 4) — requiere índice vectorial montado
-#   - ollama      → ⚠️ opcional, recomendado correrlo en host para no duplicar memoria
-#   - postgres    → 🔜 referencia, fuera del scope del Sprint 4
-#   - nginx       → 🔜 reverse proxy HTTPS, fuera del scope del Sprint 4
+# Estado (Beta-2, rebrand civic-editorial):
+#   - mcp-server  → ✅ funcional (Sprint 1)        — clientes MCP externos
+#   - api         → ✅ FastAPI + SSE (ADR-013)     — backend de la SPA
+#   - web         → ✅ Next.js 15 (ADR-011)        — frontend Civic Editorial
+#   - streamlit   → ⚙️ legacy (profile=legacy)     — disponible 30 días tras cutover
+#   - ollama      → ⚠️ opcional, recomendado en host para no duplicar memoria
+#   - nginx       → ✅ reverse proxy con routing / → web · /legacy → streamlit · /api → api
 #
-# Para ejecutar HOY (Sprint 4 sin Power BI):
-#   docker compose up mcp-server streamlit
+# Comandos comunes (local):
+#   docker compose up mcp-server api web nginx     # stack completo Beta-2
+#   docker compose --profile legacy up streamlit   # solo si necesitas la UI vieja
 #
-# El servicio `streamlit` espera el índice vectorial en /app/data/vector_index;
-# se monta como volumen desde ./data/vector_index del host. Generar el índice:
-#   python -m scripts.build_index
+# Despliegue en producción: ver docs/deployment_runbook.md.
 
 services:
   mcp-server:
@@ -30,7 +30,42 @@ services:
     ports:
       - "3000:3000"
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    env_file: .env
+    environment:
+      LLM_BACKEND: ${LLM_BACKEND:-ollama}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mcp-server
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
   streamlit:
+    profiles: ["legacy"]
     build:
       context: .
       dockerfile: Dockerfile.streamlit
@@ -42,21 +77,25 @@ services:
       MCP_SERVER_URL: http://mcp-server:3000/sse
       LLM_BACKEND: ${LLM_BACKEND:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      # Streamlit por default solo pone /app/app en sys.path (el dir del script
-      # principal). Necesitamos /app para que `from ai_engine.X import Y` y
-      # `from mcp_server.X import Y` funcionen desde cualquier página.
       PYTHONPATH: /app
     ports:
       - "8501:8501"
     volumes:
-      # data/ es read-write porque scripts.build_index escribe el índice
-      # vectorial aquí. El UID/GID del container coincide con el host
-      # (vía build-args APP_UID/APP_GID) para evitar problemas de permisos.
       - ./data:/app/data
     depends_on:
       - mcp-server
 
-  # === Opcional: Ollama containerizado (default: usar host) ===
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - api
+
+  # === Opcional: Ollama containerizado (default: usar host con host.docker.internal) ===
   # ollama:
   #   image: ollama/ollama:latest
   #   ports:
@@ -64,32 +103,6 @@ services:
   #   volumes:
   #     - ollama_models:/root/.ollama
 
-  # === Fuera del scope Sprint 4: PostgreSQL (logs y métricas de uso) ===
-  # postgres:
-  #   image: postgres:16
-  #   env_file: .env
-  #   environment:
-  #     POSTGRES_DB: ${POSTGRES_DB}
-  #     POSTGRES_USER: ${POSTGRES_USER}
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #     - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
-  # === Fuera del scope Sprint 4: Nginx (reverse proxy HTTPS) ===
-  # nginx:
-  #   image: nginx:1.27-alpine
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-  #   depends_on:
-  #     - streamlit
-
 # Volúmenes persistentes (se descomentarán cuando los servicios se habiliten)
 # volumes:
 #   ollama_models:
-#   postgres_data:

@@ -1,8 +1,43 @@
-# Dockerfile para el servicio API (FastAPI).
-# Pendiente de definir durante Sprint 1.
+# Dockerfile.api — servicio FastAPI (api/) que expone el motor IA al frontend Next.js.
+#
+# Decisión: ADR-013. El MCP server (mcp_server/) sigue dedicado a clientes MCP;
+# este servicio sirve `/api/v1/*` para la SPA y para integraciones HTTP.
+
 FROM python:3.11-slim
+
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+RUN groupadd --system --gid ${APP_GID} appuser \
+ && useradd --system --uid ${APP_UID} --gid ${APP_GID} \
+        --shell /usr/sbin/nologin --create-home appuser
+
 WORKDIR /app
-# COPY requirements.api.txt .
-# RUN pip install --no-cache-dir -r requirements.api.txt
-# COPY api/ ./api/
-# CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN chown appuser:appuser /app
+
+# Instalación capas: mcp (clientes Socrata) + ai (motor) + api (FastAPI/SSE).
+COPY --chown=appuser:appuser requirements.mcp.txt requirements.ai.txt requirements.api.txt ./
+RUN pip install -r requirements.mcp.txt \
+ && pip install -r requirements.ai.txt \
+ && pip install -r requirements.api.txt
+
+COPY --chown=appuser:appuser mcp_server/ ./mcp_server/
+COPY --chown=appuser:appuser ai_engine/ ./ai_engine/
+COPY --chown=appuser:appuser api/ ./api/
+COPY --chown=appuser:appuser scripts/ ./scripts/
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request, sys; \
+        sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3).status == 200 else 1)"
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

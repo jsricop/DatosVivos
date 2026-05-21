@@ -1,6 +1,6 @@
 # ADR-002: Streamlit en vez de React
 
-**Estado:** Aceptada
+**Estado:** Superada por [ADR-011](./011-migracion-streamlit-a-nextjs.md) (2026-05-20)
 **Fecha:** Sprint 1 (planificación), implementada Sprint 4
 
 ## Decisión
@@ -24,3 +24,4 @@ Construir la interfaz ciudadana en **Streamlit**, no en React/Next.js u otro fra
 
 - `app/main.py`, `app/pages/`
 - [`docs/crisp_mlq/06_deployment.md`](../crisp_mlq/06_deployment.md)
+- [ADR-011](./011-migracion-streamlit-a-nextjs.md) — decisión que supera esta en 2026-05-20 (rebranding Civic Editorial requiere Next.js)

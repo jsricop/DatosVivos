@@ -161,3 +161,41 @@ Concurso de MinTIC para impulsar el uso de datos abiertos con IA. Cierre: 13 jul
 
 ### ANI
 Agencia Nacional de Infraestructura. Entidad para la cual trabaja el equipo. La Oficina de Tecnología lidera DatosVivos.
+
+## Sistema visual (Beta-2)
+
+### Civic Editorial
+Dirección estética adoptada en [ADR-012](./adr/012-civic-editorial-design-system.md) para el rebranding de Beta-2. Inspiración: periódico colombiano + atlas estadístico + gaceta oficial. Tipografía serif/sans/mono coexistiendo, paletas papel-tinta, bordes rectos, sin sombras con blur. Documento operativo: [`BRAND.md`](./BRAND.md).
+
+### Token (de diseño)
+Variable CSS expuesta bajo `:root[data-theme="..."]` con un nombre semántico estable (`--bg`, `--ink`, `--accent`, `--hairline`, `--focus-ring`, etc.). Su valor cambia entre modos de color; el nombre no. Todo CSS productivo en `web/` se escribe sobre tokens, nunca sobre hex literales.
+
+### Hairline
+Borde o regleta de 1px (1.5px para SVG, 2px en modo alto contraste). Color `var(--hairline)`. Se usa para separar paneles, filas de tabla y secciones — actúa como tipografía estructural, no como decoración. Sustituye a las sombras box-shadow que están prohibidas.
+
+### Modo (light / dark / contrast)
+Estado seleccionable por el usuario que cambia la tabla de valores de los tokens. `light` (papel crema + tinta, default), `dark` (tinta profunda + papel), `contrast` (B/N puro + acento saturado, con sub-variantes `contrast-light` y `contrast-dark`). Persistido en `localStorage` bajo `datosvivos:theme` y aplicado en `<html data-theme="...">`.
+
+### IBM Plex
+Familia tipográfica de IBM (libre, latín extendido completo, mantenida activamente). DatosVivos usa tres pesos del set: **Serif** (display, h1-h2, citas), **Sans** (body/UI, h3-h6), **Mono** (data, IDs, kickers, SoQL). Self-hosted en `web/public/fonts/`; está prohibido cargarla desde Google Fonts CDN.
+
+### Kicker
+Etiqueta corta en IBM Plex Mono uppercase con `letter-spacing: 0.08em` que precede a un título, eje de chips o sección. Ejemplos: `TEMA`, `TIPO DE PREGUNTA`, `TERRITORIO`, `ENTIDAD`, `FUENTES CONSULTADAS`, `LO MÁS CONSULTADO ESTA SEMANA`.
+
+### Pleca
+Carácter ASCII `|` que separa las dos mitades del wordmark `Datos|Vivos`. Se renderiza en `var(--accent)` para actuar como acento editorial. **No es decoración** — es estructura del wordmark; copiar/pegar el wordmark debe preservar la pleca.
+
+### Wordmark
+La forma escrita del nombre de marca. En DatosVivos es `Datos|Vivos` (IBM Plex Serif 600 con pleca en `--accent`). **No hay logo gráfico separado** — el wordmark es el logo.
+
+### Anti-FOUC (Flash of Unstyled Content)
+Patrón inspirado en GOV.UK: script inline en `<head>` lee `localStorage["datosvivos:theme"]` y aplica `data-theme` en `<html>` **antes** del hidrato de React. Evita que el usuario vea un parpadeo de modo claro cuando tiene modo oscuro guardado.
+
+### SSE (Server-Sent Events)
+Estándar HTTP nativo para streaming unidireccional servidor→cliente. Eventos `text/event-stream` con líneas `data: {...}\n\n`. DatosVivos lo usa para emitir progreso del LLM (`intent`, `dataset_hits`, `narrative_chunk`, `rows`, `citations`, `done`) durante los 30-90s que toma una consulta. Decisión: [ADR-013](./adr/013-fastapi-sse-vs-mcp-http.md).
+
+### Cuneta de lectura
+Ancho máximo de línea para texto continuo. `72ch` para narrativa (`<article>` en `/buscar`), `60ch` para manifiesto (`/acerca`). Garantiza legibilidad sin saltos visuales en pantallas anchas.
+
+### Glifo tipográfico
+Carácter Unicode usado como decoración estructural en sustitución de iconos: `·` (separador), `—` (em-dash), `→` (resultado), `↵` (submit), `▾` `▸` (acordeón), `¶` (referencia), `§` (sección), `|` (pleca). Renderizados en la propia tipografía del contexto — no son SVG.

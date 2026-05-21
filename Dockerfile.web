@@ -1,0 +1,40 @@
+# Dockerfile.web — frontend Next.js 15 (web/).
+# Decisión: ADR-011 — migración Streamlit → Next.js para el rebranding Beta-2.
+
+# --- Stage 1: dependencias ---
+FROM node:22-alpine AS deps
+WORKDIR /web
+COPY web/package.json web/package-lock.json* ./
+RUN npm install --no-audit --no-fund
+
+# --- Stage 2: build ---
+FROM node:22-alpine AS builder
+WORKDIR /web
+COPY --from=deps /web/node_modules ./node_modules
+COPY web/ ./
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# --- Stage 3: runtime ---
+FROM node:22-alpine AS runner
+WORKDIR /web
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3001 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 --ingroup nodejs nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /web/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /web/public ./public
+COPY --from=builder --chown=nextjs:nodejs /web/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /web/package.json ./package.json
+
+USER nextjs
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -qO- http://localhost:3001/ > /dev/null 2>&1 || exit 1
+
+CMD ["npm", "run", "start"]
