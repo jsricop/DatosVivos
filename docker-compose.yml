@@ -55,6 +55,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        # NEXT_PUBLIC_SITE_URL se inlinea en el bundle al hacer `npm run build`.
+        # Default a producción; override en dev con `NEXT_PUBLIC_SITE_URL=...`.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://datosvivos.co}
     environment:
       NODE_ENV: production
       API_BASE_URL: http://api:8000
