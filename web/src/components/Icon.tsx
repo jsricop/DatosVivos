@@ -26,6 +26,8 @@ export type IconName =
   | "collapse"
   | "close"
   | "contrast"
+  | "sun"
+  | "moon"
   | "type-size"
   | "arrow-right"
   | "enter"
@@ -68,6 +70,10 @@ const PATHS: Record<IconName, string> = {
   close: "M5 5l14 14 M19 5l-14 14",
   contrast:
     "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M12 3v18 M12 3a9 9 0 0 1 0 18",
+  sun:
+    "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z M12 2v2 M12 20v2 M4.93 4.93l1.41 1.41 M17.66 17.66l1.41 1.41 M2 12h2 M20 12h2 M4.93 19.07l1.41-1.41 M17.66 6.34l1.41-1.41",
+  moon:
+    "M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z",
   "type-size":
     "M5 19l4-12 4 12 M6 15h6 M14 11l3-7 3 7 M14.6 13h4.8",
   "arrow-right": "M5 12h14 M13 6l6 6-6 6",
