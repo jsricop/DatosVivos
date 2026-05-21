@@ -83,6 +83,11 @@ services:
         # NEXT_PUBLIC_SITE_URL se inlinea en el bundle al hacer `npm run build`.
         # Default a producción; override en dev con `NEXT_PUBLIC_SITE_URL=...`.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://datosvivos.co}
+    # env_file pasa NEXTAUTH_SECRET, DATABASE_URL, SMTP_URL, AUTH_ALLOWED_DOMAINS,
+    # NEXTAUTH_URL al runtime de Next.js. Sin esto el server crashea con
+    # `MissingSecret` de next-auth. Es runtime — no build — porque esos
+    # secretos no deben quedar inlineados en el bundle estático.
+    env_file: .env
     environment:
       NODE_ENV: production
       API_BASE_URL: http://api:8000
@@ -91,6 +96,7 @@ services:
       - "3001:3001"
     depends_on:
       - api
+      - postgres
 
   streamlit:
     profiles: ["legacy"]
