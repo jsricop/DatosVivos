@@ -4,7 +4,15 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Acerca",
   description:
-    "Manifiesto y propuesta de valor de DatosVivos: agente civil de datos del Estado colombiano sobre datos.gov.co.",
+    "Manifiesto y propuesta de valor de DatosVivos: agente civil de datos del Estado colombiano sobre datos.gov.co. Soberanía, verificabilidad, interoperabilidad.",
+  alternates: { canonical: "/acerca" },
+  openGraph: {
+    type: "article",
+    url: "/acerca",
+    title: "Acerca · DatosVivos",
+    description:
+      "Manifiesto y propuesta de valor: soberanía del modelo, verificabilidad por fuente, interoperabilidad MCP.",
+  },
 };
 
 export default function AcercaPage() {

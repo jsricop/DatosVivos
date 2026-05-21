@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="DatosVivos — Datos del Estado, en tus palabras">
+  <title>DatosVivos</title>
+  <rect fill="#F3EFE3" x="0" y="0" width="1200" height="630"/>
+  <rect fill="none" stroke="#B7A98B" stroke-width="2" x="40" y="40" width="1120" height="550"/>
+
+  <g font-family="IBM Plex Serif, Georgia, Times New Roman, serif" font-weight="600" letter-spacing="-2">
+    <text fill="#16130E" x="100" y="290" font-size="160">Datos</text>
+    <text fill="#A52A2A" x="438" y="290" font-size="160">|</text>
+    <text fill="#16130E" x="478" y="290" font-size="160">Vivos</text>
+  </g>
+
+  <g font-family="IBM Plex Mono, Menlo, Consolas, monospace" font-weight="500" letter-spacing="3">
+    <text fill="#3B342A" x="100" y="335" font-size="22">── DATOS.GOV.CO</text>
+  </g>
+
+  <g font-family="IBM Plex Serif, Georgia, serif" font-weight="400" font-style="italic">
+    <text fill="#3B342A" x="100" y="450" font-size="48">Datos del Estado, en tus palabras.</text>
+  </g>
+
+  <g font-family="IBM Plex Sans, Helvetica Neue, Arial, sans-serif" font-weight="500">
+    <text fill="#776A55" x="100" y="540" font-size="22">Agencia Nacional de Infraestructura · Reto #07 MinTIC 2026</text>
+  </g>
+</svg>

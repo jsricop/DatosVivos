@@ -19,7 +19,7 @@ export const PATTERN_COUNT = 5;
 const PATTERNS: Array<ReactNode> = [
   // 0: sólido (sin overlay decorativo)
   null,
-  // 1: rayas diagonales /
+  // 1: rayas diagonales / — más visibles para HC
   <line
     key="p1"
     x1={0}
@@ -27,8 +27,8 @@ const PATTERNS: Array<ReactNode> = [
     x2={0}
     y2={8}
     stroke="currentColor"
-    strokeWidth={1}
-    strokeOpacity={0.5}
+    strokeWidth={1.5}
+    strokeOpacity={0.75}
   />,
   // 2: rayas inversas \
   <line
@@ -38,16 +38,16 @@ const PATTERNS: Array<ReactNode> = [
     x2={0}
     y2={8}
     stroke="currentColor"
-    strokeWidth={1}
-    strokeOpacity={0.5}
+    strokeWidth={1.5}
+    strokeOpacity={0.75}
   />,
   // 3: cuadrícula fina
   <g key="p3">
-    <line x1={0} y1={0} x2={8} y2={0} stroke="currentColor" strokeWidth={0.6} strokeOpacity={0.4} />
-    <line x1={0} y1={0} x2={0} y2={8} stroke="currentColor" strokeWidth={0.6} strokeOpacity={0.4} />
+    <line x1={0} y1={0} x2={8} y2={0} stroke="currentColor" strokeWidth={0.8} strokeOpacity={0.7} />
+    <line x1={0} y1={0} x2={0} y2={8} stroke="currentColor" strokeWidth={0.8} strokeOpacity={0.7} />
   </g>,
   // 4: puntos
-  <circle key="p4" cx={2} cy={2} r={1.2} fill="currentColor" fillOpacity={0.55} />,
+  <circle key="p4" cx={2} cy={2} r={1.4} fill="currentColor" fillOpacity={0.8} />,
 ];
 
 const PATTERN_TRANSFORM = ["", "rotate(45)", "rotate(-45)", "", ""];

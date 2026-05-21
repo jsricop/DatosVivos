@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -13,6 +14,23 @@ type SearchPageProps = {
     entidad?: string | string[];
   }>;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: SearchPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  // No indexar resultados dinámicos: cada combinación de query parameters
+  // generaría una URL distinta que no aporta valor SEO único.
+  return {
+    title: q ? `${q.slice(0, 60)} · Consulta` : "Buscar",
+    description: q
+      ? `Resultados de "${q}" sobre el catálogo de datos.gov.co.`
+      : "Pregunta sobre cualquier dato público colombiano y recibe la respuesta con la fuente original a un click.",
+    robots: { index: false, follow: true },
+    alternates: { canonical: q ? null : "/buscar" },
+  };
+}
 
 const INTENT_LABEL: Record<string, string> = {
   count: "Conteo",

@@ -5,7 +5,15 @@ import { A11yPanel } from "@/components/A11yPanel";
 export const metadata: Metadata = {
   title: "Accesibilidad",
   description:
-    "Controles de accesibilidad de DatosVivos: modo de color, tamaño tipográfico, voz, atajos de teclado. Cumplimiento WCAG 2.1 AA y Ley 1618 de 2013.",
+    "Controles de accesibilidad de DatosVivos: modo de color, tamaño tipográfico, voz (STT/TTS), atajos de teclado. Cumplimiento WCAG 2.1 AA y Ley 1618 de 2013.",
+  alternates: { canonical: "/accesibilidad" },
+  openGraph: {
+    type: "article",
+    url: "/accesibilidad",
+    title: "Accesibilidad · DatosVivos",
+    description:
+      "WCAG 2.1 AA + Ley 1618 de 2013. Modo de color, tamaño tipográfico, voz, navegación por teclado.",
+  },
 };
 
 export default function AccesibilidadPage() {
