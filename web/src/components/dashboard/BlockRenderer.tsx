@@ -2,12 +2,31 @@
 
 import dynamic from "next/dynamic";
 
-import { BarChartBlock } from "@/components/charts/BarChartBlock";
 import { KPICardBlock } from "@/components/charts/KPICardBlock";
-import { LineChartBlock } from "@/components/charts/LineChartBlock";
 import { TableBlock } from "@/components/charts/TableBlock";
 import type { Row } from "@/lib/dashboard-data";
 import type { Block } from "@/lib/schemas/dashboard";
+
+/**
+ * Charts pesados (`@visx/*` + `d3-geo`) cargan lazy desde el navegador.
+ * KPI y Table son livianos (sin Visx) y se renderizan en server side.
+ */
+
+const BarChartBlock = dynamic(
+  () =>
+    import("@/components/charts/BarChartBlock").then(
+      (mod) => mod.BarChartBlock,
+    ),
+  { ssr: false, loading: () => <ChartPlaceholder /> },
+);
+
+const LineChartBlock = dynamic(
+  () =>
+    import("@/components/charts/LineChartBlock").then(
+      (mod) => mod.LineChartBlock,
+    ),
+  { ssr: false, loading: () => <ChartPlaceholder /> },
+);
 
 const ChoroplethMapBlock = dynamic(
   () =>
@@ -42,6 +61,14 @@ export function BlockRenderer({ block, rows, stats }: Props) {
     default:
       return null;
   }
+}
+
+function ChartPlaceholder() {
+  return (
+    <div className="surface-elev p-6 text-center font-mono text-caption text-ink-muted">
+      Cargando gráfico…
+    </div>
+  );
 }
 
 function MapPlaceholder() {

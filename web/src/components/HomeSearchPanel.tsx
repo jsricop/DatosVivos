@@ -68,7 +68,7 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-7">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-7">
         {(Object.keys(chips) as Axis[]).map((axis) => (
           <ChipGroup
             key={axis}

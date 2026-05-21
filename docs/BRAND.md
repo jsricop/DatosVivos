@@ -221,6 +221,7 @@ Tamaños fluidos con `clamp()` para que escalen con el viewport sin breakpoints 
 - Italics en serif para énfasis literario o citas. En sans, peso 500 para énfasis funcional. **Sin underline para énfasis** — underline está reservado a enlaces.
 - `font-feature-settings: "ss01", "cv11"` para Plex Sans (variantes circular `g` y `l` straight); `tnum` para Mono y para data tabular.
 - Escala de usuario (`A11yPanel`): 90% / 100% (default) / 115% / 130%. Aplicada con `font-size` en `:root` para que `rem` y `clamp` escalen consistentemente.
+- **Excepción documentada:** el `<input>` del `HeroSearch` usa Plex Sans para el valor del usuario y Plex Serif italic para el placeholder. Es el único control UI con tipografía heterogénea — el placeholder evoca pregunta editorial, el valor garantiza claridad de lectura mientras se escribe.
 
 ---
 
@@ -375,10 +376,10 @@ Cada componente vive en `web/src/components/`. Documentación contractual: nombr
 - **Props:** `columns: Column[]`, `rows: Row[]`, `pagination?: PaginationOptions`, `downloadCsv?: () => void`.
 - **Reglas:** TanStack Table headless. Tipografía Plex Mono para celdas numéricas (con `tnum`), Plex Sans para celdas texto. Zebra striping prohibido — usar regletas `1px solid var(--hairline)` entre filas. Header sticky cuando scroll vertical. Botón "Descargar CSV" en la esquina superior derecha si `downloadCsv` está presente.
 
-### 8.8 `MapBlock`
+### 8.8 `MapBlock` / `ChoroplethMapBlock`
 
-- **Props:** `geojson: FeatureCollection`, `valueByCode: Record<string, number>`, `colorScale: "sequential" | "diverging"`, `divipolaLevel: "dpto" | "mpio"`, `caption: string`.
-- **Reglas:** MapLibre GL JS. Tile base monocromática (custom style basado en Natural Earth, no MapTiler default si requiere ofuscamiento de marca). Choropleth en escala del acento granate (`#A52A2A` con `chroma.js scale`) en modo claro, ámbar en oscuro, ultramar en alto contraste. Leyenda obligatoria abajo. Caption con fuente y fecha bajo el mapa. Alt-text auto-generado por el motor IA — guardado en la prop `altText`.
+- **Props:** `block: MapBlock` (con `level: "dpto" | "mpio"`, `code_column`, `metric_column`, `legend_format`), `rows`.
+- **Reglas:** SVG puro con `d3-geo` (proyección Mercator + `geoPath`). **Sin tiles base externos** — cumple la promesa "Sin trackers" del footer. GeoJSON oficial DIVIPOLA servido desde `web/public/geo/co_dptos.geojson` (departamentos) y `co_mpios.geojson` (lazy, opcional). Choropleth secuencial monocromo sobre `var(--accent)` (5 buckets por cuantiles, opacidad creciente 15% → 95%). Leyenda obligatoria al pie con rangos numéricos formateados es-CO. Tooltip por feature en `<title>` SVG (accesible a lectores de pantalla). Fallback honesto si el geojson no carga: mensaje "Mapa no disponible — consulta los datos en la tabla cruda".
 
 ### 8.9 `ChartBlock`
 

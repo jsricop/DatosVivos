@@ -1,154 +1,235 @@
 "use client";
 
-import "maplibre-gl/dist/maplibre-gl.css";
-import maplibregl from "maplibre-gl";
-import { useEffect, useMemo, useRef } from "react";
+import {
+  geoMercator,
+  geoPath,
+  type GeoPath,
+  type GeoPermissibleObjects,
+} from "d3-geo";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useUserScale } from "@/lib/motion";
 import { formatValue, type Row } from "@/lib/dashboard-data";
-import { dptoCodeFromMpio, lookupDpto } from "@/lib/divipola-centroids";
+import { dptoCodeFromMpio } from "@/lib/divipola-centroids";
 import type { MapBlock } from "@/lib/schemas/dashboard";
 
 type Props = { block: MapBlock; rows: Row[] };
 
+type DptoFeature = {
+  type: "Feature";
+  properties: { DPTO?: string; NOMBRE_DPT?: string; [k: string]: unknown };
+  geometry: GeoPermissibleObjects;
+};
+
+type FeatureCollection = {
+  type: "FeatureCollection";
+  features: DptoFeature[];
+};
+
+const BASE_WIDTH = 560;
+const BASE_HEIGHT = 480;
+const GEOJSON_URL = "/geo/co_dptos.geojson";
+
 /**
- * ChoroplethMapBlock (PLAN_DASHBOARD §6).
+ * ChoroplethMapBlock — silueta de Colombia + choropleth secuencial monocromo.
  *
- * Modo actual (sin GeoJSON cargado): renderiza marcadores graduados en los
- * centroides departamentales. Honesto: no dibuja polígonos que no tiene.
+ * Sin tiles externos: el render es SVG puro sobre GeoJSON DIVIPOLA cargado
+ * desde `web/public/geo/co_dptos.geojson`. Cumple la promesa "Sin trackers"
+ * del footer y la regla del BRAND.md §6.5 (sin dependencia externa de mapas).
  *
- * Upgrade pendiente: cargar `/geo/co_dptos.geojson` y `/geo/co_mpios.geojson`
- * (instrucciones en `web/public/geo/README.md`) y dibujar fill-color con
- * paint expressions de MapLibre.
+ * Choropleth: 5 buckets por cuantiles. Cada bucket = una opacidad creciente
+ * sobre `var(--accent)` (paleta secuencial monocroma BRAND.md §8.9).
+ *
+ * Soporta `block.level = "dpto" | "mpio"`. Para `mpio` agrupamos al
+ * departamento que pertenece (el GeoJSON de 1122 mpios queda pendiente).
  */
 export function ChoroplethMapBlock({ block, rows }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-
-  const aggregated = useMemo(() => aggregateByDpto(rows, block), [rows, block]);
+  const [geo, setGeo] = useState<FeatureCollection | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const userScale = useUserScale();
+  const height = Math.round(BASE_HEIGHT * userScale);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    if (mapRef.current) return;
-
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: BASE_STYLE,
-      center: [-74.08, 4.6],
-      zoom: 4.5,
-      attributionControl: false,
-    });
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right",
-    );
-    map.addControl(
-      new maplibregl.AttributionControl({ compact: true }),
-      "bottom-left",
-    );
-    mapRef.current = map;
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setGeo(null);
+    setLoadError(null);
+    fetch(GEOJSON_URL, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`Geojson HTTP ${r.status}`);
+        return r.json() as Promise<FeatureCollection>;
+      })
+      .then((data) => setGeo(data))
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setLoadError(err instanceof Error ? err.message : "Error cargando mapa");
+      });
+    return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const localMap: maplibregl.Map = map;
+  const aggregated = useMemo(() => aggregateByDpto(rows, block), [rows, block]);
+  const buckets = useMemo(
+    () => computeBuckets(aggregated.map((a) => a.value)),
+    [aggregated],
+  );
+  const valueByDpto = useMemo(
+    () => new Map(aggregated.map((a) => [a.dptoCode, a.value] as const)),
+    [aggregated],
+  );
 
-    const markers: maplibregl.Marker[] = [];
-    const maxValue = Math.max(0, ...aggregated.map((a) => a.value));
-
-    const setupMarkers = () => {
-      for (const entry of aggregated) {
-        const dpto = lookupDpto(entry.dptoCode);
-        if (!dpto) continue;
-        const scaled = maxValue > 0 ? entry.value / maxValue : 0;
-        const size = 12 + Math.round(scaled * 36);
-        const el = document.createElement("div");
-        el.setAttribute(
-          "aria-label",
-          `${dpto.name}: ${formatValue(entry.value, block.legend_format)}`,
-        );
-        el.style.width = `${size}px`;
-        el.style.height = `${size}px`;
-        el.style.borderRadius = "50%";
-        el.style.background = "color-mix(in srgb, var(--accent) 75%, transparent)";
-        el.style.border = "1.5px solid var(--ink)";
-        el.style.boxShadow = "0 0 0 1px var(--bg)";
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([dpto.lon, dpto.lat])
-          .setPopup(
-            new maplibregl.Popup({ closeButton: false, offset: 12 }).setHTML(
-              `<strong>${dpto.name}</strong><br/>${formatValue(entry.value, block.legend_format)}`,
-            ),
-          )
-          .addTo(localMap);
-        markers.push(marker);
-      }
-    };
-
-    if (localMap.isStyleLoaded()) {
-      setupMarkers();
-    } else {
-      localMap.once("load", () => setupMarkers());
-    }
-
-    return () => {
-      for (const m of markers) m.remove();
-    };
-  }, [aggregated, block.legend_format]);
+  if (loadError) {
+    return (
+      <figure aria-label={block.title} className="surface-elev m-0">
+        <figcaption className="text-kicker px-4 py-3 hairline-bottom">
+          {block.title}
+        </figcaption>
+        <p className="m-0 px-4 py-6 font-sans text-body-sm text-ink-muted">
+          Mapa no disponible — consulta los datos en la tabla cruda.
+        </p>
+      </figure>
+    );
+  }
 
   return (
-    <figure
-      aria-label={block.title}
-      style={{
-        margin: 0,
-        border: "1px solid var(--hairline)",
-        background: "var(--bg-elev)",
-      }}
-    >
-      <figcaption
-        className="kicker"
-        style={{
-          padding: "var(--space-3) var(--space-4)",
-          borderBlockEnd: "1px solid var(--hairline)",
-        }}
-      >
-        {block.title}
+    <figure aria-label={block.title} className="surface-elev m-0">
+      <figcaption className="text-kicker px-4 py-3 hairline-bottom flex items-baseline justify-between">
+        <span>{block.title}</span>
+        <span className="text-ink-muted">
+          {block.level === "mpio"
+            ? "Agregado al departamento"
+            : "Por departamento"}
+        </span>
       </figcaption>
-      <div ref={containerRef} style={{ width: "100%", height: 360 }} />
-      {aggregated.length === 0 ? (
-        <p
-          style={{
-            margin: 0,
-            padding: "var(--space-3) var(--space-4)",
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-muted)",
-            borderBlockStart: "1px solid var(--hairline)",
-          }}
-        >
-          Sin códigos DIVIPOLA reconocidos en los datos.
-        </p>
-      ) : (
-        <p
-          style={{
-            margin: 0,
-            padding: "var(--space-3) var(--space-4)",
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-2)",
-            borderBlockStart: "1px solid var(--hairline)",
-          }}
-        >
-          Mapa por {block.level === "mpio" ? "municipio (agregado al departamento)" : "departamento"} —
-          tamaño del marcador proporcional al valor.
-        </p>
-      )}
+      <div style={{ width: "100%", aspectRatio: `${BASE_WIDTH} / ${height}` }}>
+        {geo ? (
+          <ChoroplethSVG
+            geo={geo}
+            valueByDpto={valueByDpto}
+            buckets={buckets}
+            title={block.title}
+            legendFormat={block.legend_format}
+          />
+        ) : (
+          <div className="h-full grid place-items-center font-mono text-caption text-ink-muted">
+            Cargando mapa…
+          </div>
+        )}
+      </div>
+      <ChoroplethLegend buckets={buckets} legendFormat={block.legend_format} />
     </figure>
+  );
+}
+
+// ---- subcomponentes / helpers -----------------------------------------
+
+function ChoroplethSVG({
+  geo,
+  valueByDpto,
+  buckets,
+  title,
+  legendFormat,
+}: {
+  geo: FeatureCollection;
+  valueByDpto: Map<string, number>;
+  buckets: number[];
+  title: string;
+  legendFormat: MapBlock["legend_format"];
+}) {
+  const projection = useMemo(
+    () =>
+      geoMercator().fitSize(
+        [BASE_WIDTH, BASE_HEIGHT],
+        geo as unknown as GeoPermissibleObjects,
+      ),
+    [geo],
+  );
+  const path: GeoPath = useMemo(() => geoPath(projection), [projection]);
+
+  return (
+    <svg
+      viewBox={`0 0 ${BASE_WIDTH} ${BASE_HEIGHT}`}
+      role="img"
+      aria-label={title}
+      preserveAspectRatio="xMidYMid meet"
+      className="w-full h-full"
+    >
+      {geo.features.map((feature) => {
+        const dptoCode = String(feature.properties?.DPTO ?? "").padStart(2, "0");
+        const rawName =
+          typeof feature.properties?.NOMBRE_DPT === "string"
+            ? feature.properties.NOMBRE_DPT
+            : dptoCode;
+        const name = toTitleCase(rawName);
+        const value = valueByDpto.get(dptoCode);
+        const idx = value !== undefined ? bucketIndex(value, buckets) : -1;
+        const fill =
+          idx < 0
+            ? "var(--bg-elev)"
+            : `color-mix(in srgb, var(--accent) ${15 + idx * 20}%, var(--bg))`;
+        const d = path(feature as unknown as GeoPermissibleObjects) ?? "";
+        return (
+          <path
+            key={dptoCode}
+            d={d}
+            fill={fill}
+            stroke="var(--ink)"
+            strokeWidth={0.5}
+            strokeLinejoin="miter"
+          >
+            <title>
+              {name}
+              {value !== undefined
+                ? `: ${formatValue(value, legendFormat)}`
+                : " — sin datos"}
+            </title>
+          </path>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ChoroplethLegend({
+  buckets,
+  legendFormat,
+}: {
+  buckets: number[];
+  legendFormat: MapBlock["legend_format"];
+}) {
+  if (buckets.length === 0) {
+    return (
+      <p className="m-0 px-4 py-3 font-mono text-caption text-ink-muted hairline-top">
+        Sin códigos DIVIPOLA reconocidos en los datos.
+      </p>
+    );
+  }
+  return (
+    <div className="px-4 py-3 hairline-top flex flex-wrap items-center gap-x-4 gap-y-2">
+      <span className="text-kicker">Leyenda</span>
+      {buckets.map((max, i) => {
+        const min = i === 0 ? 0 : (buckets[i - 1] ?? 0);
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1.5 font-mono text-caption text-ink-2"
+          >
+            <span
+              aria-hidden
+              className="inline-block w-3 h-3"
+              style={{
+                background: `color-mix(in srgb, var(--accent) ${15 + i * 20}%, var(--bg))`,
+                border: "1px solid var(--ink)",
+              }}
+            />
+            <span className="[font-variant-numeric:tabular-nums]">
+              {formatValue(min, legendFormat)} – {formatValue(max, legendFormat)}
+            </span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -166,26 +247,37 @@ function aggregateByDpto(
         : String(rawCode).padStart(2, "0");
     if (!code) continue;
     const v = Number(r[block.metric_column] ?? 0);
-    if (Number.isNaN(v)) continue;
+    if (!Number.isFinite(v)) continue;
     acc.set(code, (acc.get(code) ?? 0) + v);
   }
-  return Array.from(acc.entries()).map(([dptoCode, value]) => ({ dptoCode, value }));
+  return Array.from(acc.entries()).map(([dptoCode, value]) => ({
+    dptoCode,
+    value,
+  }));
 }
 
-const BASE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    carto: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [{ id: "carto", type: "raster", source: "carto" }],
-};
+/** Devuelve los 5 umbrales de cuantil (q20, q40, q60, q80, max). */
+function computeBuckets(values: number[]): number[] {
+  if (values.length === 0) return [];
+  const sorted = [...values].sort((a, b) => a - b);
+  const quantiles = [0.2, 0.4, 0.6, 0.8, 1];
+  return quantiles.map((q) => {
+    const idx = Math.min(sorted.length - 1, Math.floor(q * sorted.length));
+    return sorted[idx] ?? 0;
+  });
+}
+
+function bucketIndex(value: number, buckets: number[]): number {
+  for (let i = 0; i < buckets.length; i++) {
+    if (value <= (buckets[i] ?? 0)) return i;
+  }
+  return buckets.length - 1;
+}
+
+function toTitleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .split(" ")
+    .map((w) => (w.length === 0 ? w : (w[0] ?? "").toUpperCase() + w.slice(1)))
+    .join(" ");
+}

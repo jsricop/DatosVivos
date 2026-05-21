@@ -19,14 +19,15 @@ export function DisclaimerBeta({ variant = "inline" }: DisclaimerBetaProps) {
     >
       <span className="text-kicker mb-2 block">Disclaimer</span>
       <p className="m-0">
-        DatosVivos está en versión Beta-1. Las cifras del bloque{" "}
-        <strong className="text-ink">Datos verificados</strong> se calculan con{" "}
-        <code className="font-mono">pandas</code> sobre los datos reales de
-        cada dataset citado en{" "}
-        <strong className="text-ink">Fuentes consultadas</strong>. Si DatosVivos
-        no puede responder tu pregunta, lo dice con el mensaje{" "}
-        <strong className="text-ink">«No encontré datasets relevantes»</strong> —
-        nunca improvisa. Abre los datasets originales para verificar.
+        Esta es la versión Beta-1. Las cifras del bloque{" "}
+        <strong className="text-ink">Datos verificados</strong> salen
+        directamente de los datasets citados en{" "}
+        <strong className="text-ink">Fuentes consultadas</strong> — no se
+        inventan. Si DatosVivos no puede responder tu pregunta, te lo dice
+        claramente con el mensaje{" "}
+        <strong className="text-ink">«No encontré datasets relevantes»</strong>:
+        nunca improvisa una respuesta. Abre la fuente original para verificar
+        cualquier dato.
       </p>
     </aside>
   );
