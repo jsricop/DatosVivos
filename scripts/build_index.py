@@ -44,14 +44,22 @@ log = logging.getLogger(__name__)
 
 
 def _shape_discovery_result(r: dict[str, Any]) -> dict[str, Any]:
-    """Aplana un objeto Discovery a la forma que VectorIndex acepta."""
+    """Aplana un objeto Discovery a la forma que VectorIndex acepta.
+
+    Para `entity` preferimos `owner.display_name` (más confiable como autoridad
+    real del dataset) sobre `resource.attribution` (que en algunos datasets de
+    datos.gov.co está mal asignado — ej. gdxc-w37w / DIVIPOLA decía
+    "Gobernación de Guainía" en attribution pero el owner real es DANE).
+    Fallback a `attribution` si `owner.display_name` no existe.
+    """
     resource = r.get("resource", {}) or {}
     classification = r.get("classification", {}) or {}
+    owner = r.get("owner", {}) or {}
     return {
         "id": resource.get("id"),
         "name": resource.get("name") or "",
         "description": (resource.get("description") or "").strip(),
-        "entity": resource.get("attribution"),
+        "entity": owner.get("display_name") or resource.get("attribution"),
         "category": classification.get("domain_category"),
         "tags": resource.get("columns_field_name") or [],
     }
