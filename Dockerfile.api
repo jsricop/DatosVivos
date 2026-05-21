@@ -23,9 +23,16 @@ RUN chown appuser:appuser /app
 
 # Instalación capas: mcp (clientes Socrata) + ai (motor) + api (FastAPI/SSE).
 COPY --chown=appuser:appuser requirements.mcp.txt requirements.ai.txt requirements.api.txt ./
-RUN pip install -r requirements.mcp.txt \
- && pip install -r requirements.ai.txt \
- && pip install -r requirements.api.txt
+
+# torch CPU-only ANTES de los requirements: la VM no tiene GPU, y pip instala
+# torch+CUDA por default (~5 GB con nvidia/cudnn) lo que rompe el build por
+# disk. Forzamos la rueda CPU oficial de PyTorch (~300 MB).
+RUN pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch torchvision \
+ && pip install --no-cache-dir -r requirements.mcp.txt \
+ && pip install --no-cache-dir -r requirements.ai.txt \
+ && pip install --no-cache-dir -r requirements.api.txt
 
 COPY --chown=appuser:appuser mcp_server/ ./mcp_server/
 COPY --chown=appuser:appuser ai_engine/ ./ai_engine/
