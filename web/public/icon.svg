@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DatosVivos">
+  <title>DatosVivos</title>
+  <rect fill="#F3EFE3" x="0" y="0" width="64" height="64" />
+  <rect stroke="#16130E" stroke-width="2" fill="none" x="1" y="1" width="62" height="62" />
+  <g font-family="IBM Plex Serif, Georgia, serif" font-weight="600" font-size="38" letter-spacing="-1" text-anchor="middle">
+    <text fill="#16130E" x="20" y="44">D</text>
+    <text fill="#A52A2A" x="32" y="44">|</text>
+    <text fill="#16130E" x="44" y="44">V</text>
+  </g>
+</svg>

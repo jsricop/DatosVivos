@@ -8,7 +8,12 @@ import { AreaClosed, LinePath } from "@visx/shape";
 import { useMemo } from "react";
 
 import { useUserScale } from "@/lib/motion";
-import { formatValue, prepareChartData, type Row } from "@/lib/dashboard-data";
+import {
+  chartColor,
+  formatValue,
+  prepareSeriesData,
+  type Row,
+} from "@/lib/dashboard-data";
 import type { ChartBlock } from "@/lib/schemas/dashboard";
 
 const MARGIN = { top: 12, right: 16, bottom: 48, left: 56 };
@@ -23,10 +28,29 @@ const AXIS_TICK_LABEL = {
 type Props = { block: ChartBlock; rows: Row[] };
 
 export function LineChartBlock({ block, rows }: Props) {
-  const data = useMemo(() => prepareChartData(block, rows), [block, rows]);
+  const series = useMemo(() => prepareSeriesData(block, rows), [block, rows]);
   const userScale = useUserScale();
   const height = Math.round(BASE_HEIGHT * userScale);
   const isArea = block.type === "area";
+  const isMulti = series.length > 1;
+
+  const xDomain = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of series) for (const p of s.data) set.add(String(p.x));
+    return Array.from(set);
+  }, [series]);
+
+  const { yMin, yMax } = useMemo(() => {
+    let min = 0;
+    let max = 0;
+    for (const s of series) {
+      for (const p of s.data) {
+        min = Math.min(min, p.y);
+        max = Math.max(max, p.y);
+      }
+    }
+    return { yMin: min, yMax: max };
+  }, [series]);
 
   return (
     <figure
@@ -34,26 +58,41 @@ export function LineChartBlock({ block, rows }: Props) {
       className="surface-elev m-0 p-4 flex flex-col gap-3"
     >
       <figcaption className="text-kicker">{block.title}</figcaption>
+      {isMulti ? (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 list-none">
+          {series.map((s, i) => (
+            <li
+              key={s.name}
+              className="inline-flex items-center gap-1.5 font-mono text-caption text-ink-2"
+            >
+              <span
+                aria-hidden
+                className="inline-block w-3 h-[2px]"
+                style={{ background: chartColor(i) }}
+              />
+              <span>{s.name}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div style={{ width: "100%", height }}>
         <ParentSize>
           {({ width, height: h }) => {
             const innerW = Math.max(0, width - MARGIN.left - MARGIN.right);
             const innerH = Math.max(0, h - MARGIN.top - MARGIN.bottom);
             const x = scaleBand<string>({
-              domain: data.map((d) => String(d.x)),
+              domain: xDomain,
               range: [0, innerW],
               padding: 0.1,
             });
-            const values = data.map((d) => d.y);
-            const min = Math.min(0, ...values);
-            const max = Math.max(0, ...values);
             const y = scaleLinear<number>({
-              domain: [min, (max || 1) * 1.1],
+              domain: [yMin, (yMax || 1) * 1.1],
               range: [innerH, 0],
               nice: true,
             });
             const xAt = (d: { x: string | number }) =>
               (x(String(d.x)) ?? 0) + x.bandwidth() / 2;
+
             return (
               <svg width={width} height={h} role="img" aria-label={block.title}>
                 <Group left={MARGIN.left} top={MARGIN.top}>
@@ -68,39 +107,49 @@ export function LineChartBlock({ block, rows }: Props) {
                       strokeWidth={1}
                     />
                   ))}
-                  {isArea ? (
-                    <AreaClosed
-                      data={data}
-                      x={xAt}
-                      y={(d) => y(d.y)}
-                      yScale={y}
-                      fill="var(--accent)"
-                      fillOpacity={0.18}
-                      stroke="var(--accent)"
-                      strokeWidth={2}
-                    />
-                  ) : (
-                    <LinePath
-                      data={data}
-                      x={xAt}
-                      y={(d) => y(d.y)}
-                      stroke="var(--accent)"
-                      strokeWidth={2}
-                      strokeLinejoin="miter"
-                      strokeLinecap="square"
-                    />
-                  )}
-                  {data.map((d) => (
-                    <circle
-                      key={String(d.x)}
-                      cx={xAt(d)}
-                      cy={y(d.y)}
-                      r={3}
-                      fill="var(--accent)"
-                    >
-                      <title>{`${d.x}: ${formatValue(d.y)}`}</title>
-                    </circle>
-                  ))}
+                  {series.map((s, sIdx) => {
+                    const color = chartColor(sIdx);
+                    return (
+                      <g key={s.name}>
+                        {isArea ? (
+                          <AreaClosed
+                            data={s.data}
+                            x={xAt}
+                            y={(d) => y(d.y)}
+                            yScale={y}
+                            fill={color}
+                            fillOpacity={isMulti ? 0.08 : 0.18}
+                            stroke={color}
+                            strokeWidth={2}
+                          />
+                        ) : (
+                          <LinePath
+                            data={s.data}
+                            x={xAt}
+                            y={(d) => y(d.y)}
+                            stroke={color}
+                            strokeWidth={2}
+                            strokeLinejoin="miter"
+                            strokeLinecap="square"
+                          />
+                        )}
+                        {s.data.map((d) => (
+                          <circle
+                            key={`${s.name}-${String(d.x)}`}
+                            cx={xAt(d)}
+                            cy={y(d.y)}
+                            r={3}
+                            fill={color}
+                          >
+                            <title>
+                              {isMulti ? `${s.name} · ` : ""}
+                              {String(d.x)}: {formatValue(d.y)}
+                            </title>
+                          </circle>
+                        ))}
+                      </g>
+                    );
+                  })}
                   <AxisLeft
                     scale={y}
                     numTicks={5}

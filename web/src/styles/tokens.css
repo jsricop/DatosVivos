@@ -30,6 +30,14 @@
   --selection-fg: #16130E;
   --hairline-width: 1px;
   --hairline-width-strong: 2px;
+
+  /* Paleta categórica para charts multi-serie (BRAND.md §8.9).
+   * Cada token = una serie distinta. Hasta 5 series legibles. */
+  --chart-1: #A52A2A; /* granate accent */
+  --chart-2: #B8860B; /* ámbar */
+  --chart-3: #1F3A5F; /* azul tinta */
+  --chart-4: #5C6B4D; /* verde tinta */
+  --chart-5: #3B342A; /* ink-2 marrón */
 }
 
 :root[data-theme="dark"] {
@@ -53,6 +61,13 @@
   --selection-fg: #0E0C08;
   --hairline-width: 1px;
   --hairline-width-strong: 2px;
+
+  /* Paleta categórica modo oscuro — luminosidad invertida (BRAND.md §8.9). */
+  --chart-1: #C24A4A; /* granate luminoso */
+  --chart-2: #D4A24A; /* ámbar luminoso */
+  --chart-3: #5B91FF; /* azul ultramar luminoso */
+  --chart-4: #8FB57C; /* verde tinta luminoso */
+  --chart-5: #B0A88F; /* ink-2 luminoso */
 }
 
 :root[data-theme="contrast-light"] {
@@ -76,6 +91,15 @@
   --selection-fg: #FFFFFF;
   --hairline-width: 2px;
   --hairline-width-strong: 3px;
+
+  /* Paleta categórica alto contraste sobre blanco — los 5 tokens deben
+   * todos pasar ≥7:1 contra el fondo. Patrones SVG distinguen visualmente
+   * para usuarios con daltonismo. (BRAND.md §8.9) */
+  --chart-1: #0033A0; /* azul ultramar */
+  --chart-2: #6B0F6B; /* púrpura oscuro */
+  --chart-3: #006400; /* verde oscuro */
+  --chart-4: #9B0000; /* granate oscuro */
+  --chart-5: #1A1A1A; /* casi negro */
 }
 
 :root[data-theme="contrast-dark"] {
@@ -99,6 +123,14 @@
   --selection-fg: #000000;
   --hairline-width: 2px;
   --hairline-width-strong: 3px;
+
+  /* Paleta categórica alto contraste sobre negro — los 5 tokens pasan
+   * ≥7:1 sobre #000. (BRAND.md §8.9) */
+  --chart-1: #FFD400; /* amarillo escolar */
+  --chart-2: #00FFFF; /* cyan */
+  --chart-3: #FF69B4; /* magenta caliente */
+  --chart-4: #7CFC00; /* verde lima */
+  --chart-5: #FFFFFF; /* blanco */
 }
 
 /* Auto: respeta prefers-color-scheme cuando el usuario no eligió aún.
@@ -126,6 +158,11 @@
     --selection-fg: #0E0C08;
     --hairline-width: 1px;
     --hairline-width-strong: 2px;
+    --chart-1: #C24A4A;
+    --chart-2: #D4A24A;
+    --chart-3: #5B91FF;
+    --chart-4: #8FB57C;
+    --chart-5: #B0A88F;
   }
 }
 @media (prefers-color-scheme: light) {
@@ -146,6 +183,11 @@
     --selection-fg: #16130E;
     --hairline-width: 1px;
     --hairline-width-strong: 2px;
+    --chart-1: #A52A2A;
+    --chart-2: #B8860B;
+    --chart-3: #1F3A5F;
+    --chart-4: #5C6B4D;
+    --chart-5: #3B342A;
   }
 }
 

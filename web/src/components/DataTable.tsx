@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -26,9 +27,15 @@ type DataTableProps = {
 /**
  * DataTable (BRAND.md §8.7) — TanStack headless.
  *
- * Search global + sort por columna + paginación + CSV download. Tipografía
- * Plex Mono tabular-nums en celdas numéricas. Sin zebra striping; regletas
- * hairline entre filas.
+ * Funcionalidad ciudadana + periodista:
+ * - Search global (matchea cualquier columna).
+ * - Sort por columna con `aria-sort` + teclado.
+ * - Filtros por columna individual (toggle "Filtros avanzados").
+ * - Descarga CSV de las filas actualmente visibles.
+ * - Paginación.
+ *
+ * Tipografía Plex Mono tabular-nums en celdas numéricas. Regletas hairline,
+ * sin zebra striping.
  */
 export function DataTable({
   columns,
@@ -39,6 +46,8 @@ export function DataTable({
 }: DataTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const tableColumns = useMemo(
     () =>
@@ -50,6 +59,7 @@ export function DataTable({
           if (v === null || v === undefined) return "—";
           return String(v);
         },
+        filterFn: "includesString" as const,
       })),
     [columns],
   );
@@ -57,9 +67,10 @@ export function DataTable({
   const table = useReactTable({
     data: rows,
     columns: tableColumns,
-    state: { globalFilter, sorting },
+    state: { globalFilter, sorting, columnFilters },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     globalFilterFn: "includesString",
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -69,6 +80,7 @@ export function DataTable({
   });
 
   const matchCount = table.getFilteredRowModel().rows.length;
+  const activeColumnFilters = columnFilters.filter((f) => Boolean(f.value)).length;
 
   const downloadCsv = useCallback(() => {
     const escape = (v: unknown) => {
@@ -91,6 +103,11 @@ export function DataTable({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [columns, downloadFilename, table]);
+
+  function clearAllFilters() {
+    setGlobalFilter("");
+    setColumnFilters([]);
+  }
 
   if (rows.length === 0) {
     return (
@@ -129,6 +146,25 @@ export function DataTable({
         </span>
         <button
           type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-pressed={filtersOpen}
+          aria-controls="datatable-column-filters"
+          className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
+        >
+          <Icon name="filter" size={14} aria-hidden />
+          <span>Filtros{activeColumnFilters > 0 ? ` (${activeColumnFilters})` : ""}</span>
+        </button>
+        {globalFilter || activeColumnFilters > 0 ? (
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink-2 underline focus-ring"
+          >
+            Limpiar
+          </button>
+        ) : null}
+        <button
+          type="button"
           onClick={downloadCsv}
           className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
           aria-label="Descargar CSV con las filas visibles"
@@ -137,7 +173,7 @@ export function DataTable({
           <span>Descargar CSV</span>
         </button>
       </div>
-      <table className="min-w-full">
+      <table className="min-w-full" id="datatable-column-filters">
         {caption ? (
           <caption className="px-4 py-3 font-mono text-caption text-ink-2 text-start caption-top">
             {caption}
@@ -181,6 +217,24 @@ export function DataTable({
               })}
             </tr>
           ))}
+          {filtersOpen ? (
+            <tr className="hairline-bottom">
+              {table.getHeaderGroups()[0]?.headers.map((header) => (
+                <th
+                  key={`${header.id}-filter`}
+                  scope="col"
+                  className="px-3 py-2 align-top"
+                >
+                  <ColumnFilterInput
+                    column={header.column}
+                    onActivate={() => {
+                      /* nothing; binding live via state */
+                    }}
+                  />
+                </th>
+              ))}
+            </tr>
+          ) : null}
         </thead>
         <tbody>
           {table.getRowModel().rows.length === 0 ? (
@@ -189,7 +243,7 @@ export function DataTable({
                 colSpan={columns.length}
                 className="font-sans text-body-sm text-ink-muted text-center py-6"
               >
-                Ninguna fila coincide con «{globalFilter}».
+                Ninguna fila coincide con los filtros actuales.
               </td>
             </tr>
           ) : (
@@ -259,5 +313,34 @@ function SortIndicator({ dir }: { dir: false | "asc" | "desc" }) {
     <span aria-hidden className="text-accent font-mono text-[10px]">
       {dir === "asc" ? "▴" : "▾"}
     </span>
+  );
+}
+
+type ColumnLike = {
+  id: string;
+  getFilterValue: () => unknown;
+  setFilterValue: (v: unknown) => void;
+};
+
+function ColumnFilterInput({
+  column,
+  onActivate,
+}: {
+  column: ColumnLike;
+  onActivate: () => void;
+}) {
+  const value = (column.getFilterValue() ?? "") as string;
+  return (
+    <input
+      type="search"
+      value={value}
+      onChange={(e) => {
+        column.setFilterValue(e.target.value || undefined);
+        if (e.target.value) onActivate();
+      }}
+      placeholder="filtrar…"
+      aria-label={`Filtro de columna ${column.id}`}
+      className="w-full border border-hairline bg-bg px-2 py-1 font-mono text-caption text-ink focus-ring"
+    />
   );
 }

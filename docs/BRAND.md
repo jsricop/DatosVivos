@@ -383,8 +383,16 @@ Cada componente vive en `web/src/components/`. Documentación contractual: nombr
 
 ### 8.9 `ChartBlock`
 
-- **Props:** `type: "bar" | "line" | "scatter"`, `data: ChartData`, `xAxis: AxisSpec`, `yAxis: AxisSpec`, `caption: string`, `altText: string`.
-- **Reglas:** Visx headless. Axes con tipografía Plex Mono tnum. Grilla horizontal solo, color `var(--hairline)` opacidad 1 (no semi-transparente). Barras y líneas usan `var(--accent)`. Si hay múltiples series, segunda usa `var(--accent-2)`, tercera y posteriores usan `var(--ink-2)` con dashed (`stroke-dasharray: 4 2`). **Nunca** colores arcoiris / categóricos pastel. Título en Plex Serif arriba; fuente y nota metodológica en Plex Mono caption abajo.
+- **Props:** `block: ChartBlock` (con `type`, `x_column`, `y_column`, `groupby?`, `agg?`, `sort?`, `limit?`), `rows`.
+- **Reglas:** Visx headless. Axes con tipografía Plex Mono tnum. Grilla horizontal solo, color `var(--hairline)`. Title del bloque en Plex Serif arriba; tooltips por punto con `<title>` SVG.
+- **Paleta categórica (multi-serie cuando block tiene `groupby`):** 5 tokens `--chart-1..--chart-5` declarados en `tokens.css` por cada modo. Cada serie consume un token cíclicamente. Tokens libres del símbolo y semánticos en cada modo:
+  - **Claro:** granate · ámbar · azul tinta · verde tinta · marrón ink-2.
+  - **Oscuro:** mismo orden con luminosidad invertida.
+  - **Alto contraste sobre blanco:** azul ultramar · púrpura oscuro · verde oscuro · granate oscuro · negro (todos ≥7:1 sobre blanco).
+  - **Alto contraste sobre negro:** amarillo · cyan · magenta · verde lima · blanco (todos ≥7:1 sobre negro).
+- **1 sola serie:** usa `--chart-1` (visualmente equivalente a `--accent` en modo claro, pero el token diferenciado deja el accent libre para CTA/links sin conflicto semántico).
+- **Leyenda automática** cuando hay más de 1 serie (cuadrito de color + nombre de serie en Plex Mono). Sin emojis, sin patrones decorativos en claro/oscuro; en alto contraste se evalúa añadir `pattern` SVG para daltonismo si CI a11y lo exige.
+- **Prohibido:** colores arcoiris / categóricos pastel, gradientes sobre series, opacidades menores a 0.18 (deja barras y líneas invisibles).
 
 ### 8.10 `DisclaimerBeta`
 
