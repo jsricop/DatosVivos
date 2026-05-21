@@ -1,5 +1,5 @@
-# 06 — Deployment & Monitoring
+# 06 — Deployment
 
-Fase 6 de CRISP-ML(Q). Docker Compose, Nginx, healthchecks, reindexación, monitoreo.
+Este documento se trasladó a la carpeta canónica de CRISP-ML(Q):
 
-> Pendiente de redacción durante Sprint 5.
+→ [`crisp_mlq/06_deployment.md`](./crisp_mlq/06_deployment.md)

@@ -19,6 +19,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mcp
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
     env_file: .env
     environment:
       MCP_TRANSPORT: sse
@@ -31,15 +34,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.streamlit
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
     env_file: .env
     environment:
       MCP_SERVER_URL: http://mcp-server:3000/sse
       LLM_BACKEND: ${LLM_BACKEND:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Streamlit por default solo pone /app/app en sys.path (el dir del script
+      # principal). Necesitamos /app para que `from ai_engine.X import Y` y
+      # `from mcp_server.X import Y` funcionen desde cualquier página.
+      PYTHONPATH: /app
     ports:
       - "8501:8501"
     volumes:
-      - ./data/vector_index:/app/data/vector_index:ro
+      # data/ es read-write porque scripts.build_index escribe el índice
+      # vectorial aquí. El UID/GID del container coincide con el host
+      # (vía build-args APP_UID/APP_GID) para evitar problemas de permisos.
+      - ./data:/app/data
     depends_on:
       - mcp-server
 

@@ -1,21 +1,36 @@
 # Dockerfile para el MCP Server (Capa 1).
 # Construye una imagen mínima Python 3.11 que sirve las tools MCP sobre datos.gov.co.
+#
+# Seguridad: corre como usuario no-root `appuser` (UID/GID configurables
+# vía build-args, default 1000:1000) para consistencia con Dockerfile.streamlit
+# y buenas prácticas de aislamiento de contenedores.
 
 FROM python:3.11-slim
+
+ARG APP_UID=1000
+ARG APP_GID=1000
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Crear usuario no-root con UID/GID parametrizable
+RUN groupadd --system --gid ${APP_GID} appuser \
+ && useradd --system --uid ${APP_UID} --gid ${APP_GID} \
+        --shell /usr/sbin/nologin --create-home appuser
+
 WORKDIR /app
+RUN chown appuser:appuser /app
 
 # Dependencias de runtime
-COPY requirements.mcp.txt .
+COPY --chown=appuser:appuser requirements.mcp.txt .
 RUN pip install -r requirements.mcp.txt
 
 # Código fuente
-COPY mcp_server/ ./mcp_server/
+COPY --chown=appuser:appuser mcp_server/ ./mcp_server/
+
+USER appuser
 
 # Puerto del MCP server (SSE)
 EXPOSE 3000
