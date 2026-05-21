@@ -1,0 +1,206 @@
+/* tokens.css — Variables CSS de DatosVivos por modo de color.
+ * Fuente de verdad: docs/BRAND.md §3.
+ * NO editar valores hex aquí sin actualizar BRAND.md.
+ */
+
+:root,
+:root[data-theme="light"] {
+  /* Surfaces */
+  --bg: #F3EFE3;
+  --bg-elev: #E8E1CE;
+  --bg-overlay: rgba(22, 19, 14, 0.08);
+
+  /* Ink */
+  --ink: #16130E;
+  --ink-2: #3B342A;
+  --ink-muted: #776A55;
+
+  /* Structure */
+  --hairline: #B7A98B;
+  --hairline-strong: #3B342A;
+
+  /* Accent */
+  --accent: #A52A2A;
+  --accent-2: #B8860B;
+  --focus-ring: #A52A2A;
+  --danger: #7A1212;
+
+  /* Computed */
+  --selection-bg: #B8860B;
+  --selection-fg: #16130E;
+  --hairline-width: 1px;
+  --hairline-width-strong: 2px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0E0C08;
+  --bg-elev: #1A1612;
+  --bg-overlay: rgba(232, 225, 206, 0.08);
+
+  --ink: #E8E1CE;
+  --ink-2: #B0A88F;
+  --ink-muted: #7A7158;
+
+  --hairline: #3B342A;
+  --hairline-strong: #B0A88F;
+
+  --accent: #C24A4A;
+  --accent-2: #D4A24A;
+  --focus-ring: #D4A24A;
+  --danger: #E07070;
+
+  --selection-bg: #D4A24A;
+  --selection-fg: #0E0C08;
+  --hairline-width: 1px;
+  --hairline-width-strong: 2px;
+}
+
+:root[data-theme="contrast-light"] {
+  --bg: #FFFFFF;
+  --bg-elev: #FFFFFF;
+  --bg-overlay: rgba(0, 0, 0, 0.05);
+
+  --ink: #000000;
+  --ink-2: #000000;
+  --ink-muted: #333333;
+
+  --hairline: #000000;
+  --hairline-strong: #000000;
+
+  --accent: #0033A0;
+  --accent-2: #0033A0;
+  --focus-ring: #0033A0;
+  --danger: #9B0000;
+
+  --selection-bg: #0033A0;
+  --selection-fg: #FFFFFF;
+  --hairline-width: 2px;
+  --hairline-width-strong: 3px;
+}
+
+:root[data-theme="contrast-dark"] {
+  --bg: #000000;
+  --bg-elev: #000000;
+  --bg-overlay: rgba(255, 255, 255, 0.05);
+
+  --ink: #FFFFFF;
+  --ink-2: #FFFFFF;
+  --ink-muted: #CCCCCC;
+
+  --hairline: #FFFFFF;
+  --hairline-strong: #FFFFFF;
+
+  --accent: #FFD400;
+  --accent-2: #FFD400;
+  --focus-ring: #FFD400;
+  --danger: #FF6B6B;
+
+  --selection-bg: #FFD400;
+  --selection-fg: #000000;
+  --hairline-width: 2px;
+  --hairline-width-strong: 3px;
+}
+
+/* Auto: respeta prefers-color-scheme cuando el usuario no eligió aún.
+ * El anti-FOUC del layout aplica data-theme="auto" cuando localStorage está vacío.
+ */
+:root[data-theme="auto"] {
+  /* Por defecto, modo claro */
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg: #0E0C08;
+    --bg-elev: #1A1612;
+    --bg-overlay: rgba(232, 225, 206, 0.08);
+    --ink: #E8E1CE;
+    --ink-2: #B0A88F;
+    --ink-muted: #7A7158;
+    --hairline: #3B342A;
+    --hairline-strong: #B0A88F;
+    --accent: #C24A4A;
+    --accent-2: #D4A24A;
+    --focus-ring: #D4A24A;
+    --danger: #E07070;
+    --selection-bg: #D4A24A;
+    --selection-fg: #0E0C08;
+    --hairline-width: 1px;
+    --hairline-width-strong: 2px;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #F3EFE3;
+    --bg-elev: #E8E1CE;
+    --bg-overlay: rgba(22, 19, 14, 0.08);
+    --ink: #16130E;
+    --ink-2: #3B342A;
+    --ink-muted: #776A55;
+    --hairline: #B7A98B;
+    --hairline-strong: #3B342A;
+    --accent: #A52A2A;
+    --accent-2: #B8860B;
+    --focus-ring: #A52A2A;
+    --danger: #7A1212;
+    --selection-bg: #B8860B;
+    --selection-fg: #16130E;
+    --hairline-width: 1px;
+    --hairline-width-strong: 2px;
+  }
+}
+
+/* Escalas tipográficas (BRAND.md §4.2) */
+:root {
+  --type-display-xl: clamp(2.75rem, 5.5vw, 4.5rem);
+  --type-h1: clamp(2.25rem, 4vw, 3.25rem);
+  --type-h2: clamp(1.75rem, 3vw, 2.5rem);
+  --type-h3: clamp(1.375rem, 2vw, 1.625rem);
+  --type-h4: 1.125rem;
+  --type-body-lg: 1.125rem;
+  --type-body: 1rem;
+  --type-body-sm: 0.9375rem;
+  --type-caption: 0.875rem;
+  --type-kicker: 0.75rem;
+  --type-mono: 0.9375rem;
+  --type-data: 1rem;
+
+  /* Escala de usuario (A11yPanel) */
+  --user-scale: 1;
+}
+
+/* Espaciado (BRAND.md §5.3) */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  --container-max: 1200px;
+  --measure: 72ch;
+  --measure-narrow: 60ch;
+}
+
+/* Forma (BRAND.md §5.1, 5.2) */
+:root {
+  --radius-0: 0;
+  --radius-1: 2px;
+}
+
+/* Transiciones (BRAND.md §5.5) */
+:root {
+  --duration-fast: 120ms;
+  --duration-medium: 200ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-medium: 0ms;
+  }
+}
