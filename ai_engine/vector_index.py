@@ -237,6 +237,35 @@ class VectorIndex:
             )
         return results
 
+    def get_by_id(self, dataset_id: str) -> SearchResult | None:
+        """Recupera un dataset específico por ID, sin pasar por similitud.
+
+        Útil para inyectar datasets autoritativos en el retrieval cuando
+        un patrón de pregunta lo amerita (ej. DIVIPOLA para preguntas de
+        conteo de mpios/dptos). Score default = 0.9 (alto, para que el
+        boost lo prioritice si aplica).
+        """
+        if not dataset_id:
+            return None
+        try:
+            raw = self._collection.get(ids=[dataset_id])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("get_by_id falló (%s): %s", dataset_id, exc)
+            return None
+        ids = raw.get("ids", [])
+        metadatas = raw.get("metadatas", [])
+        if not ids or not metadatas:
+            return None
+        meta = metadatas[0] or {}
+        return SearchResult(
+            id=ids[0],
+            name=meta.get("name") or "",
+            entity=meta.get("entity") or None,
+            score=0.9,
+            description=meta.get("description") or None,
+            category=meta.get("category") or None,
+        )
+
     def reset(self) -> None:
         """Borra toda la colección. Útil para tests, NO usar en producción."""
         self._client.delete_collection(self._collection_name)

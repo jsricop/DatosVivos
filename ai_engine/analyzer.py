@@ -53,6 +53,52 @@ DISCOVERY_BOOST = 0.05
 # acumulables si un dataset aparece en Discovery Y menciona el territorio.
 GEO_BOOST = 0.08
 
+# Boost FUERTE a DIVIPOLA cuando la pregunta pide conteo de mpios/dptos.
+# Razón: el journey 2026-05-21 mostró que sin este boost el retrieval trae
+# datasets temáticos de Antioquia (víctimas, contratación, salud) que NO
+# tienen columna `cod_dpto` correcta, hace fallar la plantilla SoQL del
+# count_in y el LLM 3B inventa columnas → 0 resultados a P1 (Antioquia=125).
+# Es alto a propósito (~5x DISCOVERY_BOOST) para que un DIVIPOLA con score
+# bajo supere datasets temáticos con score alto en este caso específico.
+DIVIPOLA_BOOST = 0.30
+# Boost extra cuando el ID es exacto al oficial DANE (`gdxc-w37w`).
+DIVIPOLA_BOOST_OFFICIAL_EXTRA = 0.10
+
+# Regex que detecta cuándo la pregunta pide conteo de mpios/dptos como
+# entidades geográficas (no como filtro temático).
+import re as _re
+_DIVIPOLA_QUESTION_PATTERN = _re.compile(
+    r"\b(municipios?|departamentos?)\b",
+    _re.IGNORECASE,
+)
+
+# IDs de datasets oficiales DIVIPOLA conocidos (mantener corto y verificado).
+_DIVIPOLA_OFFICIAL_IDS = frozenset({
+    "gdxc-w37w",  # DANE — Codificación de la División Político Administrativa
+})
+
+
+def divipola_boost_amount(question: str, hit) -> float:
+    """Boost extra para datasets DIVIPOLA cuando la pregunta es conteo geo.
+
+    Activación:
+    - Pregunta menciona "municipio(s)" o "departamento(s)" como palabra clave.
+    - Hit es el ID oficial DIVIPOLA o tiene "DIVIPOLA" en nombre/descripción.
+
+    Devuelve 0.0 si no aplica.
+    """
+    if not _DIVIPOLA_QUESTION_PATTERN.search(question):
+        return 0.0
+    is_official = hit.id in _DIVIPOLA_OFFICIAL_IDS
+    haystack = (hit.name + " " + (getattr(hit, "description", "") or "")).upper()
+    has_divipola = "DIVIPOLA" in haystack
+    if not (is_official or has_divipola):
+        return 0.0
+    boost = DIVIPOLA_BOOST
+    if is_official:
+        boost += DIVIPOLA_BOOST_OFFICIAL_EXTRA
+    return boost
+
 # Intents que disparan ejecución de SoQL contra el top dataset (no solo narrar metadata).
 INTENTS_REQUIRING_DATA = {"descriptive", "comparative", "temporal", "cross_source"}
 
@@ -390,6 +436,19 @@ class Analyzer:
         """
         vector_hits = self.vector_index.search(question, k=self.top_k_datasets)
 
+        # Inyección forzada de DIVIPOLA cuando el patrón de pregunta lo
+        # justifica. El embedding semántico NO asocia "DIVIPOLA" con
+        # preguntas tipo "¿cuántos municipios tiene Antioquia?", entonces
+        # gdxc-w37w nunca aparece en top-k aunque sea la fuente correcta.
+        # Inyectamos manualmente al inicio para que el boost lo eleve a top.
+        if _DIVIPOLA_QUESTION_PATTERN.search(question):
+            already_present = any(h.id == "gdxc-w37w" for h in vector_hits)
+            if not already_present:
+                divipola_hit = self.vector_index.get_by_id("gdxc-w37w")
+                if divipola_hit is not None:
+                    vector_hits = [divipola_hit] + vector_hits
+                    log.info("Inyectado gdxc-w37w (DIVIPOLA) al retrieval para pregunta de conteo geo")
+
         if not self.enable_hybrid_retrieval:
             return vector_hits
 
@@ -415,7 +474,8 @@ class Analyzer:
             return vector_hits
 
         # Boost a hits que también aparecen en Discovery + boost geográfico
-        # si geo_ctx menciona un territorio que aparece en el nombre/desc.
+        # si geo_ctx menciona un territorio que aparece en el nombre/desc +
+        # boost FUERTE a DIVIPOLA si la pregunta pide conteo de mpios/dptos.
         geo_tokens = self._geo_match_tokens(geo_ctx)
         boosted: list[SearchResult] = []
         for h in vector_hits:
@@ -426,6 +486,7 @@ class Analyzer:
                 haystack = (h.name + " " + (h.description or "")).lower()
                 if any(tok in haystack for tok in geo_tokens):
                     score_delta += GEO_BOOST
+            score_delta += divipola_boost_amount(question, h)
             if score_delta:
                 boosted.append(
                     SearchResult(
