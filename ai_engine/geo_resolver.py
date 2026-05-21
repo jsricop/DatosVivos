@@ -127,6 +127,39 @@ _MPIO_BLACKLIST: set[str] = {
     "colombia",  # mpio en Huila — choca con país Colombia
 }
 
+# Stopwords funcionales del español que NUNCA deben hacer fuzzy match contra
+# nombres de mpio/dpto. Razón: palabras como "cual" → "Cumbal" (ratio 0.80),
+# "como" → "Cómbita", "para" → "Parménides", causan falsos positivos.
+_FUZZY_STOPWORDS: set[str] = {
+    # Pronombres interrogativos y relativos
+    "cual", "cuales", "como", "donde", "cuando", "porque", "para",
+    "quien", "quienes",
+    # Preposiciones y conjunciones largas (≥4 chars que entran al fuzzy)
+    "entre", "sobre", "desde", "hacia", "hasta", "contra", "segun",
+    "ante", "bajo", "tras", "durante", "mediante",
+    # Cuantificadores y comparativos
+    "mucho", "muchos", "mucha", "muchas", "menos", "mayor", "menor",
+    "mayores", "menores", "alta", "alto", "altas", "altos",
+    "baja", "bajo", "bajas", "bajos", "mejor", "mejores", "peor",
+    "peores", "maxima", "maximo", "minima", "minimo",
+    # Verbos comunes en preguntas
+    "tiene", "tienen", "registra", "registran", "presenta", "presentan",
+    "hace", "hacen", "posee", "poseen", "reporta", "reportan",
+    "muestra", "muestran", "exhibe", "exhiben", "puede", "pueden",
+    # Sustantivos genéricos
+    "datos", "dato", "informacion", "estadistica", "estadisticas",
+    "cifra", "cifras", "tasa", "tasas", "indice", "indices",
+    "numero", "numeros", "cantidad", "cantidades", "total", "totales",
+    "departamento", "departamentos", "municipio", "municipios",
+    "ciudad", "ciudades", "region", "regiones", "territorio",
+    "territorios", "pais", "paises", "zona", "zonas",
+    # Conectores temporales
+    "antes", "despues", "luego", "ahora", "siempre", "nunca",
+    # Otros frecuentes
+    "tambien", "ademas", "esta", "estos", "estas", "esto",
+    "afectada", "afectado", "afectados", "afectadas",
+}
+
 
 @dataclass(frozen=True)
 class GeoTarget:
@@ -337,6 +370,26 @@ _RANKING_PATTERN = re.compile(
     r"\b(top\s+\d+|los?\s+\d+\s+(mejores|peores|m[áa]s|menos)|ranking)\b", re.IGNORECASE
 )
 _RANKING_N_RE = re.compile(r"\btop\s+(\d+)\b|\blos?\s+(\d+)\s+", re.IGNORECASE)
+
+# Ranking IMPLÍCITO (PROD_IMPROV #4): patrones del lenguaje cotidiano del
+# ciudadano que piden ordenamiento sin decir "top N" o "ranking".
+# Captura "(qué|cuál) ... X ... (más|mayor|máxima|alta|...)" con cualquier
+# contenido entre el interrogativo y el cuantificador (max 60 chars para
+# evitar matches absurdos a través de oraciones).
+# Ejemplos cubiertos:
+#   "qué departamento tiene más universidades"
+#   "cuál es la ciudad más afectada por homicidios"
+#   "cuál municipio tiene la tasa más alta de dengue"
+#   "qué región presenta mayor inversión social"
+_IMPLICIT_RANKING_PATTERN = re.compile(
+    r"\b(qu[eé]|cu[aá]l(?:es)?)\b"
+    r"[^.?!]{0,60}?"  # no greedy hasta encontrar cuantificador
+    r"\b(m[áa]s|menos|mayor(?:es)?|menor(?:es)?|"
+    r"m[áa]xim[oa]s?|m[íi]nim[oa]s?|"
+    r"alta|alto|altas|altos|baja|bajo|bajas|bajos|"
+    r"mejor(?:es)?|peor(?:es)?)\b",
+    re.IGNORECASE,
+)
 _VS_NATIONAL_PATTERN = re.compile(
     r"\b(respecto al? (promedio )?(nacional|colombia)|comparad[oa]\s+con\s+(colombia|el pais)|"
     r"versus (el)? nacional|frente al nacional)\b",
@@ -436,15 +489,24 @@ class GeoResolver:
         plural_generic = _has_plural_generic(question)
         comparison_mode, top_n = self._detect_comparison_mode(question, groupby)
 
-        # Si es ranking pero no hay groupby explícito, derivar de plurales
-        # ("Top 5 departamentos…" → cod_dpto; "Top 10 ciudades…" → cod_mpio).
+        # Si es ranking pero no hay groupby explícito, derivar de la palabra
+        # geográfica mencionada (plural o singular en ranking implícito).
+        # Convenciones es-CO:
+        #   - ciudad/ciudades   → cod_mpio
+        #   - municipio/s       → cod_mpio
+        #   - departamento/s    → cod_dpto
+        #   - territorio/s      → cod_dpto
+        #   - región/regiones   → cod_dpto (más cercano semánticamente a dpto)
         if comparison_mode == "ranking" and not groupby:
             ql = question.lower()
-            # ciudad/ciudades es sinónimo común de municipio en lenguaje
-            # cotidiano del ciudadano colombiano.
-            if "municipios" in ql or "ciudades" in ql or "ciudad" in ql:
+            # Detectar primero mpio (más específico) antes que dpto.
+            mpio_singular = re.search(r"\b(municipio|ciudad)\b", ql)
+            mpio_plural = re.search(r"\b(municipios|ciudades)\b", ql)
+            dpto_singular = re.search(r"\b(departamento|territorio|regi[oó]n)\b", ql)
+            dpto_plural = re.search(r"\b(departamentos|territorios|regiones)\b", ql)
+            if mpio_plural or mpio_singular:
                 groupby = "cod_mpio"
-            elif "departamentos" in ql or "territorios" in ql:
+            elif dpto_plural or dpto_singular:
                 groupby = "cod_dpto"
 
         # Mpio antes que dpto: si dice "Medellín" preferimos el mpio específico.
@@ -575,6 +637,10 @@ class GeoResolver:
             return "vs_national", 0
         if _RANKING_PATTERN.search(question):
             return "ranking", _detect_ranking_n(question)
+        # Ranking implícito ("qué dpto tiene más X" / "cuál ciudad mayor Y")
+        if _IMPLICIT_RANKING_PATTERN.search(question):
+            # n=5 por default — ranking implícito sin número explícito
+            return "ranking", 5
         # 'vs' requiere o token explícito (vs/versus/compara) o 2+ territorios separados por 'y'
         if _VS_PATTERN.search(question):
             return "vs", 0
@@ -591,8 +657,16 @@ class GeoResolver:
         return len(levels) <= 2 and "national" not in levels
 
     def _fuzzy_search(self, norm_text: str) -> tuple[list, list]:
-        """Búsqueda fuzzy token-a-token. Solo se invoca si no hubo match exacto."""
-        tokens = [t for t in norm_text.split() if len(t) >= 4]
+        """Búsqueda fuzzy token-a-token. Solo se invoca si no hubo match exacto.
+
+        Excluye stopwords funcionales que producen falsos positivos
+        (ej. "cual" → "Cumbal" ratio 0.80, "como" → "Cómbita").
+        """
+        # Filtrar tokens ≥4 chars Y NO stopwords
+        tokens = [
+            t for t in norm_text.split()
+            if len(t) >= 4 and t not in _FUZZY_STOPWORDS
+        ]
         mpio_hits: list[tuple[str, str, str, float]] = []
         dpto_hits: list[tuple[str, str, float]] = []
 

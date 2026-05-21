@@ -246,3 +246,67 @@ def test_top_n_ciudades_activa_groupby_mpio():
     assert ctx.comparison_mode == "ranking"
     assert ctx.groupby == "cod_mpio"
     assert ctx.top_n == 10
+
+
+# ============================================================
+# F. Detección de comparativa IMPLÍCITA (PROD_IMPROV #4)
+# ============================================================
+
+
+def test_ranking_implicito_que_departamento_tiene_mas():
+    """'Qué departamento tiene más X' debe activar ranking implícito."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Qué departamento tiene más universidades")
+    assert ctx is not None
+    assert ctx.comparison_mode == "ranking"
+    assert ctx.groupby == "cod_dpto"
+
+
+def test_ranking_implicito_cual_ciudad():
+    """'Cuál es la ciudad más afectada por X' → ranking de mpios."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Cuál es la ciudad más afectada por homicidios")
+    assert ctx is not None
+    assert ctx.comparison_mode == "ranking"
+    assert ctx.groupby == "cod_mpio"
+
+
+def test_ranking_implicito_cual_municipio_tasa_mas_alta():
+    """'Cuál municipio tiene la tasa más alta' → ranking de mpios."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Cuál municipio tiene la tasa más alta de dengue")
+    assert ctx is not None
+    assert ctx.comparison_mode == "ranking"
+    assert ctx.groupby == "cod_mpio"
+
+
+def test_ranking_implicito_region_mayor():
+    """'Qué región presenta mayor inversión' → ranking (preferimos cod_dpto por default)."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Qué región presenta mayor inversión social")
+    assert ctx is not None
+    assert ctx.comparison_mode == "ranking"
+    # "región" es ambiguo — preferimos cod_dpto por convención
+    assert ctx.groupby == "cod_dpto"
+
+
+def test_ranking_implicito_no_se_activa_con_singular_general():
+    """'Cómo se compara Antioquia' — vs implícito a sí mismo no es ranking.
+    El resolver lo trata como búsqueda normal sobre Antioquia.
+    """
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Información sobre Antioquia")
+    assert ctx is not None
+    # No es ranking ni vs — solo dpto
+    assert ctx.comparison_mode is None
+    assert ctx.dpto_code == "05"
