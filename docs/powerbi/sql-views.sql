@@ -1,0 +1,139 @@
+-- DatosVivos — Views consumibles por Power BI (ADR-014)
+--
+-- Power BI conecta a PostgreSQL (DirectQuery o Import) usando las views
+-- declaradas en `db/init.sql`. Este archivo documenta cada view, las
+-- columnas que expone y el rol que tiene en el dashboard.
+--
+-- NO ejecutar de nuevo — las views ya están creadas por `db/init.sql`.
+-- Este SQL es documentación viva.
+
+-- ============================================================
+-- v_dataset_status
+-- ============================================================
+-- Rol: tabla maestra de datasets con su estado de actualización.
+-- Página PowerBI: 1 (vista por entidad) y 2 (drill-down).
+-- Granularidad: 1 fila por dataset_id.
+--
+-- SELECT
+--     dataset_id          -- 4x4 Socrata, llave
+--     dataset_name        -- nombre original Socrata
+--     entity_id           -- FK a entities
+--     entity_name         -- nombre largo de la entidad
+--     entity_abbrev       -- abbreviation usada en el filtro PowerBI
+--     category            -- categoría declarada por Socrata
+--     rows_updated_at     -- timestamp última actualización (Socrata)
+--     update_frequency    -- "Annual" | "Quarterly" | "Monthly" | etc. o NULL
+--     frequency_days      -- intervalo en días según parse_frequency_days()
+--     days_since_update   -- entero. NULL si rows_updated_at es NULL
+--     status              -- 'verde' | 'amarillo' | 'rojo' | 'desconocido'
+--     row_count           -- número de filas en Socrata (snapshot del refresh)
+--     view_count          -- número de vistas/descargas en datos.gov.co
+--     socrata_url         -- https://www.datos.gov.co/d/{id}
+--     api_url             -- https://www.datos.gov.co/resource/{id}.json
+--     last_refreshed_at   -- cuándo el ETL trajo este registro
+-- FROM v_dataset_status;
+
+-- ============================================================
+-- v_dataset_usage
+-- ============================================================
+-- Rol: métricas de consumo por dataset.
+-- Página PowerBI: 2 (drill-down dataset).
+-- Granularidad: 1 fila por dataset_id (solo datasets con al menos 1 consulta).
+--
+-- SELECT
+--     dataset_id              -- llave
+--     n_queries_total         -- total histórico
+--     n_queries_30d           -- últimos 30 días
+--     n_queries_90d           -- últimos 90 días
+--     last_query_at           -- timestamp última consulta
+--     days_since_last_query   -- días desde última consulta
+--     top_intent              -- intent más común (search|comparative|temporal|cross_source)
+--     avg_elapsed_s           -- latencia promedio (s)
+-- FROM v_dataset_usage;
+
+-- ============================================================
+-- v_entity_summary
+-- ============================================================
+-- Rol: KPIs de página principal por entidad. La página de entrada del
+--      dashboard hace `WHERE entity_abbrev = '...'` y obtiene 1 fila.
+-- Granularidad: 1 fila por entity_id (incluso si no tiene consultas).
+--
+-- SELECT
+--     entity_id
+--     entity_name
+--     entity_abbrev           -- usado en filtro URL del iframe
+--     n_datasets              -- total datasets de la entidad
+--     n_queries_30d           -- consultas últimos 30 días
+--     n_queries_total         -- consultas totales
+--     datasets_verdes         -- count de status='verde'
+--     datasets_amarillos
+--     datasets_rojos
+--     datasets_sin_fecha      -- rows_updated_at NULL (calidad del catálogo)
+--     last_access_at          -- timestamp última consulta a cualquier dataset suyo
+-- FROM v_entity_summary;
+
+-- ============================================================
+-- v_top_datasets
+-- ============================================================
+-- Rol: top 10 datasets más consultados (página 3 benchmark público).
+-- Granularidad: hasta 10 filas, ordenadas por n_queries DESC.
+--
+-- SELECT
+--     dataset_id
+--     dataset_name
+--     entity_abbrev
+--     category
+--     n_queries
+--     last_query_at
+-- FROM v_top_datasets;
+
+-- ============================================================
+-- v_queries_daily
+-- ============================================================
+-- Rol: serie temporal para la tendencia mensual.
+-- Granularidad: 1 fila por día con al menos 1 consulta.
+--
+-- SELECT
+--     query_date              -- DATE
+--     n_queries               -- consultas del día
+--     n_distinct_datasets     -- datasets únicos consultados
+--     avg_elapsed_s           -- latencia promedio del día
+-- FROM v_queries_daily;
+
+-- ============================================================
+-- Queries directas para visuales Power BI específicos
+-- ============================================================
+
+-- 1. KPIs página principal (entrada filtra `?Entity=MinSalud`)
+-- SELECT * FROM v_entity_summary WHERE entity_abbrev = 'MinSalud';
+
+-- 2. Tabla maestra de datasets de la entidad
+-- SELECT *
+-- FROM v_dataset_status d
+-- LEFT JOIN v_dataset_usage u USING (dataset_id)
+-- WHERE d.entity_abbrev = 'MinSalud'
+-- ORDER BY d.days_since_update DESC NULLS LAST;
+
+-- 3. Distribución por estado (gráfico de dona)
+-- SELECT
+--   status,
+--   COUNT(*) AS n
+-- FROM v_dataset_status
+-- WHERE entity_abbrev = 'MinSalud'
+-- GROUP BY status;
+
+-- 4. Tendencia mensual (página benchmark)
+-- SELECT
+--   DATE_TRUNC('month', query_date) AS mes,
+--   SUM(n_queries) AS consultas
+-- FROM v_queries_daily
+-- WHERE query_date >= NOW() - INTERVAL '12 months'
+-- GROUP BY mes
+-- ORDER BY mes;
+
+-- 5. Calidad del catálogo (KPI técnico)
+-- SELECT
+--   COUNT(*) FILTER (WHERE update_frequency IS NULL) AS datasets_sin_frecuencia,
+--   COUNT(*) FILTER (WHERE rows_updated_at IS NULL) AS datasets_sin_fecha,
+--   COUNT(*) AS total
+-- FROM v_dataset_status;

@@ -15,12 +15,13 @@ Formato: cada ADR documenta **decisión + razón + trade-off** en formato breve.
 | [005](./005-chromadb-vs-pgvector.md) | ChromaDB en vez de pgvector | Aceptada |
 | [006](./006-web-speech-api.md) | Web Speech API del navegador para accesibilidad | Aceptada |
 | [007](./007-busqueda-3-tiers.md) | Búsqueda con fallback en 3 tiers (acrónimos + topic keywords + LLM) | Aceptada |
-| [008](./008-scope-sin-powerbi.md) | Sprint 4 sin Power BI: scope solo Streamlit + accesibilidad | Aceptada |
+| [008](./008-scope-sin-powerbi.md) | Sprint 4 sin Power BI: scope solo Streamlit + accesibilidad | Superada por [ADR-014](./014-reabrir-powerbi-con-login.md) |
 | [009](./009-cifras-pandas-whitelist.md) | Cifras solo desde pandas; LLM interpreta pero no inventa números | Aceptada |
 | [010](./010-geo-resolver.md) | GeoResolver con DIVIPOLA + plantillas SoQL deterministas para comparativa | Aceptada |
 | [011](./011-migracion-streamlit-a-nextjs.md) | Migración de Streamlit a Next.js para Beta-2 | Aceptada |
 | [012](./012-civic-editorial-design-system.md) | Sistema de diseño Civic Editorial (papel & tinta) | Aceptada |
 | [013](./013-fastapi-sse-vs-mcp-http.md) | FastAPI + SSE como contrato Next.js ↔ Python (no MCP HTTP) | Aceptada |
+| [014](./014-reabrir-powerbi-con-login.md) | Reabrir Power BI con login institucional embebido (PostgreSQL activo) | Aceptada |
 
 ## Sobre los estados
 

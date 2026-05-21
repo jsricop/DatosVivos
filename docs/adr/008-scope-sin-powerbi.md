@@ -1,6 +1,6 @@
 # ADR-008: Sprint 4 sin Power BI — scope solo Streamlit + accesibilidad
 
-**Estado:** Aceptada
+**Estado:** Superada por [ADR-014](./014-reabrir-powerbi-con-login.md) (2026-05-21)
 **Fecha:** 2026-05-16
 
 ## Decisión

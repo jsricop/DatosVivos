@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { ColorModeToggle } from "@/components/ColorModeToggle";
+import { UserMenu } from "@/components/UserMenu";
 import { Wordmark } from "@/components/Wordmark";
 
 export function Header() {
@@ -30,6 +32,9 @@ export function Header() {
           >
             Accesibilidad
           </Link>
+          <Suspense fallback={null}>
+            <UserMenu />
+          </Suspense>
           <ColorModeToggle />
         </nav>
       </div>
