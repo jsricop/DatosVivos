@@ -12,7 +12,12 @@ FROM node:22-alpine AS builder
 WORKDIR /web
 COPY --from=deps /web/node_modules ./node_modules
 COPY web/ ./
-ENV NEXT_TELEMETRY_DISABLED=1
+
+# NEXT_PUBLIC_* deben estar disponibles en BUILD TIME para inlinearse en el
+# bundle estático. Pasar via build-arg desde docker-compose.yml.
+ARG NEXT_PUBLIC_SITE_URL=https://datosvivos.co
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # --- Stage 3: runtime ---
