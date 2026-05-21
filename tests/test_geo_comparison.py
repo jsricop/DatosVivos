@@ -298,6 +298,62 @@ def test_ranking_implicito_region_mayor():
     assert ctx.groupby == "cod_dpto"
 
 
+# ============================================================
+# G. Count-in mode (PROD_IMPROV gap detectado en journey 2026-05-21)
+# ============================================================
+# "Cuántos X tiene Antioquia" no es vs/ranking/vs_national pero requiere
+# plantilla determinista para que el LLM 3B no invente `cod_municipio='05'`.
+
+
+def test_count_in_dpto_simple():
+    """'Cuántos municipios tiene Antioquia' → mode='count_in' + dpto=05."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("¿Cuántos municipios tiene Antioquia?")
+    assert ctx is not None
+    assert ctx.comparison_mode == "count_in"
+    assert ctx.dpto_code == "05"
+    assert ctx.mpio_code is None  # regla anti-capital ya cubierta
+
+
+def test_count_in_mpio():
+    """'Cuántos hospitales hay en Medellín' → mode='count_in' + mpio=05001."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("¿Cuántos hospitales hay en Medellín?")
+    assert ctx is not None
+    assert ctx.comparison_mode == "count_in"
+    assert ctx.mpio_code == "05001"
+
+
+def test_count_in_construye_soql_determinista_dpto():
+    """count_in con dpto produce WHERE cod_dpto correcto, no inventa col mpio."""
+    from ai_engine.geo_resolver import GeoResolver, build_comparison_soql
+
+    r = GeoResolver()
+    ctx = r.resolve("Cuántos casos de dengue hay en Cundinamarca")
+    soql = build_comparison_soql(ctx, columns={"cod_dpto", "casos", "fecha"})
+    assert soql is not None
+    assert "cod_dpto" in soql.lower()
+    assert "'25'" in soql
+    assert "count(*)" in soql.lower()
+    # NO debe meter cod_mpio si el target es dpto
+    assert "cod_mpio" not in soql.lower()
+
+
+def test_count_in_no_se_activa_sin_geo():
+    """'Cuántos hospitales hay' (sin territorio) → no es count_in."""
+    from ai_engine.geo_resolver import GeoResolver
+
+    r = GeoResolver()
+    ctx = r.resolve("Cuántos hospitales hay")
+    # Sin geo, no debe haber comparison_mode count_in
+    if ctx is not None:
+        assert ctx.comparison_mode != "count_in"
+
+
 def test_ranking_implicito_no_se_activa_con_singular_general():
     """'Cómo se compara Antioquia' — vs implícito a sí mismo no es ranking.
     El resolver lo trata como búsqueda normal sobre Antioquia.

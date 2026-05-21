@@ -396,6 +396,16 @@ _VS_NATIONAL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Count-in: pregunta de conteo simple SOBRE un territorio específico.
+# Ejemplos: "cuántos municipios tiene Antioquia", "cuántos hospitales hay en
+# Medellín", "qué cantidad de casos registra Cundinamarca".
+# Activa plantilla SoQL determinista `SELECT count(*) WHERE cod_dpto/mpio = X`.
+_COUNT_IN_PATTERN = re.compile(
+    r"\b(cu[áa]nt[oa]s?|qu[eé]\s+cantidad\s+de|n[uú]mero\s+de|"
+    r"total\s+de|cantidad\s+de)\b",
+    re.IGNORECASE,
+)
+
 
 def _detect_ranking_n(question: str, default: int = 5) -> int:
     m = _RANKING_N_RE.search(question)
@@ -589,6 +599,13 @@ class GeoResolver:
         if comparison_mode is None and self._detect_implicit_vs(targets):
             comparison_mode = "vs"
 
+        # count_in requiere territorio subnacional concreto. Si no hay
+        # ningún dpto o mpio resuelto, invalidamos count_in.
+        if comparison_mode == "count_in":
+            has_subnacional = any(t.level in ("dpto", "mpio") for t in targets)
+            if not has_subnacional:
+                comparison_mode = None
+
         # Fallback: si no hay nada útil, devolver None.
         if not targets and not groupby and not national and not comparison_mode:
             return None
@@ -644,6 +661,11 @@ class GeoResolver:
         # 'vs' requiere o token explícito (vs/versus/compara) o 2+ territorios separados por 'y'
         if _VS_PATTERN.search(question):
             return "vs", 0
+        # Count-in: "cuántos X tiene Antioquia" — solo válido si HAY territorio
+        # subnacional. La verificación de territorio se hace en `resolve()`
+        # (mode='count_in' se invalida si no hay dpto ni mpio resuelto).
+        if _COUNT_IN_PATTERN.search(question):
+            return "count_in", 0
         # heurística: si hay ' y ' entre tokens largos podría ser comparación
         # (lo confirmamos cuando llegamos a contar territorios). Aquí lo detectamos.
         return None, 0
@@ -858,6 +880,29 @@ def build_comparison_soql(
             f"GROUP BY {geo_col} "
             f"ORDER BY n DESC "
             f"LIMIT 50"
+        )
+
+    if ctx.comparison_mode == "count_in":
+        # Count simple sobre un territorio específico.
+        # "¿Cuántos municipios tiene Antioquia?" → WHERE cod_dpto='05'
+        if not targets_for_filter:
+            return None
+        first_target = targets_for_filter[0]
+        if is_code:
+            if not first_target.code:
+                return None
+            return (
+                f"SELECT count(*) AS n "
+                f"WHERE {geo_col} = '{first_target.code}'"
+            )
+        # Columna-nombre: case-insensitive con variantes sin tildes.
+        variants = _name_variants(first_target.name)
+        if not variants:
+            return None
+        in_list = ", ".join(f"'{v}'" for v in sorted(set(variants)))
+        return (
+            f"SELECT count(*) AS n "
+            f"WHERE lower({geo_col}) IN ({in_list})"
         )
 
     return None
