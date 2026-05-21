@@ -5,61 +5,28 @@ import { Wordmark } from "@/components/Wordmark";
 
 export function Header() {
   return (
-    <header
-      className="hairline-bottom"
-      style={{
-        position: "sticky",
-        insetBlockStart: 0,
-        zIndex: 10,
-        background: "var(--bg)",
-        backdropFilter: "none",
-      }}
-    >
-      <div
-        className="container-narrow"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 24,
-          paddingBlock: "var(--space-4)",
-        }}
-      >
+    <header className="sticky top-0 z-10 bg-bg hairline-bottom">
+      <div className="container-narrow flex items-center justify-between gap-6 py-4">
         <Wordmark size="header" />
         <nav
           aria-label="Navegación primaria"
-          style={{ display: "flex", alignItems: "center", gap: 24 }}
+          className="flex items-center gap-6"
         >
           <Link
             href="/buscar"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-body-sm)",
-              color: "var(--ink-2)",
-              borderBottom: "1px solid transparent",
-            }}
+            className="font-sans text-body-sm text-ink-2 focus-ring"
           >
             Buscar
           </Link>
           <Link
             href="/acerca"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-body-sm)",
-              color: "var(--ink-2)",
-              borderBottom: "1px solid transparent",
-            }}
+            className="font-sans text-body-sm text-ink-2 focus-ring"
           >
             Acerca
           </Link>
           <Link
             href="/accesibilidad"
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-body-sm)",
-              color: "var(--ink-2)",
-              borderBottom: "1px solid transparent",
-            }}
+            className="font-sans text-body-sm text-ink-2 focus-ring"
           >
             Accesibilidad
           </Link>

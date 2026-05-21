@@ -14,38 +14,30 @@ export function Button({
   size = "md",
   iconStart,
   iconEnd,
+  className = "",
   children,
-  style,
   ...rest
 }: ButtonProps) {
-  const isPrimary = variant === "primary";
-  const isSecondary = variant === "secondary";
+  const variantClass =
+    variant === "primary"
+      ? "border-2 border-accent bg-accent text-bg"
+      : variant === "secondary"
+        ? "border border-hairline-strong text-ink bg-transparent"
+        : "border border-transparent text-ink bg-transparent";
+  const sizeClass =
+    size === "lg" ? "px-5 py-3 text-body-lg" : "px-[14px] py-2 text-body";
+
   return (
     <button
       type="button"
       {...rest}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: size === "lg" ? "12px 20px" : "8px 14px",
-        borderRadius: "var(--radius-0)",
-        border:
-          isPrimary
-            ? "2px solid var(--accent)"
-            : isSecondary
-              ? "1px solid var(--hairline-strong)"
-              : "1px solid transparent",
-        background: isPrimary ? "var(--accent)" : "transparent",
-        color: isPrimary ? "var(--bg)" : "var(--ink)",
-        fontFamily: "var(--font-sans)",
-        fontSize: size === "lg" ? "var(--type-body-lg)" : "var(--type-body)",
-        fontWeight: 600,
-        cursor: rest.disabled ? "not-allowed" : "pointer",
-        opacity: rest.disabled ? 0.7 : 1,
-        transition: "background var(--duration-fast) var(--easing-standard), border-color var(--duration-fast) var(--easing-standard)",
-        ...style,
-      }}
+      className={[
+        "inline-flex items-center gap-2 font-sans font-semibold rounded-none transition-colors focus-ring",
+        variantClass,
+        sizeClass,
+        rest.disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer",
+        className,
+      ].join(" ")}
     >
       {iconStart}
       <span>{children}</span>

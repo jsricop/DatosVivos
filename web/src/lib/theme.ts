@@ -88,6 +88,10 @@ export function writeFontScaleToStorage(scale: FontScale): void {
 export function applyFontScale(scale: FontScale): void {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty("--user-scale", String(scale));
+  // Dispara un evento same-tab para que `useUserScale` se actualice.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("datosvivos:font-scale"));
+  }
 }
 
 export const ANTI_FOUC_SCALE_SCRIPT = `(function(){try{var s=parseFloat(localStorage.getItem('${FONT_SCALE_STORAGE_KEY}'));if(!isFinite(s)||s<0.5||s>2){s=1;}document.documentElement.style.setProperty('--user-scale',String(s));}catch(e){document.documentElement.style.setProperty('--user-scale','1');}})();`;

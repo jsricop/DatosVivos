@@ -34,6 +34,9 @@ export function SpeechOutput({ text, lang = "es-CO" }: SpeechOutputProps) {
     setSpeaking(false);
   }
 
+  const borderClass = speaking ? "border-accent" : "border-hairline";
+  const colorClass = supported ? "text-ink-2" : "text-ink-muted cursor-not-allowed";
+
   return (
     <button
       type="button"
@@ -47,22 +50,14 @@ export function SpeechOutput({ text, lang = "es-CO" }: SpeechOutputProps) {
             ? "Detener lectura"
             : "Leer en voz alta"
       }
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        border: `1px solid ${speaking ? "var(--accent)" : "var(--hairline)"}`,
-        background: "transparent",
-        color: supported ? "var(--ink-2)" : "var(--ink-muted)",
-        fontFamily: "var(--font-mono)",
-        fontSize: "var(--type-kicker)",
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        cursor: supported && text ? "pointer" : "not-allowed",
-      }}
+      className={[
+        "inline-flex items-center gap-2 px-3 py-1.5 border bg-transparent font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] focus-ring",
+        borderClass,
+        colorClass,
+        supported && text ? "cursor-pointer" : "",
+      ].join(" ")}
     >
-      <Icon name={speaking ? "speaker" : "speaker"} size={14} aria-hidden />
+      <Icon name="speaker" size={14} aria-hidden />
       <span>{speaking ? "Detener" : "Leer"}</span>
     </button>
   );

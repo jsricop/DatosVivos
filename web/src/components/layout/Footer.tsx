@@ -1,41 +1,11 @@
 export function Footer() {
   return (
-    <footer
-      className="hairline-top"
-      style={{
-        marginBlockStart: "var(--space-8)",
-        paddingBlock: "var(--space-6)",
-        color: "var(--ink-2)",
-      }}
-    >
-      <div
-        className="container-narrow"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 24,
-          justifyContent: "space-between",
-          alignItems: "baseline",
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-2)",
-          }}
-        >
+    <footer className="hairline-top mt-16 py-8 text-ink-2">
+      <div className="container-narrow flex flex-wrap items-baseline justify-between gap-6">
+        <p className="m-0 font-mono text-caption text-ink-2">
           Agencia Nacional de Infraestructura — Reto #07 MinTIC 2026
         </p>
-        <p
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-muted)",
-          }}
-        >
+        <p className="m-0 font-mono text-caption text-ink-muted">
           Beta · Sin trackers · El modelo corre en una máquina del Estado
         </p>
       </div>

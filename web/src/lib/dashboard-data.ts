@@ -24,7 +24,8 @@ export function formatValue(
 ): string {
   if (value === null || value === undefined) return "—";
   const num = typeof value === "number" ? value : Number(value);
-  if (Number.isNaN(num)) return String(value);
+  // NaN no se muestra como "NaN" — mejor un guion limpio (BRAND.md §1.3).
+  if (!Number.isFinite(num)) return "—";
   if (format === "percent") return PERCENT_ES_CO.format(num);
   if (format === "currency_cop") return CURRENCY_COP.format(num);
   return NUMBER_ES_CO.format(num);
@@ -80,7 +81,10 @@ export function prepareChartData(
   if (block.limit && entries.length > block.limit) {
     entries = entries.slice(0, block.limit);
   }
-  return entries;
+  // Defensa NaN: si Socrata devuelve `"abc"` en columna numérica el chart
+  // dibujaría barras inválidas. Filtramos en silencio (BRAND.md §1.3: cero
+  // cifras inventadas — preferimos omisión a ruido visual).
+  return entries.filter((e) => Number.isFinite(e.y));
 }
 
 export function prepareTableRows(block: TableBlock, rows: Row[]): Row[] {

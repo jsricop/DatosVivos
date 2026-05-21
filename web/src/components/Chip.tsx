@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 
 type ChipProps = {
   label: string;
@@ -18,11 +18,11 @@ type ChipProps = {
  * Chip individual (BRAND.md §8.2).
  *
  * Estados: default · hover · focus-visible · active · disabled.
- * Forma: radius 2px, borde 1px hairline default, 2px accent cuando active.
- * Tipografía: Plex Sans 500. Kicker mono uppercase si presente.
+ * Borde 1px hairline default, 2px accent cuando active.
+ * Tipografía Plex Sans 500. Kicker mono uppercase si presente.
  *
  * Invariante: el tamaño NO cambia entre estados — solo el borde se vuelve
- * más grueso. Esto evita saltos visuales en el ChipGroup.
+ * más grueso. Padding compensa para evitar saltos visuales.
  */
 export function Chip({
   label,
@@ -35,22 +35,17 @@ export function Chip({
   as = "button",
   href,
 }: ChipProps) {
-  const baseStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: active ? "7px 13px" : "8px 14px", // compensa border 2px vs 1px
-    border: `${active ? "2px" : "1px"} solid ${active ? "var(--accent)" : "var(--hairline)"}`,
-    borderRadius: "var(--radius-1)",
-    background: active ? "var(--bg-elev)" : "var(--bg)",
-    color: disabled ? "var(--ink-muted)" : "var(--ink)",
-    fontFamily: "var(--font-sans)",
-    fontSize: "var(--type-body-sm)",
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    transition:
-      "border-color var(--duration-fast) var(--easing-standard), background var(--duration-fast) var(--easing-standard)",
-  };
+  const base =
+    "inline-flex items-center gap-2 font-sans text-body-sm font-medium transition-colors focus-ring rounded-[var(--radius-1)]";
+  const padding = active ? "py-[7px] px-[13px]" : "py-2 px-[14px]";
+  const borderState = active
+    ? "border-2 border-accent bg-bg-elev"
+    : "border border-hairline bg-bg";
+  const colorState = disabled
+    ? "text-ink-muted cursor-not-allowed"
+    : "text-ink cursor-pointer";
+
+  const className = `${base} ${padding} ${borderState} ${colorState}`;
 
   function handleKey(event: KeyboardEvent) {
     if (disabled) return;
@@ -63,29 +58,13 @@ export function Chip({
   const content = (
     <>
       {kicker ? (
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "10px",
-            fontWeight: 500,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "var(--ink-2)",
-          }}
-        >
+        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-2">
           {kicker}
         </span>
       ) : null}
       <span>{label}</span>
       {typeof count === "number" ? (
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-kicker)",
-            color: "var(--ink-muted)",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
+        <span className="font-mono text-[length:var(--type-kicker)] text-ink-muted [font-variant-numeric:tabular-nums]">
           {count}
         </span>
       ) : null}
@@ -94,11 +73,7 @@ export function Chip({
 
   if (as === "link" && href) {
     return (
-      <a
-        href={href}
-        style={{ ...baseStyle, textDecoration: "none" }}
-        aria-disabled={disabled || undefined}
-      >
+      <a href={href} className={`${className} no-underline`} aria-disabled={disabled || undefined}>
         {content}
       </a>
     );
@@ -110,7 +85,7 @@ export function Chip({
       onKeyDown={handleKey}
       disabled={disabled}
       aria-pressed={active}
-      style={baseStyle}
+      className={className}
     >
       {content}
     </button>

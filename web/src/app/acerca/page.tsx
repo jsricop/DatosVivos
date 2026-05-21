@@ -9,51 +9,39 @@ export const metadata: Metadata = {
 
 export default function AcercaPage() {
   return (
-    <div
-      className="container-narrow"
-      style={{ paddingBlock: "var(--space-7)" }}
-    >
-      <article
-        className="measure-narrow"
-        style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}
-      >
-        <header
-          style={{
-            paddingBlockEnd: "var(--space-4)",
-            borderBlockEnd: "1px solid var(--hairline)",
-          }}
-        >
-          <span className="kicker">Manifiesto</span>
-          <h1
-            style={{
-              margin: "8px 0 0 0",
-              fontFamily: "var(--font-serif)",
-              fontSize: "var(--type-h1)",
-            }}
-          >
+    <div className="container-narrow py-12">
+      <article className="measure-narrow flex flex-col gap-6">
+        <header className="pb-4 hairline-bottom">
+          <span className="text-kicker">Manifiesto</span>
+          <h1 className="m-0 mt-2 font-serif text-h1">
             Datos del Estado, en tus palabras.
           </h1>
         </header>
 
-        <p style={pStyle}>
-          DatosVivos es un agente civil de datos del Estado colombiano. Funciona
-          sobre {" "}
-          <a href="https://www.datos.gov.co" target="_blank" rel="noopener noreferrer">
+        <P>
+          DatosVivos es un agente civil de datos del Estado colombiano.
+          Funciona sobre{" "}
+          <a
+            href="https://www.datos.gov.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="focus-ring"
+          >
             datos.gov.co
-          </a>{" "}
-          — el portal de datos abiertos operado por MinTIC con más de 8.000
-          datasets publicados por entidades nacionales y territoriales.
-        </p>
-        <p style={pStyle}>
-          Una persona pregunta en su idioma — el del barrio, el del trabajo, el
-          del periódico — y el agente responde ejecutando consultas reales
+          </a>
+          {" "}— el portal de datos abiertos operado por MinTIC con más de
+          8.000 datasets publicados por entidades nacionales y territoriales.
+        </P>
+        <P>
+          Una persona pregunta en su idioma — el del barrio, el del trabajo,
+          el del periódico — y el agente responde ejecutando consultas reales
           contra el catálogo. Cada cifra está calculada con{" "}
-          <code className="mono">pandas</code> sobre las filas devueltas por el
-          dataset citado. El modelo de lenguaje corre localmente en una máquina
-          del Estado — no se exportan consultas a servicios externos.
-        </p>
+          <code className="font-mono">pandas</code> sobre las filas devueltas
+          por el dataset citado. El modelo de lenguaje corre localmente en una
+          máquina del Estado — no se exportan consultas a servicios externos.
+        </P>
 
-        <section style={{ marginBlockStart: "var(--space-5)" }}>
+        <section className="mt-6">
           <Pilar
             number="01"
             title="Soberanía"
@@ -71,50 +59,43 @@ export default function AcercaPage() {
           />
         </section>
 
-        <section
-          style={{
-            marginBlockStart: "var(--space-5)",
-            paddingBlockStart: "var(--space-5)",
-            borderBlockStart: "1px solid var(--hairline)",
-          }}
-        >
-          <span className="kicker">Equipo</span>
-          <h2
-            style={{
-              margin: "8px 0 12px 0",
-              fontFamily: "var(--font-serif)",
-              fontSize: "var(--type-h3)",
-              fontWeight: 600,
-            }}
-          >
+        <section className="mt-6 pt-6 hairline-top">
+          <span className="text-kicker">Equipo</span>
+          <h2 className="m-0 mt-2 mb-3 font-serif text-h3 font-semibold">
             Oficina de Tecnología — Agencia Nacional de Infraestructura (ANI)
           </h2>
-          <p style={pStyle}>
+          <P>
             Proyecto presentado al concurso{" "}
             <em>Datos al Ecosistema 2026: IA para Colombia</em>, Reto #07
             (Innovación y Tecnología) del Ministerio TIC.
-          </p>
+          </P>
         </section>
 
-        <section
-          style={{
-            marginBlockStart: "var(--space-5)",
-            paddingBlockStart: "var(--space-5)",
-            borderBlockStart: "1px solid var(--hairline)",
-          }}
-        >
-          <span className="kicker">Documentación</span>
-          <ul style={{ marginBlockStart: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <section className="mt-6 pt-6 hairline-top">
+          <span className="text-kicker">Documentación</span>
+          <ul className="mt-3 flex flex-col gap-2">
             <li>
-              <Link href="/accesibilidad">Accesibilidad</Link>
+              <Link href="/accesibilidad" className="focus-ring">
+                Accesibilidad
+              </Link>
             </li>
             <li>
-              <a href="https://github.com/jsricop/DatosVivos" target="_blank" rel="noopener noreferrer">
+              <a
+                href="https://github.com/jsricop/DatosVivos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="focus-ring"
+              >
                 Repositorio de código en GitHub
               </a>
             </li>
             <li>
-              <a href="https://www.datos.gov.co" target="_blank" rel="noopener noreferrer">
+              <a
+                href="https://www.datos.gov.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="focus-ring"
+              >
                 Portal datos.gov.co
               </a>
             </li>
@@ -125,41 +106,18 @@ export default function AcercaPage() {
   );
 }
 
-const pStyle: React.CSSProperties = {
-  margin: 0,
-  fontFamily: "var(--font-sans)",
-  fontSize: "var(--type-body-lg)",
-  lineHeight: 1.65,
-  color: "var(--ink)",
-};
-
-function Pilar({
-  number,
-  title,
-  body,
-}: {
-  number: string;
-  title: string;
-  body: string;
-}) {
+function P({ children }: { children: React.ReactNode }) {
   return (
-    <article
-      style={{
-        paddingBlock: "var(--space-4)",
-        borderBlockEnd: "1px solid var(--hairline)",
-      }}
-    >
-      <span className="kicker">{number} · Pilar</span>
-      <h3
-        style={{
-          margin: "8px 0 8px 0",
-          fontFamily: "var(--font-serif)",
-          fontSize: "var(--type-h3)",
-        }}
-      >
-        {title}
-      </h3>
-      <p style={{ ...pStyle, fontSize: "var(--type-body)" }}>{body}</p>
+    <p className="m-0 font-sans text-body-lg leading-relaxed text-ink">{children}</p>
+  );
+}
+
+function Pilar({ number, title, body }: { number: string; title: string; body: string }) {
+  return (
+    <article className="py-4 hairline-bottom">
+      <span className="text-kicker">{number} · Pilar</span>
+      <h3 className="m-0 mt-2 mb-2 font-serif text-h3">{title}</h3>
+      <p className="m-0 font-sans text-body text-ink leading-relaxed">{body}</p>
     </article>
   );
 }

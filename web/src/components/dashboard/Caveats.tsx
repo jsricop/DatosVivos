@@ -6,27 +6,12 @@ export function Caveats({ items }: Props) {
     <aside
       role="note"
       aria-label="Advertencias"
-      style={{
-        borderInlineStart: "2px solid var(--accent-2)",
-        paddingInlineStart: "var(--space-4)",
-        paddingBlock: "var(--space-3)",
-        marginBlockStart: "var(--space-4)",
-        color: "var(--ink-2)",
-      }}
+      className="border-l-2 border-accent-2 pl-4 py-3 mt-4 text-ink-2"
     >
-      <span className="kicker" style={{ display: "block", marginBlockEnd: 8 }}>
-        Advertencias
-      </span>
-      <ul style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span className="text-kicker block mb-2">Advertencias</span>
+      <ul className="flex flex-col gap-1.5">
         {items.map((item, i) => (
-          <li
-            key={i}
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-body-sm)",
-              lineHeight: 1.55,
-            }}
-          >
+          <li key={i} className="font-sans text-body-sm leading-[1.55]">
             {item}
           </li>
         ))}

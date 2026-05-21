@@ -7,41 +7,37 @@ import { scaleBand, scaleLinear } from "@visx/scale";
 import { Bar } from "@visx/shape";
 import { useMemo } from "react";
 
+import { useUserScale } from "@/lib/motion";
 import { formatValue, prepareChartData, type Row } from "@/lib/dashboard-data";
 import type { ChartBlock } from "@/lib/schemas/dashboard";
 
 const MARGIN = { top: 12, right: 16, bottom: 56, left: 64 };
+const BASE_HEIGHT = 280;
 
 const AXIS_TICK_LABEL = {
   fontFamily: "var(--font-mono)",
   fontSize: 11,
   fill: "var(--ink-2)",
-};
+} as const;
 
 type Props = { block: ChartBlock; rows: Row[] };
 
 export function BarChartBlock({ block, rows }: Props) {
   const data = useMemo(() => prepareChartData(block, rows), [block, rows]);
+  const userScale = useUserScale();
+  const height = Math.round(BASE_HEIGHT * userScale);
 
   return (
     <figure
       aria-label={block.title}
-      style={{
-        margin: 0,
-        border: "1px solid var(--hairline)",
-        background: "var(--bg-elev)",
-        padding: "var(--space-4)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
+      className="surface-elev m-0 p-4 flex flex-col gap-3"
     >
-      <figcaption className="kicker">{block.title}</figcaption>
-      <div style={{ width: "100%", height: 280 }}>
+      <figcaption className="text-kicker">{block.title}</figcaption>
+      <div style={{ width: "100%", height }}>
         <ParentSize>
-          {({ width, height }) => {
+          {({ width, height: h }) => {
             const innerW = Math.max(0, width - MARGIN.left - MARGIN.right);
-            const innerH = Math.max(0, height - MARGIN.top - MARGIN.bottom);
+            const innerH = Math.max(0, h - MARGIN.top - MARGIN.bottom);
             const x = scaleBand<string>({
               domain: data.map((d) => String(d.x)),
               range: [0, innerW],
@@ -54,7 +50,7 @@ export function BarChartBlock({ block, rows }: Props) {
               nice: true,
             });
             return (
-              <svg width={width} height={height} role="img" aria-label={block.title}>
+              <svg width={width} height={h} role="img" aria-label={block.title}>
                 <Group left={MARGIN.left} top={MARGIN.top}>
                   {y.ticks(5).map((t) => (
                     <line

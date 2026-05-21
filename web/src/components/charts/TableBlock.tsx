@@ -6,26 +6,13 @@ type Props = { block: TableBlockSpec; rows: Row[] };
 export function TableBlock({ block, rows }: Props) {
   const visibleRows = prepareTableRows(block, rows);
   return (
-    <figure
-      aria-label={block.title}
-      style={{
-        margin: 0,
-        border: "1px solid var(--hairline)",
-        background: "var(--bg-elev)",
-      }}
-    >
-      <figcaption
-        className="kicker"
-        style={{
-          padding: "var(--space-3) var(--space-4)",
-          borderBlockEnd: "1px solid var(--hairline)",
-        }}
-      >
+    <figure aria-label={block.title} className="surface-elev m-0">
+      <figcaption className="text-kicker px-4 py-3 hairline-bottom">
         {block.title}
       </figcaption>
-      <div style={{ overflow: "auto", maxBlockSize: 320 }}>
+      <div className="overflow-auto max-h-[320px]">
         <table>
-          <thead style={{ position: "sticky", top: 0, background: "var(--bg-elev)" }}>
+          <thead className="sticky top-0 bg-bg-elev">
             <tr>
               {block.columns.map((c) => (
                 <th key={c} scope="col">
@@ -43,12 +30,11 @@ export function TableBlock({ block, rows }: Props) {
                   return (
                     <td
                       key={c}
-                      style={{
-                        fontFamily: isNumeric
-                          ? "var(--font-mono)"
-                          : "var(--font-sans)",
-                        fontVariantNumeric: isNumeric ? "tabular-nums" : "normal",
-                      }}
+                      className={
+                        isNumeric
+                          ? "font-mono [font-variant-numeric:tabular-nums]"
+                          : "font-sans"
+                      }
                     >
                       {value === null || value === undefined
                         ? "—"

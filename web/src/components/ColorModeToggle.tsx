@@ -22,9 +22,9 @@ const OPTIONS: Option[] = [
 /**
  * ColorModeToggle (BRAND.md §8.11).
  *
- * - 3 modos seleccionables. El cuarto (`contrast-dark`) se accede desde
- *   /accesibilidad con un sub-selector A/B sobre la variante alto contraste.
- * - Persistido en localStorage bajo `datosvivos:theme`.
+ * - 3 modos seleccionables. El cuarto (contrast-dark) se accede desde
+ *   /accesibilidad con un sub-selector A/B.
+ * - Persistido en localStorage bajo datosvivos:theme.
  * - Pre-aplicado anti-FOUC por el script inline en layout.tsx.
  */
 export function ColorModeToggle() {
@@ -51,16 +51,13 @@ export function ColorModeToggle() {
     <div
       role="group"
       aria-label="Modo de color"
-      className="inline-flex items-center"
-      style={{
-        border: "var(--hairline-width) solid var(--hairline)",
-        borderRadius: "var(--radius-1)",
-        padding: 2,
-        background: "var(--bg-elev)",
-      }}
+      className="inline-flex items-center border border-hairline bg-bg-elev p-[2px] rounded-[var(--radius-1)]"
     >
       {OPTIONS.map((opt) => {
         const isActive = currentValue === opt.value;
+        const stateClass = isActive
+          ? "bg-ink text-bg"
+          : "bg-transparent text-ink-2";
         return (
           <button
             key={opt.value}
@@ -68,20 +65,7 @@ export function ColorModeToggle() {
             onClick={() => pick(opt.value)}
             aria-pressed={isActive}
             title={`Modo ${opt.label.toLowerCase()}`}
-            style={{
-              padding: "6px 10px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--type-kicker)",
-              fontWeight: 500,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: isActive ? "var(--bg)" : "var(--ink-2)",
-              background: isActive ? "var(--ink)" : "transparent",
-              transition: "background var(--duration-fast) var(--easing-standard)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
+            className={`${stateClass} inline-flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[length:var(--type-kicker)] font-medium uppercase tracking-[0.08em] transition-colors focus-ring`}
           >
             <Icon name="contrast" size={14} />
             <span>{opt.label}</span>

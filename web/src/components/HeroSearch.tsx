@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { Icon } from "@/components/Icon";
+import { useReducedMotion } from "@/lib/motion";
 
 type HeroSearchProps = {
   initialValue?: string;
@@ -24,7 +25,7 @@ type HeroSearchProps = {
 
 const DEFAULT_PLACEHOLDERS = [
   "¿Cuántos colegios públicos hay en Boyacá?",
-  "¿Tendencia de homicidios en Cali 2018-2024?",
+  "¿Tendencia de matrícula en Cundinamarca 2018-2024?",
   "¿Cobertura de vacunación contra fiebre amarilla?",
   "¿Top 10 municipios con más estudiantes matriculados?",
   "¿Cuántos contratos firmó la ANI en 2024?",
@@ -33,10 +34,10 @@ const DEFAULT_PLACEHOLDERS = [
 /**
  * HeroSearch (BRAND.md §8.1).
  *
- * - Placeholder rotativo cada 6s.
+ * - Placeholder rotativo cada 6 s (pausa en focus/typing — PR3 añade prefers-reduced-motion).
  * - Submit → /buscar?q=... con extraQuery preservado.
- * - Botón "Buscar" con glifo `↵` + label visible (no solo icono).
- * - STT opcional (componente hermano `SpeechInput` lo conecta).
+ * - Botón "Buscar" con glifo `↵` + label visible.
+ * - Atajo `/` para enfocar desde cualquier parte de la página.
  */
 export function HeroSearch({
   initialValue = "",
@@ -47,15 +48,20 @@ export function HeroSearch({
   const router = useRouter();
   const [q, setQ] = useState(initialValue);
   const [phIndex, setPhIndex] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
+  const reducedMotion = useReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (reducedMotion) return; // respeta prefers-reduced-motion (BRAND.md §5.5)
     if (placeholders.length <= 1) return;
+    if (q.length > 0) return; // pausa cuando el usuario está escribiendo
+    if (isFocused) return; // pausa cuando el campo está enfocado
     const id = window.setInterval(() => {
       setPhIndex((i) => (i + 1) % placeholders.length);
     }, 6000);
     return () => window.clearInterval(id);
-  }, [placeholders.length]);
+  }, [placeholders.length, q.length, isFocused, reducedMotion]);
 
   useEffect(() => {
     function focusOnSlash(e: KeyboardEvent) {
@@ -101,29 +107,12 @@ export function HeroSearch({
       onSubmit={onSubmit}
       role="search"
       aria-label="Buscar en datos.gov.co"
-      style={{
-        display: "flex",
-        alignItems: "stretch",
-        gap: 0,
-        width: "100%",
-        border: "1px solid var(--hairline)",
-        background: "var(--bg-elev)",
-        transition:
-          "border-color var(--duration-fast) var(--easing-standard)",
-      }}
+      className="flex items-stretch w-full border border-hairline bg-bg-elev focus-within:border-accent transition-colors"
     >
       <label htmlFor="hero-search-input" className="sr-only">
         Escribe tu pregunta
       </label>
-      <span
-        aria-hidden="true"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          paddingInline: 20,
-          color: "var(--ink-2)",
-        }}
-      >
+      <span aria-hidden="true" className="inline-flex items-center px-5 text-ink-2">
         <Icon name="search" size={isDisplay ? 24 : 20} />
       </span>
       <input
@@ -135,35 +124,19 @@ export function HeroSearch({
         spellCheck={false}
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         aria-label="Pregunta en lenguaje natural"
-        style={{
-          flex: 1,
-          paddingBlock: isDisplay ? 24 : 14,
-          paddingInline: 8,
-          fontFamily: "var(--font-serif)",
-          fontSize: isDisplay ? "var(--type-h3)" : "var(--type-body-lg)",
-          fontWeight: 400,
-          color: "var(--ink)",
-          background: "transparent",
-          minWidth: 0,
-        }}
+        className={[
+          "flex-1 min-w-0 px-2 bg-transparent font-serif text-ink",
+          isDisplay ? "py-6 text-h3" : "py-[14px] text-body-lg",
+        ].join(" ")}
       />
       <button
         type="submit"
         aria-label="Ejecutar búsqueda"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          paddingInline: 24,
-          background: "var(--ink)",
-          color: "var(--bg)",
-          fontFamily: "var(--font-sans)",
-          fontSize: "var(--type-body)",
-          fontWeight: 600,
-          letterSpacing: 0.2,
-        }}
+        className="inline-flex items-center gap-2.5 px-6 bg-ink text-bg font-sans text-body font-semibold tracking-[0.2px] focus-ring"
       >
         <span>Buscar</span>
         <Icon name="enter" size={18} aria-hidden />

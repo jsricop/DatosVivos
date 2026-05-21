@@ -31,8 +31,8 @@ declare global {
 /**
  * SpeechInput (BRAND.md §8.12) — botón STT.
  *
- * Usa Web Speech API. Locale es-CO. Si el navegador no soporta, el botón
- * queda visible pero deshabilitado con aria-label que explica el porqué.
+ * Usa Web Speech API. Locale es-CO por defecto. Si el navegador no soporta,
+ * el botón queda visible pero deshabilitado con aria-label explicativo.
  */
 export function SpeechInput({ onTranscript, lang = "es-CO" }: SpeechInputProps) {
   const [supported, setSupported] = useState(false);
@@ -67,6 +67,9 @@ export function SpeechInput({ onTranscript, lang = "es-CO" }: SpeechInputProps) 
     setListening(false);
   }
 
+  const borderClass = listening ? "border-accent bg-bg-elev" : "border-hairline bg-transparent";
+  const colorClass = supported ? "text-ink cursor-pointer" : "text-ink-muted cursor-not-allowed";
+
   return (
     <button
       type="button"
@@ -80,20 +83,13 @@ export function SpeechInput({ onTranscript, lang = "es-CO" }: SpeechInputProps) 
             ? "Detener entrada por voz"
             : "Iniciar entrada por voz"
       }
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 14px",
-        border: `1px solid ${listening ? "var(--accent)" : "var(--hairline)"}`,
-        background: listening ? "var(--bg-elev)" : "transparent",
-        color: supported ? "var(--ink)" : "var(--ink-muted)",
-        fontFamily: "var(--font-mono)",
-        fontSize: "var(--type-caption)",
-        cursor: supported ? "pointer" : "not-allowed",
-      }}
+      className={[
+        "inline-flex items-center gap-2 px-[14px] py-2 border font-mono text-caption focus-ring",
+        borderClass,
+        colorClass,
+      ].join(" ")}
     >
-      <Icon name={listening ? "mic" : "mic"} size={16} aria-hidden />
+      <Icon name="mic" size={16} aria-hidden />
       <span>{listening ? "Escuchando" : "Voz"}</span>
     </button>
   );

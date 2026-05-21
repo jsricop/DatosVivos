@@ -29,8 +29,8 @@ type ChipGroupProps = {
 /**
  * ChipGroup — grupo de chips bajo un eje (BRAND.md §8.3).
  *
- * Para `tipo` (Cuántos / Comparar / Ranking / Tendencia / Mapa): `multi=false`.
- * Para los otros tres ejes: `multi=true`.
+ * Para `tipo` (Cuántos / Comparar / Ranking / Tendencia / Mapa): multi=false.
+ * Para los otros tres ejes: multi=true.
  */
 export function ChipGroup({
   axis,
@@ -53,52 +53,18 @@ export function ChipGroup({
   }
 
   return (
-    <fieldset
-      style={{
-        border: "none",
-        margin: 0,
-        padding: 0,
-      }}
-    >
-      <legend
-        className="kicker"
-        style={{
-          marginBottom: 12,
-          padding: 0,
-        }}
-      >
+    <fieldset className="border-0 m-0 p-0">
+      <legend className="text-kicker mb-3 p-0">
         {KICKER_BY_AXIS[axis]}
         {description ? (
-          <span
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-caption)",
-              fontWeight: 400,
-              textTransform: "none",
-              letterSpacing: 0,
-              color: "var(--ink-muted)",
-              marginLeft: 12,
-            }}
-          >
+          <span className="ml-3 font-sans text-caption font-normal text-ink-muted normal-case tracking-normal">
             {description}
           </span>
         ) : null}
       </legend>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
+      <div className="flex flex-wrap gap-2">
         {options.length === 0 ? (
-          <span
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-caption)",
-              color: "var(--ink-muted)",
-            }}
-          >
+          <span className="font-sans text-caption text-ink-muted">
             Sin opciones disponibles.
           </span>
         ) : null}

@@ -15,7 +15,6 @@ import {
 } from "@/lib/schemas/dashboard";
 import type {
   DatasetCitation as Citation_,
-  QueryEvent,
   Row,
 } from "@/lib/types";
 
@@ -50,8 +49,9 @@ const INTENT_LABEL: Record<string, string> = {
 };
 
 /**
- * Consume el endpoint SSE `/api/proxy/query` y renderiza la respuesta
- * incrementalmente. Cada evento del backend (ADR-013) actualiza el estado.
+ * Consume el endpoint SSE /api/proxy/query y renderiza la respuesta
+ * incrementalmente. Cada evento del backend (ADR-013 + PLAN_DASHBOARD §2)
+ * actualiza el estado.
  */
 export function ResultStream({ question, filters }: ResultStreamProps) {
   const [state, setState] = useState<State>({
@@ -155,34 +155,15 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
   const isLoading = state.status === "streaming";
 
   return (
-    <article style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+    <article className="flex flex-col gap-8" aria-live="polite">
       {state.intent ? (
-        <header
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 16,
-            paddingBlockEnd: "var(--space-3)",
-            borderBlockEnd: "1px solid var(--hairline)",
-          }}
-        >
-          <span className="kicker">
+        <header className="flex flex-wrap items-baseline justify-between gap-4 pb-3 hairline-bottom">
+          <span className="text-kicker">
             {INTENT_LABEL[state.intent] ?? state.intent}
-            {state.datasets[0]?.entity
-              ? ` · ${state.datasets[0].entity}`
-              : null}
+            {state.datasets[0]?.entity ? ` · ${state.datasets[0].entity}` : null}
           </span>
           {state.elapsed ? (
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--type-kicker)",
-                color: "var(--ink-muted)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
+            <span className="font-mono text-[length:var(--type-kicker)] text-ink-muted [font-variant-numeric:tabular-nums]">
               {state.elapsed.toFixed(1)} s
             </span>
           ) : null}
@@ -190,29 +171,17 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
       ) : null}
 
       {isLoading && !state.narrative ? (
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-2)",
-          }}
-        >
+        <p className="font-mono text-caption text-ink-2">
           Procesando consulta {state.intent ? `(${state.intent})` : ""}…
         </p>
       ) : null}
 
       {state.narrative ? (
-        <section className="measure" aria-live="polite">
-          <div
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "var(--type-body-lg)",
-              lineHeight: 1.7,
-            }}
-          >
+        <section className="measure">
+          <div className="font-serif text-body-lg leading-[1.7]">
             {renderNarrative(state.narrative, state.citations.length)}
           </div>
-          <div style={{ marginBlockStart: 12 }}>
+          <div className="mt-3">
             <SpeechOutput text={state.narrative} />
           </div>
         </section>
@@ -225,19 +194,37 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
         />
       ) : null}
 
+      {state.soql ? (
+        <section className="surface-elev p-4">
+          <div className="flex items-center justify-between gap-4 mb-2">
+            <span className="text-kicker">SoQL ejecutado</span>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(state.soql)}
+              aria-label="Copiar SoQL"
+              className="inline-flex items-center gap-1.5 border border-hairline-strong px-2.5 py-1 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
+            >
+              <Icon name="copy" size={12} aria-hidden />
+              <span>Copiar</span>
+            </button>
+          </div>
+          <pre className="font-mono text-mono text-ink overflow-auto m-0 whitespace-pre-wrap">
+            {state.soql}
+          </pre>
+        </section>
+      ) : null}
+
       {state.rows.length > 0 ? (
-        <section style={{ marginBlockStart: "var(--space-3)" }}>
+        <section className="mt-3">
           <details>
             <summary>
               Ver tabla cruda ({state.rowCount.toLocaleString("es-CO")} filas)
             </summary>
-            <div style={{ marginBlockStart: 16 }}>
+            <div className="mt-4">
               <DataTable
                 columns={state.columns}
                 rows={state.rows}
-                caption={
-                  state.soql ? `SoQL ejecutado: ${state.soql}` : undefined
-                }
+                downloadFilename="datosvivos-rows.csv"
               />
             </div>
           </details>
@@ -246,13 +233,8 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
 
       {state.citations.length > 0 ? (
         <section>
-          <h2
-            className="kicker"
-            style={{ marginBlockEnd: 16, fontFamily: undefined }}
-          >
-            Fuentes consultadas
-          </h2>
-          <ol style={{ listStyle: "none" }}>
+          <h2 className="text-kicker mb-4">Fuentes consultadas</h2>
+          <ol className="list-none">
             {state.citations.map((c) => (
               <DatasetCitation key={c.index} citation={c} />
             ))}
@@ -263,14 +245,7 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
       {state.status === "error" ? (
         <p
           role="alert"
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-body-sm)",
-            color: "var(--danger)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
+          className="inline-flex items-center gap-2 font-mono text-body-sm text-danger"
         >
           <Icon name="close" size={16} aria-hidden />
           {state.errorMessage ?? "Error procesando la consulta"}
@@ -296,17 +271,11 @@ function applyEvent(
           intentConfidence: (payload.confidence as number) ?? 0,
         };
       case "dataset_hits":
-        return {
-          ...s,
-          datasets: (payload.datasets as State["datasets"]) ?? [],
-        };
+        return { ...s, datasets: (payload.datasets as State["datasets"]) ?? [] };
       case "soql":
         return { ...s, soql: (payload.soql as string) ?? "" };
       case "narrative_chunk":
-        return {
-          ...s,
-          narrative: s.narrative + ((payload.text as string) ?? ""),
-        };
+        return { ...s, narrative: s.narrative + ((payload.text as string) ?? "") };
       case "rows":
         return {
           ...s,
@@ -315,10 +284,7 @@ function applyEvent(
           rows: (payload.preview as Row[]) ?? [],
         };
       case "citations":
-        return {
-          ...s,
-          citations: (payload.citations as State["citations"]) ?? [],
-        };
+        return { ...s, citations: (payload.citations as State["citations"]) ?? [] };
       case "dashboard_spec": {
         const parsed = parseDashboardSpec(payload);
         return { ...s, dashboardSpec: parsed };
@@ -327,8 +293,7 @@ function applyEvent(
         return {
           ...s,
           status: "error",
-          errorMessage:
-            (payload.message as string) ?? "Error procesando la consulta",
+          errorMessage: (payload.message as string) ?? "Error procesando la consulta",
         };
       case "done":
         return {
@@ -360,10 +325,6 @@ function renderNarrative(text: string, maxCitations: number) {
   }
   if (cursor < text.length) parts.push(text.slice(cursor));
   return parts.map((p, i) =>
-    typeof p === "string" ? (
-      <span key={i}>{p}</span>
-    ) : (
-      <Citation key={i} index={p.citationIndex} />
-    ),
+    typeof p === "string" ? <span key={i}>{p}</span> : <Citation key={i} index={p.citationIndex} />,
   );
 }

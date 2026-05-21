@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import {
   applyFontScale,
   applyTheme,
@@ -54,22 +54,14 @@ export function A11yPanel() {
     writeFontScaleToStorage(allowed.value);
   }
 
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
   return (
-    <section
-      aria-label="Controles de accesibilidad"
-      style={{
-        display: "grid",
-        gap: "var(--space-5)",
-      }}
-    >
+    <section aria-label="Controles de accesibilidad" className="grid gap-6">
       <Group title="Modo de color" icon="contrast">
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {THEMES.map((t) => (
-            <label key={t} style={radioRow}>
+            <label key={t} className="inline-flex items-baseline gap-3 font-sans text-body cursor-pointer">
               <input
                 type="radio"
                 name="theme"
@@ -84,9 +76,9 @@ export function A11yPanel() {
       </Group>
 
       <Group title="Tamaño tipográfico" icon="type-size">
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {FONT_SCALES.map((s) => (
-            <label key={s.value} style={radioRow}>
+            <label key={s.value} className="inline-flex items-baseline gap-3 font-sans text-body cursor-pointer">
               <input
                 type="radio"
                 name="font-scale"
@@ -96,13 +88,7 @@ export function A11yPanel() {
               />
               <span>
                 {s.label}{" "}
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--type-kicker)",
-                    color: "var(--ink-muted)",
-                  }}
-                >
+                <span className="font-mono text-[length:var(--type-kicker)] text-ink-muted">
                   ({s.caption})
                 </span>
               </span>
@@ -112,7 +98,7 @@ export function A11yPanel() {
       </Group>
 
       <Group title="Voz" icon="speaker">
-        <p style={pStyle}>
+        <p className="m-0 font-sans text-body text-ink-2 leading-relaxed">
           La entrada por voz (STT) y la lectura en voz alta (TTS) se controlan
           desde cada vista. Funcionan con el reconocimiento nativo del
           navegador en español de Colombia. Compatibilidad: Chrome y Edge
@@ -121,23 +107,11 @@ export function A11yPanel() {
       </Group>
 
       <Group title="Atajos de teclado" icon="menu">
-        <ul style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <li style={kbdRow}>
-            <kbd style={kbdStyle}>Tab</kbd>
-            <span>Navegar entre controles</span>
-          </li>
-          <li style={kbdRow}>
-            <kbd style={kbdStyle}>/</kbd>
-            <span>Enfocar el buscador</span>
-          </li>
-          <li style={kbdRow}>
-            <kbd style={kbdStyle}>Esc</kbd>
-            <span>Cerrar paneles y diálogos</span>
-          </li>
-          <li style={kbdRow}>
-            <kbd style={kbdStyle}>Enter</kbd>
-            <span>Activar el botón enfocado / enviar consulta</span>
-          </li>
+        <ul className="flex flex-col gap-1.5">
+          <ShortcutRow keys="Tab" description="Navegar entre controles" />
+          <ShortcutRow keys="/" description="Enfocar el buscador" />
+          <ShortcutRow keys="Esc" description="Cerrar paneles y diálogos" />
+          <ShortcutRow keys="Enter" description="Activar el botón enfocado / enviar consulta" />
         </ul>
       </Group>
     </section>
@@ -150,73 +124,27 @@ function Group({
   children,
 }: {
   title: string;
-  icon: "contrast" | "type-size" | "speaker" | "menu";
+  icon: IconName;
   children: React.ReactNode;
 }) {
   return (
-    <article
-      style={{
-        border: "1px solid var(--hairline)",
-        padding: "var(--space-5)",
-        background: "var(--bg-elev)",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          marginBlockEnd: 16,
-        }}
-      >
+    <article className="surface-elev p-6">
+      <header className="flex items-center gap-2.5 mb-4">
         <Icon name={icon} size={20} aria-hidden />
-        <h3
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--type-h4)",
-            fontWeight: 600,
-          }}
-        >
-          {title}
-        </h3>
+        <h3 className="m-0 font-sans text-h4 font-semibold">{title}</h3>
       </header>
       {children}
     </article>
   );
 }
 
-const radioRow: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "baseline",
-  gap: 12,
-  fontFamily: "var(--font-sans)",
-  fontSize: "var(--type-body)",
-  cursor: "pointer",
-};
-
-const kbdRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 12,
-};
-
-const kbdStyle: React.CSSProperties = {
-  display: "inline-block",
-  border: "1px solid var(--hairline-strong)",
-  padding: "1px 8px",
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--type-caption)",
-  background: "var(--bg)",
-  color: "var(--ink)",
-  minInlineSize: "2.4em",
-  textAlign: "center" as const,
-};
-
-const pStyle: React.CSSProperties = {
-  margin: 0,
-  fontFamily: "var(--font-sans)",
-  fontSize: "var(--type-body)",
-  color: "var(--ink-2)",
-  lineHeight: 1.6,
-};
+function ShortcutRow({ keys, description }: { keys: string; description: string }) {
+  return (
+    <li className="flex items-baseline gap-3">
+      <kbd className="inline-block border border-hairline-strong px-2 py-px font-mono text-caption bg-bg text-ink min-w-[2.4em] text-center">
+        {keys}
+      </kbd>
+      <span>{description}</span>
+    </li>
+  );
+}

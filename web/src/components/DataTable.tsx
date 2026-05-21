@@ -6,8 +6,9 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
+import { Icon } from "@/components/Icon";
 import type { Row } from "@/lib/types";
 
 type DataTableProps = {
@@ -15,19 +16,22 @@ type DataTableProps = {
   rows: Row[];
   caption?: string;
   pageSize?: number;
+  /** Si está presente, agrega botón "Descargar CSV" (B.1 — auditabilidad MinTIC). */
+  downloadFilename?: string;
 };
 
 /**
  * DataTable (BRAND.md §8.7) — TanStack headless.
  *
- * Tipografía Plex Mono tabular-nums en celdas numéricas. Sin zebra striping;
- * regletas hairline entre filas. Header sticky.
+ * Tipografía Plex Mono tabular-nums en celdas numéricas. Regletas hairline,
+ * sin zebra striping. Header sticky. Botón CSV cumple PLAN_DASHBOARD §11.8.
  */
 export function DataTable({
   columns,
   rows,
   caption,
   pageSize = 25,
+  downloadFilename = "rows.csv",
 }: DataTableProps) {
   const tableColumns = useMemo(
     () =>
@@ -51,16 +55,30 @@ export function DataTable({
     initialState: { pagination: { pageSize } },
   });
 
+  const downloadCsv = useCallback(() => {
+    const escape = (v: unknown) => {
+      const s = v === null || v === undefined ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [
+      columns.join(","),
+      ...rows.map((r) => columns.map((c) => escape(r[c])).join(",")),
+    ].join("\n");
+    // BOM para que Excel/Numbers detecten UTF-8 con tildes/eñes correctamente.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = downloadFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [columns, rows, downloadFilename]);
+
   if (rows.length === 0) {
     return (
-      <p
-        style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: "var(--type-body-sm)",
-          color: "var(--ink-muted)",
-          padding: "var(--space-4)",
-        }}
-      >
+      <p className="font-sans text-body-sm text-ink-muted p-4">
         La consulta no devolvió filas.
       </p>
     );
@@ -70,28 +88,29 @@ export function DataTable({
     <div
       role="region"
       aria-label="Tabla de datos crudos"
-      style={{
-        border: "1px solid var(--hairline)",
-        overflow: "auto",
-        maxBlockSize: "60vh",
-      }}
+      className="border border-hairline overflow-auto max-h-[60vh]"
     >
-      <table style={{ minWidth: "100%" }}>
+      <div className="flex justify-between items-center px-4 py-3 hairline-bottom bg-bg-elev sticky top-0 z-10">
+        <span className="text-kicker">
+          {rows.length.toLocaleString("es-CO")} filas
+        </span>
+        <button
+          type="button"
+          onClick={downloadCsv}
+          className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
+          aria-label="Descargar CSV con todas las filas"
+        >
+          <Icon name="download" size={14} aria-hidden />
+          <span>Descargar CSV</span>
+        </button>
+      </div>
+      <table className="min-w-full">
         {caption ? (
-          <caption
-            style={{
-              padding: "var(--space-3) var(--space-4)",
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--type-caption)",
-              color: "var(--ink-2)",
-              textAlign: "start",
-              captionSide: "top",
-            }}
-          >
+          <caption className="px-4 py-3 font-mono text-caption text-ink-2 text-start caption-top">
             {caption}
           </caption>
         ) : null}
-        <thead style={{ position: "sticky", top: 0, background: "var(--bg-elev)" }}>
+        <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>
               {hg.headers.map((header) => (
@@ -113,12 +132,7 @@ export function DataTable({
                 return (
                   <td
                     key={cell.id}
-                    style={{
-                      fontFamily: isNumeric
-                        ? "var(--font-mono)"
-                        : "var(--font-sans)",
-                      fontVariantNumeric: isNumeric ? "tabular-nums" : "normal",
-                    }}
+                    className={isNumeric ? "font-mono [font-variant-numeric:tabular-nums]" : "font-sans"}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
@@ -129,30 +143,17 @@ export function DataTable({
         </tbody>
       </table>
       {table.getPageCount() > 1 ? (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "var(--space-3) var(--space-4)",
-            borderBlockStart: "1px solid var(--hairline)",
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-          }}
-        >
+        <div className="flex justify-between items-center px-4 py-3 hairline-top font-mono text-caption">
           <span>
             Página {table.getState().pagination.pageIndex + 1} de{" "}
             {table.getPageCount()}
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              style={{
-                border: "1px solid var(--hairline)",
-                padding: "4px 10px",
-              }}
+              className="border border-hairline px-2.5 py-1 focus-ring disabled:opacity-50"
             >
               Anterior
             </button>
@@ -160,10 +161,7 @@ export function DataTable({
               type="button"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              style={{
-                border: "1px solid var(--hairline)",
-                padding: "4px 10px",
-              }}
+              className="border border-hairline px-2.5 py-1 focus-ring disabled:opacity-50"
             >
               Siguiente
             </button>

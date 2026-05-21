@@ -27,60 +27,27 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const q = (params.q ?? "").trim();
   const filters = normalizeFilters(params);
 
-  if (!q) {
-    return <EmptyState />;
-  }
+  if (!q) return <EmptyState />;
 
-  const intent = Array.isArray(filters.tipo)
-    ? filters.tipo[0]
-    : filters.tipo;
+  const intent = Array.isArray(filters.tipo) ? filters.tipo[0] : filters.tipo;
   const intentLabel = intent ? INTENT_LABEL[intent] : null;
 
   return (
-    <div
-      className="container-narrow"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-6)",
-        paddingBlock: "var(--space-6)",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-3)",
-          paddingBlockEnd: "var(--space-4)",
-          borderBlockEnd: "1px solid var(--hairline)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <span className="kicker">
+    <div className="container-narrow flex flex-col gap-8 py-8">
+      <header className="flex flex-col gap-3 pb-4 hairline-bottom">
+        <div className="flex justify-between gap-4">
+          <span className="text-kicker">
             Pregunta
             {intentLabel ? ` · ${intentLabel}` : null}
           </span>
           <Link
             href="/"
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--type-caption)",
-              color: "var(--ink-2)",
-            }}
+            className="font-mono text-caption text-ink-2 focus-ring"
           >
             ← volver al inicio
           </Link>
         </div>
-        <h1
-          style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: "var(--type-h1)",
-            margin: 0,
-            color: "var(--ink)",
-          }}
-        >
-          {q}
-        </h1>
+        <h1 className="font-serif text-h1 m-0 text-ink">{q}</h1>
         <ActiveFilters filters={filters} />
       </header>
 
@@ -88,19 +55,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         <ResultStream question={q} filters={filters} />
       </Suspense>
 
-      <section
-        aria-label="Editar consulta"
-        style={{
-          paddingBlockStart: "var(--space-5)",
-          borderBlockStart: "1px solid var(--hairline)",
-        }}
-      >
-        <span
-          className="kicker"
-          style={{ display: "block", marginBlockEnd: 12 }}
-        >
-          Editar consulta
-        </span>
+      <section aria-label="Editar consulta" className="pt-6 hairline-top">
+        <span className="text-kicker block mb-3">Editar consulta</span>
         <HeroSearch initialValue={q} size="compact" />
       </section>
     </div>
@@ -109,34 +65,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
 function EmptyState() {
   return (
-    <div
-      className="container-narrow"
-      style={{
-        paddingBlock: "var(--space-8)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-        maxInlineSize: "60ch",
-      }}
-    >
-      <span className="kicker">Sin consulta</span>
-      <h1
-        style={{
-          fontFamily: "var(--font-serif)",
-          fontSize: "var(--type-h2)",
-          margin: 0,
-        }}
-      >
-        Empieza por una pregunta
-      </h1>
-      <p
-        style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: "var(--type-body-lg)",
-          color: "var(--ink-2)",
-          lineHeight: 1.6,
-        }}
-      >
+    <div className="container-narrow py-16 flex flex-col gap-4 max-w-[60ch]">
+      <span className="text-kicker">Sin consulta</span>
+      <h1 className="font-serif text-h2 m-0">Empieza por una pregunta</h1>
+      <p className="font-sans text-body-lg text-ink-2 leading-relaxed">
         Pasa una pregunta en lenguaje natural sobre los datos públicos de
         Colombia. Por ejemplo: ¿Cuántos colegios públicos hay en Boyacá?
       </p>
@@ -145,37 +77,19 @@ function EmptyState() {
   );
 }
 
-function ActiveFilters({
-  filters,
-}: {
-  filters: Record<string, string[]>;
-}) {
+function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
   const chips = Object.entries(filters).flatMap(([axis, values]) =>
     values.map((v) => ({ axis, value: v })),
   );
   if (chips.length === 0) return null;
   return (
-    <ul
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
-        listStyle: "none",
-      }}
-    >
+    <ul className="flex flex-wrap gap-1.5 list-none">
       {chips.map(({ axis, value }) => (
         <li
           key={`${axis}-${value}`}
-          style={{
-            border: "1px solid var(--hairline)",
-            padding: "4px 10px",
-            borderRadius: "var(--radius-1)",
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--type-caption)",
-            color: "var(--ink-2)",
-          }}
+          className="border border-hairline px-2.5 py-1 rounded-[var(--radius-1)] font-mono text-caption text-ink-2"
         >
-          <span style={{ color: "var(--ink-muted)" }}>{axis} ·</span> {value}
+          <span className="text-ink-muted">{axis} ·</span> {value}
         </li>
       ))}
     </ul>

@@ -25,6 +25,11 @@
   --radius-0: 0;
   --radius-1: 2px;
 
+  /* Spacing base 4px (BRAND.md §5.3). Tailwind v4 multiplica linealmente:
+   * p-1=4 · p-2=8 · p-3=12 · p-4=16 · p-6=24 · p-8=32 · p-12=48 · p-16=64 · p-24=96
+   * Equivale a los tokens --space-1..--space-9 declarados en tokens.css. */
+  --spacing: 4px;
+
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
@@ -280,7 +285,8 @@ pre,
 .measure-narrow {
   max-inline-size: var(--measure-narrow);
 }
-.kicker {
+.kicker,
+.text-kicker {
   font-family: var(--font-mono);
   font-size: var(--type-kicker);
   font-weight: 500;
@@ -298,6 +304,31 @@ pre,
   block-size: var(--hairline-width);
   inline-size: 100%;
   background: var(--hairline);
+}
+/* Card-like container con borde hairline + fondo elev. Usado en
+ * paneles, charts, KPIs, blocks de auditabilidad. Centraliza el patrón. */
+.surface-elev {
+  background: var(--bg-elev);
+  border: 1px solid var(--hairline);
+}
+
+/* Tipografía utility — tamaños alineados a tokens (BRAND.md §4.2) */
+.text-display-xl { font-size: var(--type-display-xl); line-height: 1.05; }
+.text-h1 { font-size: var(--type-h1); line-height: 1.1; }
+.text-h2 { font-size: var(--type-h2); line-height: 1.15; }
+.text-h3 { font-size: var(--type-h3); line-height: 1.25; }
+.text-h4 { font-size: var(--type-h4); line-height: 1.3; }
+.text-body-lg { font-size: var(--type-body-lg); line-height: 1.6; }
+.text-body { font-size: var(--type-body); line-height: 1.6; }
+.text-body-sm { font-size: var(--type-body-sm); line-height: 1.5; }
+.text-caption { font-size: var(--type-caption); line-height: 1.45; }
+.text-mono { font-size: var(--type-mono); line-height: 1.5; }
+.text-data { font-size: var(--type-data); line-height: 1.4; font-variant-numeric: tabular-nums; }
+
+/* Foco visible reutilizable (BRAND.md §5.5 reglas duras §20) */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* Tabla con tabular-nums obligatorio (BRAND.md §4.3) */

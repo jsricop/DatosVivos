@@ -16,69 +16,48 @@ type Props = {
  *
  * No decide colores ni dimensiones — todo viene de los tokens del BRAND.md
  * via CSS variables [data-theme]. El LLM solo decidió `qué` mostrar.
+ *
+ * Auditabilidad MinTIC (§11.8): incluye `<details>` con el spec JSON crudo.
  */
 export function DashboardRenderer({ spec, rows, stats = null }: Props) {
   if (!spec.blocks.length) return null;
 
-  const isGrid = spec.layout === "grid";
+  const layoutClass =
+    spec.layout === "grid"
+      ? "grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4"
+      : "flex flex-col gap-4";
+
   return (
     <section
       aria-label={`Dashboard: ${spec.title}`}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-5)",
-        paddingBlockStart: "var(--space-5)",
-        borderBlockStart: "1px solid var(--hairline)",
-      }}
+      className="flex flex-col gap-6 pt-6 hairline-top"
     >
-      <header
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}
-      >
-        <span className="kicker">Dashboard generado</span>
-        <h2
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-serif)",
-            fontSize: "var(--type-h2)",
-          }}
-        >
-          {spec.title}
-        </h2>
+      <header className="flex flex-col gap-1.5">
+        <span className="text-kicker">Dashboard generado</span>
+        <h2 className="m-0 font-serif text-h2">{spec.title}</h2>
         {spec.subtitle ? (
-          <p
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--type-body-sm)",
-              color: "var(--ink-2)",
-            }}
-          >
+          <p className="m-0 font-sans text-body-sm text-ink-2">
             {spec.subtitle}
           </p>
         ) : null}
       </header>
 
-      <div
-        style={{
-          display: isGrid ? "grid" : "flex",
-          flexDirection: isGrid ? undefined : "column",
-          gridTemplateColumns: isGrid
-            ? "repeat(auto-fit, minmax(280px, 1fr))"
-            : undefined,
-          gap: "var(--space-4)",
-        }}
-      >
+      <div className={layoutClass}>
         {spec.blocks.map((block, i) => (
           <BlockRenderer key={i} block={block} rows={rows} stats={stats} />
         ))}
       </div>
 
       {spec.caveats?.length ? <Caveats items={spec.caveats} /> : null}
+
+      <details className="surface-elev p-4">
+        <summary className="text-kicker cursor-pointer">
+          Ver spec JSON (auditabilidad)
+        </summary>
+        <pre className="font-mono text-caption mt-3 overflow-auto whitespace-pre-wrap text-ink-2">
+          {JSON.stringify(spec, null, 2)}
+        </pre>
+      </details>
     </section>
   );
 }

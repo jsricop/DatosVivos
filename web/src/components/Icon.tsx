@@ -29,7 +29,9 @@ export type IconName =
   | "type-size"
   | "arrow-right"
   | "enter"
-  | "menu";
+  | "menu"
+  | "download"
+  | "copy";
 
 type IconProps = SVGProps<SVGSVGElement> & {
   name: IconName;
@@ -71,6 +73,8 @@ const PATHS: Record<IconName, string> = {
   "arrow-right": "M5 12h14 M13 6l6 6-6 6",
   enter: "M3 12l5-5 M3 12l5 5 M3 12h13a4 4 0 0 0 4-4V4",
   menu: "M4 7h16 M4 12h16 M4 17h16",
+  download: "M12 3v12 M7 11l5 5 5-5 M4 19h16",
+  copy: "M8 8h10v12H8z M5 5h10v3 M5 5v10h3",
 };
 
 export function Icon({ name, size = 20, title, ...rest }: IconProps) {

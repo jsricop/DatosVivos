@@ -49,39 +49,26 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
   }
 
   return (
-    <section
-      aria-label="Buscador principal"
-      style={{ display: "flex", flexDirection: "column", gap: 32 }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <section aria-label="Buscador principal" className="flex flex-col gap-8">
+      <div className="flex flex-col gap-4">
         <HeroSearch
           initialValue={voiceQuery}
           extraQuery={extraQuery}
           size="display"
         />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--type-caption)",
-              color: "var(--ink-muted)",
-            }}
-          >
-            Pulsa <kbd style={kbdStyle}>/</kbd> para enfocar el buscador
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <span className="font-mono text-caption text-ink-muted">
+            Pulsa{" "}
+            <kbd className="inline-block border border-hairline-strong px-1.5 py-px font-mono text-[length:var(--type-kicker)] bg-bg-elev text-ink-2">
+              /
+            </kbd>{" "}
+            para enfocar el buscador
           </span>
           <SpeechInput onTranscript={setVoiceQuery} />
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div className="flex flex-col gap-7">
         {(Object.keys(chips) as Axis[]).map((axis) => (
           <ChipGroup
             key={axis}
@@ -97,13 +84,3 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
     </section>
   );
 }
-
-const kbdStyle: React.CSSProperties = {
-  display: "inline-block",
-  border: "1px solid var(--hairline-strong)",
-  padding: "1px 6px",
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--type-kicker)",
-  background: "var(--bg-elev)",
-  color: "var(--ink-2)",
-};
