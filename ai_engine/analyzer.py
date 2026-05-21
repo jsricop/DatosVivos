@@ -31,6 +31,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from ai_engine.geo_attribution import validate_geographic_attribution
 from ai_engine.geo_resolver import GeoContext, GeoResolver, build_comparison_soql
 from ai_engine.intent_classifier import IntentClassifier
 from ai_engine.llm_backend import LLMBackend
@@ -325,7 +326,7 @@ class Analyzer:
             if soql_result is not None:
                 soql, rows = soql_result
                 narrative, stats = await self._narrate_with_data(
-                    question, hits[0], soql, rows
+                    question, hits[0], soql, rows, geo_ctx=geo_ctx
                 )
                 return AnalysisResult(
                     question=question,
@@ -704,6 +705,7 @@ class Analyzer:
         top: SearchResult,
         soql: str,
         rows: list[dict[str, Any]],
+        geo_ctx: GeoContext | None = None,
     ) -> tuple[str, Statistics]:
         """Genera narrativa con cifras 100% verificables.
 
@@ -764,12 +766,24 @@ class Analyzer:
         raw = await self.llm.generate(prompt, max_tokens=400)
         narrative = _validate_numbers(raw, stats)
 
+        # Validación geográfica (PROD_IMPROV #5): si el usuario preguntó por
+        # un territorio específico y los rows NO incluyen filas de ese
+        # territorio, agregar advertencia para evitar atribución incorrecta.
+        geo_warning_line = ""
+        try:
+            attr = validate_geographic_attribution(rows, geo_ctx)
+            if not attr.matches and attr.warning:
+                geo_warning_line = f"\n- {attr.warning}"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("validate_geographic_attribution falló (%s); sigo sin warning", exc)
+
         # Bloque determinista al final — siempre visible, intocable.
         verified_block = (
             "\n\n📊 **Datos verificados** (calculados con pandas sobre los rows reales):\n"
             + "\n".join(f"- {line}" for line in stats.summary_lines)
             + f"\n- SoQL ejecutado: `{soql}`"
             + f"\n- Entidad publicadora: {entity}"
+            + geo_warning_line
         )
         return narrative + verified_block, stats
 
