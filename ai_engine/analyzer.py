@@ -436,6 +436,19 @@ class Analyzer:
         """
         vector_hits = self.vector_index.search(question, k=self.top_k_datasets)
 
+        # Inyección forzada de DIVIPOLA cuando el patrón de pregunta lo
+        # justifica. El embedding semántico NO asocia "DIVIPOLA" con
+        # preguntas tipo "¿cuántos municipios tiene Antioquia?", entonces
+        # gdxc-w37w nunca aparece en top-k aunque sea la fuente correcta.
+        # Inyectamos manualmente al inicio para que el boost lo eleve a top.
+        if _DIVIPOLA_QUESTION_PATTERN.search(question):
+            already_present = any(h.id == "gdxc-w37w" for h in vector_hits)
+            if not already_present:
+                divipola_hit = self.vector_index.get_by_id("gdxc-w37w")
+                if divipola_hit is not None:
+                    vector_hits = [divipola_hit] + vector_hits
+                    log.info("Inyectado gdxc-w37w (DIVIPOLA) al retrieval para pregunta de conteo geo")
+
         if not self.enable_hybrid_retrieval:
             return vector_hits
 
