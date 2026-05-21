@@ -27,11 +27,16 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   icons: {
     icon: [
+      // SVG primero — la mayoría de navegadores modernos lo prefieren.
       { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      // ICO legacy multi-resolución (16/32/48) para IE y agentes antiguos.
+      { url: "/favicon.ico", sizes: "any" },
+      // PNGs cuadrados para Android/PWA y agentes que esperan raster específico.
+      { url: "/favicon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/favicon-512.png", type: "image/png", sizes: "512x512" },
     ],
     apple: [{ url: "/apple-touch-icon.svg", type: "image/svg+xml" }],
-    shortcut: [{ url: "/favicon.svg" }],
+    shortcut: [{ url: "/favicon.ico" }],
   },
   description:
     "Agente civil de datos abiertos del Estado colombiano. Pregunta en lenguaje natural sobre cualquier dato público y recibe la respuesta con la fuente original a un click.",

@@ -7,6 +7,8 @@ import { scaleBand, scaleLinear } from "@visx/scale";
 import { Bar } from "@visx/shape";
 import { useMemo } from "react";
 
+import { useId } from "react";
+
 import { useUserScale } from "@/lib/motion";
 import {
   chartColor,
@@ -15,6 +17,7 @@ import {
   type Row,
 } from "@/lib/dashboard-data";
 import type { ChartBlock } from "@/lib/schemas/dashboard";
+import { ChartPatternDefs, patternFill } from "@/components/charts/chart-patterns";
 
 const MARGIN = { top: 12, right: 16, bottom: 56, left: 64 };
 const BASE_HEIGHT = 280;
@@ -31,6 +34,7 @@ export function BarChartBlock({ block, rows }: Props) {
   const series = useMemo(() => prepareSeriesData(block, rows), [block, rows]);
   const userScale = useUserScale();
   const height = Math.round(BASE_HEIGHT * userScale);
+  const patternId = useId().replace(/:/g, "_");
 
   // Eje X compartido y máximo Y para escala común a todas las series.
   const xDomain = useMemo(() => {
@@ -54,7 +58,7 @@ export function BarChartBlock({ block, rows }: Props) {
       className="surface-elev m-0 p-4 flex flex-col gap-3"
     >
       <figcaption className="text-kicker">{block.title}</figcaption>
-      {isMulti ? <Legend series={series} /> : null}
+      {isMulti ? <Legend series={series} patternId={patternId} /> : null}
       <div style={{ width: "100%", height }}>
         <ParentSize>
           {({ width, height: h }) => {
@@ -80,6 +84,7 @@ export function BarChartBlock({ block, rows }: Props) {
 
             return (
               <svg width={width} height={h} role="img" aria-label={block.title}>
+                <ChartPatternDefs id={patternId} />
                 <Group left={MARGIN.left} top={MARGIN.top}>
                   {y.ticks(5).map((t) => (
                     <line
@@ -95,6 +100,11 @@ export function BarChartBlock({ block, rows }: Props) {
                   {hasData
                     ? series.flatMap((s, sIdx) => {
                         const color = chartColor(sIdx);
+                        // Pattern overlay solo cuando hay multi-series: el
+                        // canal adicional (textura) diferencia para usuarios
+                        // con daltonismo (BRAND.md §8.9 + WCAG 1.4.1).
+                        const overlay =
+                          isMulti ? patternFill(patternId, sIdx) : undefined;
                         return s.data.map((d) => {
                           const xKey = String(d.x);
                           const bx = x(xKey) ?? 0;
@@ -107,19 +117,24 @@ export function BarChartBlock({ block, rows }: Props) {
                           const by = y(d.y);
                           const bh = innerH - by;
                           return (
-                            <Bar
-                              key={`${s.name}-${xKey}`}
-                              x={innerX}
-                              y={by}
-                              width={bw}
-                              height={bh}
-                              fill={color}
-                            >
-                              <title>
-                                {isMulti ? `${s.name} · ` : ""}
-                                {xKey}: {formatValue(d.y)}
-                              </title>
-                            </Bar>
+                            <g key={`${s.name}-${xKey}`}>
+                              <Bar x={innerX} y={by} width={bw} height={bh} fill={color}>
+                                <title>
+                                  {isMulti ? `${s.name} · ` : ""}
+                                  {xKey}: {formatValue(d.y)}
+                                </title>
+                              </Bar>
+                              {overlay ? (
+                                <Bar
+                                  x={innerX}
+                                  y={by}
+                                  width={bw}
+                                  height={bh}
+                                  fill={overlay}
+                                  pointerEvents="none"
+                                />
+                              ) : null}
+                            </g>
                           );
                         });
                       })
@@ -166,24 +181,42 @@ export function BarChartBlock({ block, rows }: Props) {
 
 function Legend({
   series,
+  patternId,
 }: {
   series: Array<{ name: string; data: unknown[] }>;
+  patternId: string;
 }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 list-none">
-      {series.map((s, i) => (
-        <li
-          key={s.name}
-          className="inline-flex items-center gap-1.5 font-mono text-caption text-ink-2"
-        >
-          <span
-            aria-hidden
-            className="inline-block w-3 h-3"
-            style={{ background: chartColor(i), border: "1px solid var(--ink)" }}
-          />
-          <span>{s.name}</span>
-        </li>
-      ))}
+      {series.map((s, i) => {
+        const color = chartColor(i);
+        const overlay = patternFill(patternId, i);
+        return (
+          <li
+            key={s.name}
+            className="inline-flex items-center gap-1.5 font-mono text-caption text-ink-2"
+          >
+            <svg
+              aria-hidden
+              width={12}
+              height={12}
+              viewBox="0 0 12 12"
+              className="inline-block"
+            >
+              <ChartPatternDefs id={`${patternId}-legend-${i}`} />
+              <rect width={12} height={12} fill={color} stroke="var(--ink)" strokeWidth={0.5} />
+              {overlay ? (
+                <rect
+                  width={12}
+                  height={12}
+                  fill={patternFill(`${patternId}-legend-${i}`, i) ?? "transparent"}
+                />
+              ) : null}
+            </svg>
+            <span>{s.name}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

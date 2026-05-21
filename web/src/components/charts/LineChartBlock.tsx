@@ -15,6 +15,7 @@ import {
   type Row,
 } from "@/lib/dashboard-data";
 import type { ChartBlock } from "@/lib/schemas/dashboard";
+import { dashArray } from "@/components/charts/chart-patterns";
 
 const MARGIN = { top: 12, right: 16, bottom: 48, left: 56 };
 const BASE_HEIGHT = 280;
@@ -65,11 +66,24 @@ export function LineChartBlock({ block, rows }: Props) {
               key={s.name}
               className="inline-flex items-center gap-1.5 font-mono text-caption text-ink-2"
             >
-              <span
+              <svg
                 aria-hidden
-                className="inline-block w-3 h-[2px]"
-                style={{ background: chartColor(i) }}
-              />
+                width={18}
+                height={6}
+                viewBox="0 0 18 6"
+                className="inline-block"
+              >
+                <line
+                  x1={0}
+                  y1={3}
+                  x2={18}
+                  y2={3}
+                  stroke={chartColor(i)}
+                  strokeWidth={2}
+                  strokeDasharray={dashArray(i)}
+                  strokeLinecap="square"
+                />
+              </svg>
               <span>{s.name}</span>
             </li>
           ))}
@@ -109,6 +123,10 @@ export function LineChartBlock({ block, rows }: Props) {
                   ))}
                   {series.map((s, sIdx) => {
                     const color = chartColor(sIdx);
+                    // Dash-array cíclico cuando hay multi-serie: garantiza
+                    // diferenciación visual aunque dos colores choquen para
+                    // un usuario con daltonismo (BRAND.md §8.9 + WCAG 1.4.1).
+                    const dash = isMulti ? dashArray(sIdx) : undefined;
                     return (
                       <g key={s.name}>
                         {isArea ? (
@@ -121,6 +139,7 @@ export function LineChartBlock({ block, rows }: Props) {
                             fillOpacity={isMulti ? 0.08 : 0.18}
                             stroke={color}
                             strokeWidth={2}
+                            strokeDasharray={dash}
                           />
                         ) : (
                           <LinePath
@@ -131,6 +150,7 @@ export function LineChartBlock({ block, rows }: Props) {
                             strokeWidth={2}
                             strokeLinejoin="miter"
                             strokeLinecap="square"
+                            strokeDasharray={dash}
                           />
                         )}
                         {s.data.map((d) => (

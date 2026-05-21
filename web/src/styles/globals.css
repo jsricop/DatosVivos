@@ -177,7 +177,12 @@ button {
   font: inherit;
   color: inherit;
   background: transparent;
-  border: none;
+  /* Conservamos el modelo de borde para que las utilities `border`,
+   * `border-hairline`, `border-accent` etc. de Tailwind funcionen sobre los
+   * <button>. Sin width por defecto = invisible salvo que la clase lo declare. */
+  border-style: solid;
+  border-width: 0;
+  border-color: var(--hairline);
   padding: 0;
   cursor: pointer;
 }
@@ -198,7 +203,11 @@ select {
   font: inherit;
   color: inherit;
   background: transparent;
-  border: none;
+  /* Mismo motivo que `button`: dejamos el modelo de borde activo con
+   * width 0 para que `border`, `border-hairline`, etc. funcionen. */
+  border-style: solid;
+  border-width: 0;
+  border-color: var(--hairline);
 }
 
 ul,
