@@ -87,6 +87,95 @@ export function prepareChartData(
   return entries.filter((e) => Number.isFinite(e.y));
 }
 
+export type ChartSeries = {
+  /** Nombre legible de la serie. Si solo hay 1, suele ser block.y_column. */
+  name: string;
+  data: Array<{ x: string | number; y: number; raw: Row }>;
+};
+
+/**
+ * Variante multi-serie cuando un block tiene `groupby`. Cada valor único en
+ * la columna groupby produce una serie distinta — listas para colorear con
+ * la paleta categórica `--chart-1..5` (BRAND.md §8.9).
+ *
+ * Si block.groupby está ausente, devuelve 1 sola serie equivalente a
+ * `prepareChartData`. Limit y sort se aplican a las claves x del primer
+ * grupo (criterio: la serie más larga marca el rango visible).
+ */
+export function prepareSeriesData(
+  block: ChartBlock,
+  rows: Row[],
+): ChartSeries[] {
+  if (!block.groupby) {
+    const data = prepareChartData(block, rows);
+    return [{ name: block.y_column, data }];
+  }
+
+  // 1) Agrupar por (x, group) → valor agregado.
+  const cell = new Map<string, Map<string, Row[]>>();
+  for (const r of rows) {
+    const xKey = String(r[block.x_column] ?? "—");
+    const gKey = String(r[block.groupby] ?? "—");
+    const inner = cell.get(gKey) ?? new Map<string, Row[]>();
+    const arr = inner.get(xKey) ?? [];
+    arr.push(r);
+    inner.set(xKey, arr);
+    cell.set(gKey, inner);
+  }
+
+  // 2) Construir series.
+  const aggFn = block.agg ?? "sum";
+  const allX = new Set<string>();
+  const series: ChartSeries[] = Array.from(cell.entries()).map(([gKey, xs]) => {
+    const data = Array.from(xs.entries())
+      .map(([x, group]) => {
+        allX.add(x);
+        return {
+          x,
+          y: aggregate(group, block.y_column, aggFn),
+          raw: group[0]!,
+        };
+      })
+      .filter((e) => Number.isFinite(e.y));
+    return { name: gKey, data };
+  });
+
+  // 3) Limit cap: solo el top-N de claves x más comunes en términos del
+  //    máximo Y de cualquier serie. Aplica solo si todas las series superan
+  //    el limit (caso contrario podríamos cortar visualmente datos relevantes).
+  if (block.limit && allX.size > block.limit) {
+    const xMaxY = new Map<string, number>();
+    for (const s of series) {
+      for (const point of s.data) {
+        xMaxY.set(String(point.x), Math.max(xMaxY.get(String(point.x)) ?? 0, point.y));
+      }
+    }
+    const top = Array.from(xMaxY.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, block.limit)
+      .map(([x]) => x);
+    const keep = new Set(top);
+    for (const s of series) {
+      s.data = s.data.filter((p) => keep.has(String(p.x)));
+    }
+  }
+
+  return series;
+}
+
+/** Tokens de la paleta categórica, cíclicos. */
+export const CHART_PALETTE_TOKENS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+] as const;
+
+export function chartColor(seriesIndex: number): string {
+  return CHART_PALETTE_TOKENS[seriesIndex % CHART_PALETTE_TOKENS.length]!;
+}
+
 export function prepareTableRows(block: TableBlock, rows: Row[]): Row[] {
   if (block.max_rows && rows.length > block.max_rows) {
     return rows.slice(0, block.max_rows);

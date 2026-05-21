@@ -11,8 +11,6 @@ export const metadata: Metadata = {
     default: "Datos|Vivos — Datos del Estado, en tus palabras.",
     template: "%s · Datos|Vivos",
   },
-  description:
-    "Agente de IA con modelo local sobre datos.gov.co. Pregunta en lenguaje natural, recibe respuestas con cifras verificables y fuentes citables. Concurso MinTIC 2026 · Equipo ANI.",
   applicationName: "DatosVivos",
   authors: [{ name: "Agencia Nacional de Infraestructura — Oficina de Tecnología" }],
   generator: "Next.js",
@@ -27,6 +25,16 @@ export const metadata: Metadata = {
     "soberanía de datos",
   ],
   robots: { index: true, follow: true },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+    ],
+    apple: [{ url: "/apple-touch-icon.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/favicon.svg" }],
+  },
+  description:
+    "Agente civil de datos abiertos del Estado colombiano. Pregunta en lenguaje natural sobre cualquier dato público y recibe la respuesta con la fuente original a un click.",
 };
 
 export const viewport: Viewport = {

@@ -17,6 +17,11 @@
   --color-accent-2: var(--accent-2);
   --color-focus-ring: var(--focus-ring);
   --color-danger: var(--danger);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
   --font-serif: "IBM Plex Serif", "Georgia", "Times New Roman", serif;
   --font-sans: "IBM Plex Sans", "Helvetica Neue", "Arial", sans-serif;
