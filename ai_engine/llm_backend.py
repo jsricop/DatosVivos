@@ -38,6 +38,16 @@ class MockBackend:
         await mock.generate("¿municipios de Antioquia?")  # → "125"
     """
 
+    # Spec demo: se devuelve cuando el prompt es el del DashboardSpecGenerator.
+    # Útil para verificar end-to-end el journey SSE sin Ollama corriendo.
+    # No interfiere con tests unitarios que llaman `add_response` antes.
+    _DASHBOARD_DEMO_SPEC: str = (
+        '{"version":"1","title":"Vista de los datos","subtitle":"Resumen automático",'
+        '"layout":"grid","blocks":['
+        '{"type":"table","title":"Primeras filas","columns":["__placeholder__"],"max_rows":15}'
+        "]}"
+    )
+
     def __init__(self, default_response: str = "MOCK_RESPONSE") -> None:
         self.default_response = default_response
         self._responses: list[tuple[str, str]] = []
@@ -52,7 +62,39 @@ class MockBackend:
         for key, value in self._responses:
             if key.lower() in prompt.lower():
                 return value
+        # Heurística de comodidad opt-in (env `DASHBOARD_DEMO_FALLBACK=1`):
+        # si el prompt es el del DashboardSpecGenerator y no hubo match
+        # pre-grabado, devolver un spec demo con las primeras columnas del
+        # prompt. Permite verificar el journey SSE → DashboardRenderer sin
+        # Ollama. NUNCA activo durante pytest (los tests son congelados).
+        if (
+            os.getenv("DASHBOARD_DEMO_FALLBACK") == "1"
+            and "diseñador de dashboards" in prompt.lower()
+        ):
+            return self._build_demo_spec(prompt)
         return self.default_response
+
+    @classmethod
+    def _build_demo_spec(cls, prompt: str) -> str:
+        """Detecta las primeras columnas del prompt y construye un spec demo."""
+        # Las columnas en el prompt aparecen como `  - <name>` (PLAN_DASHBOARD prompt).
+        cols: list[str] = []
+        for line in prompt.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") and len(cols) < 8:
+                # Tomar solo el nombre antes de cualquier paréntesis o coma.
+                name = stripped[2:].split("(")[0].split(",")[0].strip()
+                if name and name not in cols:
+                    cols.append(name)
+        if not cols:
+            return cls._DASHBOARD_DEMO_SPEC
+        return (
+            '{"version":"1","title":"Vista automática",'
+            '"subtitle":"Spec demo (LLM no disponible)",'
+            '"layout":"grid","blocks":['
+            f'{{"type":"table","title":"Primeras filas","columns":{cols!r},"max_rows":15}}'
+            "]}"
+        ).replace("'", '"')
 
 
 class OllamaBackend:

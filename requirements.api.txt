@@ -1,0 +1,9 @@
+# Dependencias del servicio FastAPI (api/main.py).
+# Coexiste con requirements.ai.txt para el motor IA y requirements.mcp.txt para el MCP server.
+# Se instala sobre el venv que ya tenga requirements.ai.txt + requirements.mcp.txt.
+
+fastapi>=0.115,<0.117
+uvicorn[standard]>=0.34,<0.36
+pydantic>=2.11,<3.0
+httpx>=0.27,<1.0  # ya viene en requirements.mcp.txt pero lo aseguramos aquí
+sse-starlette>=2.1,<3.0
