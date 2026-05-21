@@ -49,11 +49,13 @@ async def _refresh() -> tuple[int, int]:
     initial_count = len(idx)
     log.info("Índice cargado: %d datasets existentes", initial_count)
 
-    async with DiscoveryClient() as client:
-        offset = 0
-        updated = 0
-        skipped = 0
-        processed = 0
+    # DiscoveryClient NO es async context manager — solo instanciarlo.
+    client = DiscoveryClient()
+    offset = 0
+    updated = 0
+    skipped = 0
+    processed = 0
+    try:
         while True:
             page = await _fetch_page(client, offset, PAGE_SIZE)
             if not page:
@@ -98,6 +100,13 @@ async def _refresh() -> tuple[int, int]:
             if len(page) < PAGE_SIZE:
                 break
             offset += PAGE_SIZE
+    finally:
+        # DiscoveryClient usa httpx.AsyncClient internamente; cerrar bien.
+        close_method = getattr(client, "aclose", None) or getattr(client, "close", None)
+        if close_method:
+            result = close_method()
+            if asyncio.iscoroutine(result):
+                await result
 
     log.info("✓ Refresh completo. Actualizados: %d, no en índice: %d", updated, skipped)
     return updated, skipped

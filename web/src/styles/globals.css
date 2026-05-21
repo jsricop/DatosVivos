@@ -331,6 +331,16 @@ pre,
   outline-offset: 2px;
 }
 
+/* HeroSearch — excepción documentada en BRAND.md §4.3:
+ * el valor va en Plex Sans (control UI), el placeholder en Plex Serif italic
+ * (invita a la pregunta editorial). Es el único control con tipografía heterogénea. */
+.datosvivos-search-input::placeholder {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--ink-muted);
+  opacity: 1;
+}
+
 /* Tabla con tabular-nums obligatorio (BRAND.md §4.3) */
 table {
   width: 100%;

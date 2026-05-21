@@ -129,7 +129,7 @@ export function HeroSearch({
         placeholder={placeholder}
         aria-label="Pregunta en lenguaje natural"
         className={[
-          "flex-1 min-w-0 px-2 bg-transparent font-serif text-ink",
+          "datosvivos-search-input flex-1 min-w-0 px-2 bg-transparent font-sans text-ink",
           isDisplay ? "py-6 text-h3" : "py-[14px] text-body-lg",
         ].join(" ")}
       />

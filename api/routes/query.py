@@ -251,15 +251,20 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
         await asyncio.sleep(0)
 
     # 8) Esperar dashboard_spec si quedó pendiente (con timeout duro).
+    # 90s para producción con LLM 14B compartido con la narrativa: ambos tasks
+    # compiten por el mismo backend Ollama secuencialmente y el spec
+    # generation puede arrancar realmente solo tras emitir narrative_chunks.
     if dashboard_task is not None:
         try:
-            spec = await asyncio.wait_for(dashboard_task, timeout=45.0)
+            spec = await asyncio.wait_for(dashboard_task, timeout=90.0)
             if spec is not None:
                 yield _sse("dashboard_spec", spec.model_dump(mode="json"))
+            else:
+                log.info("DashboardSpec generator devolvió None (válido para datasets escalares)")
         except asyncio.TimeoutError:
-            log.info("DashboardSpec timeout (>45s) — sigo sin dashboard")
+            log.warning("DashboardSpec timeout (>90s) — sigo sin dashboard")
         except Exception as exc:  # noqa: BLE001
-            log.warning("DashboardSpec falló: %s", exc)
+            log.warning("DashboardSpec falló: %s", exc, exc_info=True)
 
     elapsed = round(time.perf_counter() - started, 2)
 

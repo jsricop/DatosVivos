@@ -27,18 +27,9 @@ export default async function HomePage() {
           Datos del Estado, en tus palabras.
         </p>
         <p className="m-0 max-w-[60ch] font-sans text-body-lg text-ink-2 leading-[1.55]">
-          Agente de IA con modelo local sobre{" "}
-          <a
-            href="https://www.datos.gov.co"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="focus-ring"
-          >
-            datos.gov.co
-          </a>
-          . Cada cifra que ves está calculada con{" "}
-          <code className="font-mono">pandas</code> sobre los datos reales del
-          dataset citado. Cero cifras inventadas, trazabilidad por enlace.
+          Pregunta sobre cualquier dato público colombiano —educación, salud,
+          contratos, ambiente— y recibe la respuesta con la fuente original a
+          un click. Sin registro, sin filtros, sin opiniones.
         </p>
       </section>
 
@@ -77,33 +68,16 @@ export default async function HomePage() {
         )}
       </section>
 
-      <section className="hairline-top pt-8 grid gap-6 grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
-        <Pillar
-          number="01"
-          title="Soberanía"
-          body="El modelo corre localmente en una máquina del Estado. Tus consultas no salen del servidor; no las leen Anthropic, OpenAI ni nadie más."
-        />
-        <Pillar
-          number="02"
-          title="Verificabilidad"
-          body="Cada cifra es reproducible y cada dataset citado es clicable. Si dudas, abre la fuente original y compruébalo."
-        />
-        <Pillar
-          number="03"
-          title="Interoperabilidad"
-          body="Las mismas herramientas se exponen como MCP server estándar. Cualquier cliente compatible (Claude, Gemini, otros) puede consumirlas."
-        />
+      <section className="hairline-top pt-6">
+        <p className="m-0 max-w-[60ch] font-sans text-body text-ink-2 leading-relaxed">
+          Este servicio es público y gratuito. Los datos que consultas vienen
+          del catálogo oficial del Estado colombiano publicado en datos.gov.co.
+          ¿Quieres saber cómo funciona y quién está detrás?{" "}
+          <Link href="/acerca" className="focus-ring">
+            Lee el manifiesto.
+          </Link>
+        </p>
       </section>
     </div>
-  );
-}
-
-function Pillar({ number, title, body }: { number: string; title: string; body: string }) {
-  return (
-    <article>
-      <span className="text-kicker block mb-2">{number} · Pilar</span>
-      <h3 className="font-serif text-h3 m-0 mb-3">{title}</h3>
-      <p className="m-0 font-sans text-body text-ink-2 leading-relaxed">{body}</p>
-    </article>
   );
 }
