@@ -270,7 +270,7 @@ Tamaños fluidos con `clamp()` para que escalen con el viewport sin breakpoints 
 - Iconos propios en `web/public/icons/`, SVG con `stroke="currentColor"`, `viewBox="0 0 24 24"`, `stroke-width="1.5"`, `stroke-linecap="square"`, `stroke-linejoin="miter"`, sin `fill` (siempre outline).
 - **Prohibidos**: íconos rellenos, íconos con gradientes, íconos con sombras, sets pre-hechos (Material Icons, Feather, Lucide) sin re-trazar al stroke 1.5px square.
 
-### 6.2 Set MVP (16 iconos obligatorios)
+### 6.2 Set MVP (18 iconos obligatorios)
 
 | Nombre | Uso |
 |---|---|
@@ -288,7 +288,9 @@ Tamaños fluidos con `clamp()` para que escalen con el viewport sin breakpoints 
 | `expand` | Abrir tabla / sección colapsable |
 | `collapse` | Cerrar |
 | `close` | Cerrar drawer/modal |
-| `contrast` | Toggle de modo color |
+| `sun` | Modo color claro (ColorModeToggle §8.11) |
+| `moon` | Modo color oscuro (ColorModeToggle §8.11) |
+| `contrast` | Modo color alto contraste (ColorModeToggle §8.11) |
 | `type-size` | Control de tamaño tipográfico |
 
 ### 6.3 Glifos tipográficos como decoración
@@ -353,8 +355,17 @@ Cada componente vive en `web/src/components/`. Documentación contractual: nombr
 
 ### 8.3 `ChipGroup`
 
-- **Props:** `axis: "tema" | "tipo" | "territorio" | "entidad"`, `options: ChipOption[]`, `multi: boolean`, `selected: string[]`, `onChange(values): void`.
-- **Reglas:** Etiqueta del grupo arriba con kicker mono (`TEMA`, `TIPO DE PREGUNTA`, `TERRITORIO`, `ENTIDAD`). Wrap a líneas múltiples con gap `--space-2`. Para `tipo` (Cuántos/Comparar/Ranking/Tendencia/Mapa), `multi: false`. Para los otros tres, `multi: true`.
+- **Props:** `axis: "tema" | "tipo" | "territorio" | "entidad"`, `options: ChipOption[]`, `multi: boolean`, `selected: string[]`, `onChange(values): void`, `description?: string`.
+- **Reglas:** Wrapper `<fieldset>` con **borde visible** `1px solid var(--hairline)` + fondo `var(--bg-elev)` al 60% para que se lea como tarjeta y no como lista de palabras. Padding interior `pt-4 pb-5 px-5`. `<legend>` arriba con kicker mono (`TEMA`, `TIPO DE PREGUNTA`, `TERRITORIO`, `ENTIDAD`) anclado en el borde superior con padding `0 6px`. Hint `description` debajo del legend en `font-sans text-caption text-ink-muted`. Chips dentro con wrap a líneas múltiples y gap `--space-2`. Para `tipo` (Cuántos/Comparar/Ranking/Tendencia/Mapa), `multi: false`. Para los otros tres, `multi: true`.
+
+### 8.3-bis `QueryBuilderBar`
+
+- **Props:** `selected: Record<Axis, string[]>`, `chips: Record<Axis, SuggestOption[]>`, `onClear(axis, value): void`.
+- **Reglas:** Barra horizontal con `<aside role="status" aria-live="polite">` que aparece **solo cuando hay al menos una selección** activa. Borde superior `1px solid var(--hairline-strong)` + fondo `var(--bg-elev)`. Contenido:
+  1. Kicker mono "TU CONSULTA" en `var(--ink-muted)`.
+  2. Lista `<ul>` de chips removibles — cada uno `<button>` con kicker del eje + label de la opción + glifo `close` 12px. `aria-label="Quitar X de Y"`.
+  3. Botón principal "Buscar →" (`bg-ink text-bg`) que navega a `/buscar?<axis>=<value>...` con los filtros como query params. Si el ciudadano ya tipeó algo en el `HeroSearch`, ese `q` se preserva en el submit del input principal.
+- **Propósito:** dar feedback visible de que cada chip se acumula y permite editar la consulta antes de ejecutarla.
 
 ### 8.4 `FilterPanel`
 
@@ -402,7 +413,7 @@ Cada componente vive en `web/src/components/`. Documentación contractual: nombr
 ### 8.11 `ColorModeToggle`
 
 - **Props:** `current: "light" | "dark" | "contrast"`, `onChange(mode): void`.
-- **Reglas:** ToggleGroup de Radix con 3 botones, glifos icono + label visible ("Claro", "Oscuro", "Alto contraste"). Persistido en `localStorage` bajo clave `datosvivos:theme`. Aplica `data-theme` en `<html>`. Variante alto contraste tiene sub-selector A/B (sobre blanco / sobre negro) que aparece solo cuando alto contraste está activo.
+- **Reglas:** ToggleGroup con 3 botones (sin Radix — implementado nativo con `role="group"` + `aria-pressed`). Cada botón muestra **icono distintivo** (`sun` / `moon` / `contrast`) + label visible ("Claro" / "Oscuro" / "Alto contraste"). El componente está precedido por un **label visible "Apariencia"** en `font-mono uppercase text-caption text-ink-muted` (`hidden sm:inline` para no romper el header en mobile) asociado al group via `aria-labelledby="color-mode-label"`. Persistido en `localStorage` bajo clave `datosvivos:theme`. Aplica `data-theme` en `<html>`. Variante alto contraste tiene sub-selector A/B (sobre blanco / sobre negro) que aparece solo cuando alto contraste está activo en `/accesibilidad`.
 
 ### 8.12 `A11yPanel`
 

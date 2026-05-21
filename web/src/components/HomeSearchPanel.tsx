@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ChipGroup, type Axis } from "@/components/ChipGroup";
 import { HeroSearch } from "@/components/HeroSearch";
+import { QueryBuilderBar } from "@/components/QueryBuilderBar";
 import { SpeechInput } from "@/components/SpeechInput";
 import type { SuggestOption } from "@/lib/types";
 
@@ -48,6 +49,13 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
     setSelected((s) => ({ ...s, [axis]: values }));
   }
 
+  function clearOne(axis: Axis, value: string) {
+    setSelected((s) => ({
+      ...s,
+      [axis]: s[axis].filter((v) => v !== value),
+    }));
+  }
+
   return (
     <section aria-label="Buscador principal" className="flex flex-col gap-8">
       <div className="flex flex-col gap-4">
@@ -68,19 +76,27 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-7">
-        {(Object.keys(chips) as Axis[]).map((axis) => (
-          <ChipGroup
-            key={axis}
-            axis={axis}
-            options={chips[axis] ?? []}
-            multi={MULTI_SELECT[axis]}
-            selected={selected[axis]}
-            onChange={(v) => update(axis, v)}
-            description={AXIS_HINT[axis]}
-          />
-        ))}
+      <div className="flex flex-col gap-3">
+        <p className="font-sans text-caption text-ink-muted max-w-prose">
+          O construye tu consulta con los filtros de abajo. Cada selección se
+          va sumando a la barra inferior.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          {(Object.keys(chips) as Axis[]).map((axis) => (
+            <ChipGroup
+              key={axis}
+              axis={axis}
+              options={chips[axis] ?? []}
+              multi={MULTI_SELECT[axis]}
+              selected={selected[axis]}
+              onChange={(v) => update(axis, v)}
+              description={AXIS_HINT[axis]}
+            />
+          ))}
+        </div>
       </div>
+
+      <QueryBuilderBar selected={selected} chips={chips} onClear={clearOne} />
     </section>
   );
 }
