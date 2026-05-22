@@ -12,3 +12,6 @@ sse-starlette>=2.1,<3.0
 # `ai_engine/telemetry.py` y scripts ETL.
 psycopg[binary]>=3.2,<4.0
 psycopg-pool>=3.2,<4.0
+# Anthropic SDK — dormido por default (LLM_BACKEND=ollama). Cuando se active
+# Haiku para producción concurrent, este dependency queda listo.
+anthropic>=0.40,<1.0
