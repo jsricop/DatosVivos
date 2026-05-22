@@ -533,17 +533,30 @@ class Analyzer:
 
         # Boost a hits que también aparecen en Discovery + boost geográfico
         # si geo_ctx menciona un territorio que aparece en el nombre/desc +
-        # boost FUERTE a DIVIPOLA si la pregunta pide conteo de mpios/dptos.
+        # boost FUERTE a DIVIPOLA si la pregunta pide conteo de mpios/dptos +
+        # **penalty si entity menciona OTRO territorio** que no es el del ctx
+        # (fix #3 atribución geográfica 2026-05-22: "Estudiantes de Bogotá"
+        # traía UPTC = Boyacá. La entity "Universidad Pedagógica y Tecnológica
+        # de Colombia" no menciona Bogotá pero el embedding semántico la
+        # priorizaba). Penalty alto baja datasets institucionales que NO son
+        # del territorio preguntado.
         geo_tokens = self._geo_match_tokens(geo_ctx)
+        other_territory_tokens = self._other_territory_tokens(geo_ctx)
         boosted: list[SearchResult] = []
         for h in vector_hits:
             score_delta = 0.0
             if h.id in discovery_ids:
                 score_delta += DISCOVERY_BOOST
+            entity_lc = (h.entity or "").lower()
+            name_desc_lc = (h.name + " " + (h.description or "")).lower()
             if geo_tokens:
-                haystack = (h.name + " " + (h.description or "")).lower()
-                if any(tok in haystack for tok in geo_tokens):
+                if any(tok in name_desc_lc for tok in geo_tokens):
                     score_delta += GEO_BOOST
+            # Penalty si entity menciona explícitamente otro depto/mpio.
+            if other_territory_tokens and any(
+                tok in entity_lc for tok in other_territory_tokens
+            ):
+                score_delta -= GEO_BOOST  # mismo orden de magnitud que el boost positivo
             score_delta += divipola_boost_amount(question, h)
             if score_delta:
                 boosted.append(
@@ -574,6 +587,39 @@ class Analyzer:
         if geo_ctx.mpio_name:
             tokens.add(geo_ctx.mpio_name.lower())
         return [t for t in tokens if t]
+
+    @staticmethod
+    def _other_territory_tokens(geo_ctx: GeoContext | None) -> list[str]:
+        """Departamentos colombianos QUE NO SON el del ctx. Útil para penalizar
+        datasets cuya entity claramente menciona otro territorio.
+
+        Ej: pregunta "Estudiantes de Bogotá" → ctx.dpto=Bogotá. Si entity dice
+        "Universidad Pedagógica y Tecnológica de Colombia" (no menciona otro
+        territorio explícitamente), penalty no se aplica. Pero si dice
+        "Gobernación de Boyacá" o "Universidad del Valle", sí.
+        """
+        if geo_ctx is None:
+            return []
+        # Lista corta de dptos con nombres potencialmente ambiguos en
+        # entity strings (capitales del país que tienden a aparecer en
+        # nombres de universidades, gobernaciones, etc.).
+        all_dpto_names = {
+            "antioquia", "atlántico", "atlantico", "bogotá", "bogota",
+            "bolívar", "bolivar", "boyacá", "boyaca", "caldas", "caquetá",
+            "caqueta", "cauca", "cesar", "córdoba", "cordoba", "cundinamarca",
+            "chocó", "choco", "huila", "guajira", "magdalena", "meta",
+            "nariño", "narino", "norte de santander", "quindío", "quindio",
+            "risaralda", "santander", "sucre", "tolima", "valle del cauca",
+            "valle", "arauca", "casanare", "putumayo", "amazonas", "guainía",
+            "guainia", "guaviare", "vaupés", "vaupes", "vichada", "san andrés",
+            "san andres",
+        }
+        excluded = set()
+        if geo_ctx.dpto_name:
+            excluded.add(geo_ctx.dpto_name.lower())
+        if geo_ctx.mpio_name:
+            excluded.add(geo_ctx.mpio_name.lower())
+        return sorted(all_dpto_names - excluded)
 
     # ------------------------------------------------------------
     # Re-ranker LLM (mitigación 2)
@@ -704,26 +750,57 @@ class Analyzer:
 
         # --- (2) Fallback: query_gen LLM con hints de geo si aplican ---
         # Construir la pregunta-con-geo-hint para el query_generator.
+        # Fix #2 atribución (2026-05-22): cobertura ampliada de columnas
+        # territoriales (codigo_dane_departamento, departamento, etc.) +
+        # hint reforzado como OBLIGATORIO para que el LLM no ignore el
+        # filtro geográfico (causa raíz del bug "Estudiantes Bogotá → 6
+        # de UPTC Boyacá").
         question_for_gen = question
-        if geo_ctx is not None:
+        if geo_ctx is not None and (geo_ctx.dpto_code or geo_ctx.mpio_code):
             hint_parts: list[str] = []
-            if geo_ctx.mpio_code and "cod_mpio" in col_names:
-                hint_parts.append(
-                    f"WHERE cod_mpio = '{geo_ctx.mpio_code}' "
-                    f"(corresponde a {geo_ctx.mpio_name})"
-                )
-            elif geo_ctx.dpto_code and "cod_dpto" in col_names:
-                hint_parts.append(
-                    f"WHERE cod_dpto = '{geo_ctx.dpto_code}' "
-                    f"(corresponde a {geo_ctx.dpto_name})"
-                )
+            # Buscar la columna territorial disponible en el dataset.
+            mpio_code_cols = ("cod_mpio", "codigo_mpio", "codigo_municipio", "codigo_dane_municipio")
+            mpio_name_cols = ("municipio", "nombre_municipio", "nom_mpio", "mpio_nombre")
+            dpto_code_cols = ("cod_dpto", "codigo_dpto", "codigo_departamento", "codigo_dane_departamento")
+            dpto_name_cols = ("departamento", "nombre_departamento", "nom_dpto", "depto", "depa_nombre")
+
+            if geo_ctx.mpio_code:
+                col = next((c for c in mpio_code_cols if c in col_names), None)
+                if col:
+                    hint_parts.append(
+                        f"WHERE {col} = '{geo_ctx.mpio_code}' (DIVIPOLA "
+                        f"para {geo_ctx.mpio_name})"
+                    )
+                else:
+                    col = next((c for c in mpio_name_cols if c in col_names), None)
+                    if col:
+                        hint_parts.append(
+                            f"WHERE lower({col}) = '{(geo_ctx.mpio_name or '').lower()}'"
+                        )
+            elif geo_ctx.dpto_code:
+                col = next((c for c in dpto_code_cols if c in col_names), None)
+                if col:
+                    hint_parts.append(
+                        f"WHERE {col} = '{geo_ctx.dpto_code}' (DIVIPOLA "
+                        f"para {geo_ctx.dpto_name})"
+                    )
+                else:
+                    col = next((c for c in dpto_name_cols if c in col_names), None)
+                    if col:
+                        hint_parts.append(
+                            f"WHERE upper({col}) = '{(geo_ctx.dpto_name or '').upper()}'"
+                        )
             if geo_ctx.groupby and geo_ctx.groupby in col_names:
                 hint_parts.append(f"GROUP BY {geo_ctx.groupby}")
             if hint_parts:
                 question_for_gen = (
-                    f"{question}\n\nPISTA (DIVIPOLA): usa exactamente "
+                    f"{question}\n\n"
+                    f"FILTRO GEOGRÁFICO OBLIGATORIO: el ciudadano preguntó "
+                    f"por **{geo_ctx.mpio_name or geo_ctx.dpto_name}**. "
+                    f"Tu SoQL DEBE incluir: "
                     + "; ".join(hint_parts)
-                    + " sobre las columnas reales del esquema."
+                    + ". Sin este WHERE, el resultado NO corresponde a la "
+                    f"pregunta y será rechazado."
                 )
 
         try:

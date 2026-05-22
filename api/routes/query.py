@@ -207,8 +207,30 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
 
     # 5) Dashboard spec — lo lanzamos en paralelo con los siguientes eventos.
     #    Si el LLM tarda, no bloqueamos la narrativa.
+    #
+    # GUARDA GEOGRÁFICA (fix #1, 2026-05-22): si el usuario preguntó por un
+    # territorio específico y los rows del dataset NO corresponden a ese
+    # territorio, NO emitimos dashboard. Mostrar un KPI "6 estudiantes" sin
+    # advertencia para una pregunta de Bogotá cuando el dataset es de Boyacá
+    # es engañoso. Mejor mostrar narrativa con warning explícito y omitir
+    # el dashboard que da apariencia de "cifra confirmada".
+    from ai_engine.geo_attribution import validate_geographic_attribution as _vga
+    geo_ok = True
+    if result.geo_context and result.rows:
+        try:
+            attr = _vga(result.rows, result.geo_context)
+            geo_ok = attr.matches
+            if not geo_ok:
+                log.info(
+                    "Dashboard omitido: rows no corresponden a %s (warning="
+                    "validate_geographic_attribution).",
+                    result.geo_context.targets[0].name if result.geo_context.targets else "territorio",
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("validate_geographic_attribution check falló: %s", exc)
+
     dashboard_task: asyncio.Task[Any] | None = None
-    if result.rows and result.dataset_references:
+    if result.rows and result.dataset_references and geo_ok:
         try:
             generator = _get_dashboard_generator()
             top_name = (
