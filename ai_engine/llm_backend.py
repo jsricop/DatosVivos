@@ -257,11 +257,59 @@ class OllamaBackend:
 
 
 class AnthropicBackend:
-    """Placeholder para Anthropic API. No implementado en Beta-2."""
+    """Cliente Anthropic Messages API — opt-in con `LLM_BACKEND=anthropic`.
 
-    def __init__(self, model: str = "claude-haiku-4-5-20251001") -> None:
-        self.model = model
-        self.api_key = os.getenv("ANTHROPIC_API_KEY")
+    Diseño:
+    - Misma interfaz que `OllamaBackend` (`generate`, `generate_stream`).
+    - `model` por llamada override default — compatible con `model_for_task()`.
+    - System prompt + user prompt: el `prompt` que llega del Analyzer se
+      pasa como user message; el system prompt es vacío por simplicidad
+      (la instrucción de cifras/whitelist va en el user message).
+    - Streaming: usa `AsyncAnthropic.messages.stream(...)` que emite tokens
+      conforme llegan. Bajo latencia (TTFB ~300ms con Haiku).
+
+    Requisitos:
+    - `pip install anthropic` (en requirements.api.txt).
+    - Env var `ANTHROPIC_API_KEY` seteada.
+
+    Activación (post-validación de Ollama):
+        # En .env de la VM:
+        LLM_BACKEND=anthropic
+        ANTHROPIC_API_KEY=sk-ant-xxxx
+        ANTHROPIC_MODEL_FAST=claude-haiku-4-5-20251001
+        ANTHROPIC_MODEL_NARRATIVE=claude-haiku-4-5-20251001
+        # docker compose restart api
+    """
+
+    DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 60.0,
+    ) -> None:
+        self.model = model or os.getenv("ANTHROPIC_MODEL", self.DEFAULT_MODEL)
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        self.timeout = timeout
+        # Cliente lazy — no romper si SDK no instalado al import.
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            try:
+                from anthropic import AsyncAnthropic
+            except ImportError as exc:
+                raise RuntimeError(
+                    "AnthropicBackend requiere `pip install anthropic`. "
+                    "Ya está en requirements.api.txt."
+                ) from exc
+            if not self.api_key:
+                raise RuntimeError(
+                    "AnthropicBackend requiere ANTHROPIC_API_KEY env var."
+                )
+            self._client = AsyncAnthropic(api_key=self.api_key, timeout=self.timeout)
+        return self._client
 
     async def generate(
         self,
@@ -271,9 +319,51 @@ class AnthropicBackend:
         model: str | None = None,
         **kwargs,
     ) -> str:
-        raise NotImplementedError(
-            "AnthropicBackend pendiente. Para Beta-2 usar LLM_BACKEND=ollama o mock."
-        )
+        """Llamada no-streaming. Equivalente a Ollama `stream=False`."""
+        client = self._get_client()
+        used_model = model or self.model
+        message_kwargs = {
+            "model": used_model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if "temperature" in kwargs:
+            message_kwargs["temperature"] = float(kwargs["temperature"])
+        resp = await client.messages.create(**message_kwargs)
+        # `resp.content` es lista de bloques; concatenamos los de tipo text.
+        chunks: list[str] = []
+        for block in resp.content:
+            if getattr(block, "type", None) == "text":
+                chunks.append(getattr(block, "text", ""))
+        return "".join(chunks).strip()
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> AsyncIterator[str]:
+        """Stream tokens via `AsyncAnthropic.messages.stream`.
+
+        Yieldea `text` por cada `MessageStreamEvent` de tipo `content_block_delta`
+        con `delta.type == "text_delta"`. El context manager `async with`
+        cierra la conexión correctamente al terminar.
+        """
+        client = self._get_client()
+        used_model = model or self.model
+        stream_kwargs = {
+            "model": used_model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if "temperature" in kwargs:
+            stream_kwargs["temperature"] = float(kwargs["temperature"])
+        async with client.messages.stream(**stream_kwargs) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    yield text
 
 
 # ---------------------------------------------------------------
@@ -294,13 +384,33 @@ _TASK_TO_ENV_VAR: dict[Task, str] = {
 }
 
 
-def model_for_task(task: Task) -> str:
-    """Resuelve el modelo Ollama a usar para un task específico.
+_ANTHROPIC_TASK_TO_ENV_VAR: dict[Task, str] = {
+    "rerank": "ANTHROPIC_MODEL_FAST",
+    "soql": "ANTHROPIC_MODEL_FAST",
+    "dashboard": "ANTHROPIC_MODEL_FAST",
+    "reformulate": "ANTHROPIC_MODEL_FAST",
+    "narrative": "ANTHROPIC_MODEL_NARRATIVE",
+}
+_DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
-    Lee de env var asociada (OLLAMA_MODEL_FAST u OLLAMA_MODEL_NARRATIVE). Si
-    no está seteada, usa el default. Si `OLLAMA_MODEL` (legacy, single-model)
-    está seteado y la específica no, usa el legacy para preservar comportamiento.
+
+def model_for_task(task: Task) -> str:
+    """Resuelve el modelo a usar para un task específico.
+
+    Cuando `LLM_BACKEND=anthropic`:
+      Lee `ANTHROPIC_MODEL_FAST` o `ANTHROPIC_MODEL_NARRATIVE`. Si no, default Haiku.
+
+    Cuando `LLM_BACKEND=ollama` (default):
+      Lee `OLLAMA_MODEL_FAST` o `OLLAMA_MODEL_NARRATIVE`. Si no, cae a `OLLAMA_MODEL`
+      legacy. Si tampoco, defaults Qwen.
     """
+    backend = os.getenv("LLM_BACKEND", "ollama").lower()
+    if backend == "anthropic":
+        env_var = _ANTHROPIC_TASK_TO_ENV_VAR.get(task, "ANTHROPIC_MODEL_FAST")
+        value = os.getenv(env_var) or os.getenv("ANTHROPIC_MODEL")
+        return value or _DEFAULT_ANTHROPIC_MODEL
+
+    # Default: ollama.
     env_var = _TASK_TO_ENV_VAR.get(task, "OLLAMA_MODEL_FAST")
     value = os.getenv(env_var)
     if value:

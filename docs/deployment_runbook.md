@@ -174,12 +174,29 @@ Para URL fija: comprar dominio + migrar a Named Tunnel (no cubierto aquí).
 
 | Servicio | Función | Activado por |
 |---|---|---|
-| `ollama` | Servidor LLM local en `:11434` | Instalador oficial Ollama |
+| `ollama` | Servidor LLM local en `:11434` | Instalador oficial Ollama + `scripts/setup_ollama_concurrent.sh` (drop-in concurrencia) |
 | `dnscrypt-proxy` | Resolver DoH local | `setup_doh_vm.sh` |
 | `docker` | Engine de containers | apt install docker-ce |
 | `datosvivos-tunnel` | Cloudflare Tunnel saliente | `setup_cloudflare_tunnel.sh` |
 
 Ver todos: `systemctl list-units --type=service --state=running`.
+
+### Ollama concurrent (drop-in systemd)
+
+Para soportar 2 queries concurrentes y mantener modelos calientes:
+
+```bash
+sudo bash scripts/setup_ollama_concurrent.sh
+```
+
+Crea `/etc/systemd/system/ollama.service.d/concurrent.conf` con:
+- `OLLAMA_NUM_PARALLEL=2` — 2 queries simultáneas por modelo.
+- `OLLAMA_KEEP_ALIVE=24h` — modelos cargados 24h sin tráfico (sin cold-start).
+- `OLLAMA_MAX_LOADED_MODELS=2` — coder:3b + qwen:7b ambos en RAM.
+
+**RAM extra**: ~10 GB (de 31 GB total VM ANI). Verificado tras deploy: `nvidia-smi` o `free -h`.
+
+**Revertir**: `sudo rm /etc/systemd/system/ollama.service.d/concurrent.conf && sudo systemctl daemon-reload && sudo systemctl restart ollama`.
 
 ## Containers Docker
 
