@@ -34,7 +34,7 @@ from typing import Any
 from ai_engine.geo_attribution import validate_geographic_attribution
 from ai_engine.geo_resolver import GeoContext, GeoResolver, build_comparison_soql
 from ai_engine.intent_classifier import IntentClassifier
-from ai_engine.llm_backend import LLMBackend
+from ai_engine.llm_backend import LLMBackend, model_for_task
 from ai_engine.query_generator import QueryGenerator
 from ai_engine.stats_computer import Statistics, StatsComputer, _normalize_number
 from ai_engine.vector_index import SearchResult, VectorIndex
@@ -545,7 +545,12 @@ class Analyzer:
             "Respuesta (solo el número o NINGUNO):"
         )
         try:
-            raw = await self.llm.generate(prompt, max_tokens=10, temperature=0.0)
+            raw = await self.llm.generate(
+                prompt,
+                max_tokens=10,
+                model=model_for_task("rerank"),
+                temperature=0.0,
+            )
         except Exception as exc:  # noqa: BLE001
             log.warning("Rerank LLM error: %s", exc)
             return hits
@@ -716,7 +721,9 @@ class Analyzer:
             "Indica qué datasets pueden servirle y por qué. NO incluyas cifras "
             "ni estadísticas — solo describe qué contiene cada dataset."
         )
-        raw = await self.llm.generate(prompt, max_tokens=300)
+        raw = await self.llm.generate(
+            prompt, max_tokens=300, model=model_for_task("narrative")
+        )
         return _validate_numbers(raw, None)
 
     def _deterministic_no_matches(self, question: str) -> str:
@@ -757,7 +764,9 @@ class Analyzer:
             "Indica al ciudadano qué información contiene este dataset y "
             "sugiérele consultarlo. NO incluyas cifras ni estadísticas."
         )
-        raw = await self.llm.generate(prompt, max_tokens=250)
+        raw = await self.llm.generate(
+            prompt, max_tokens=250, model=model_for_task("narrative")
+        )
         return _validate_numbers(raw, None)
 
     async def _narrate_with_data(
@@ -824,7 +833,9 @@ class Analyzer:
             f"- Catálogo es colombiano; NO menciones otros países salvo que "
             f"aparezcan literalmente arriba.\n"
         )
-        raw = await self.llm.generate(prompt, max_tokens=400)
+        raw = await self.llm.generate(
+            prompt, max_tokens=400, model=model_for_task("narrative")
+        )
         narrative = _validate_numbers(raw, stats)
 
         # Validación geográfica (PROD_IMPROV #5): si el usuario preguntó por
@@ -871,7 +882,12 @@ class Analyzer:
         # se quedó atascada 67 min en este path. Para beta limitamos a 60 s.
         try:
             response = await asyncio.wait_for(
-                self.llm.generate(prompt, max_tokens=100, temperature=0.3),
+                self.llm.generate(
+                    prompt,
+                    max_tokens=100,
+                    model=model_for_task("reformulate"),
+                    temperature=0.3,
+                ),
                 timeout=60.0,
             )
         except asyncio.TimeoutError:

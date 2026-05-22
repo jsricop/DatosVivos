@@ -8,7 +8,7 @@ Formato: cada ADR documenta **decisión + razón + trade-off** en formato breve.
 
 | ADR | Título | Estado |
 |---|---|---|
-| [001](./001-ollama-local.md) | Ollama local en vez de API externa | Aceptada |
+| [001](./001-ollama-local.md) | Ollama local en vez de API externa | Aceptada (modelo único superado por [ADR-015](./015-tiered-llm-models.md)) |
 | [002](./002-streamlit-vs-react.md) | Streamlit en vez de React | Superada por [ADR-011](./011-migracion-streamlit-a-nextjs.md) |
 | [003](./003-powerbi-analitica.md) | Power BI para analítica, no para interfaz principal | Superada por [ADR-008](./008-scope-sin-powerbi.md) |
 | [004](./004-postgresql-vs-sqlite.md) | PostgreSQL en vez de SQLite | Aceptada (no activada en MVP) |
@@ -22,6 +22,7 @@ Formato: cada ADR documenta **decisión + razón + trade-off** en formato breve.
 | [012](./012-civic-editorial-design-system.md) | Sistema de diseño Civic Editorial (papel & tinta) | Aceptada |
 | [013](./013-fastapi-sse-vs-mcp-http.md) | FastAPI + SSE como contrato Next.js ↔ Python (no MCP HTTP) | Aceptada |
 | [014](./014-reabrir-powerbi-con-login.md) | Reabrir Power BI con login institucional embebido (PostgreSQL activo) | Aceptada |
+| [015](./015-tiered-llm-models.md) | Tiered LLM models por task (Qwen 3B fast + Qwen 7B narrative) | Aceptada |
 
 ## Sobre los estados
 

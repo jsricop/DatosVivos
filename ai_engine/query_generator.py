@@ -192,12 +192,17 @@ class QueryGenerator:
             samples_block=_format_samples(samples),
             question=question,
         )
+        from ai_engine.llm_backend import model_for_task
+
         valid_cols = self._schema_columns(schema)
+        soql_model = model_for_task("soql")
 
         last_raw = ""
         soql = ""
         for attempt in range(self.max_retries + 1):
-            raw = await self.backend.generate(prompt, max_tokens=300, temperature=0.1)
+            raw = await self.backend.generate(
+                prompt, max_tokens=300, model=soql_model, temperature=0.1
+            )
             last_raw = raw
             soql = self._postprocess(raw)
 
