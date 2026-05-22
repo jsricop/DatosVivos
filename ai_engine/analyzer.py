@@ -987,15 +987,29 @@ class Analyzer:
         except Exception as exc:  # noqa: BLE001
             log.warning("Extended LLM stream falló (%s)", exc)
 
+        # IMPORTANTE: estos yields SIEMPRE deben ejecutarse para que el
+        # endpoint pueda salir del loop `async for event in stream` y emitir
+        # el evento `done` SSE. Si los omitimos por excepción/cuelgue, el
+        # cliente queda en estado "Cargando…" indefinidamente.
+
         # Validación post-LLM. Si hay corrección, emitir evento de reemplazo.
-        validated = _validate_numbers(extended_buf, stats)
-        if validated != extended_buf:
-            yield NarrativeStreamEvent(
-                "extended_correction", validated, done=False
-            )
+        try:
+            validated = _validate_numbers(extended_buf, stats)
+            if validated != extended_buf and validated:
+                yield NarrativeStreamEvent(
+                    "extended_correction", validated, done=False
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("_validate_numbers falló (%s); sigo sin corrección", exc)
 
         # Bloque determinista de datos verificados al cierre del extended.
-        verified_block = self._build_verified_block(soql, rows, stats, top, geo_ctx)
+        try:
+            verified_block = self._build_verified_block(
+                soql, rows, stats, top, geo_ctx
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("_build_verified_block falló (%s); sigo sin bloque", exc)
+            verified_block = ""
         yield NarrativeStreamEvent("extended", verified_block, done=True)
 
         # Stats al final (canal lateral, opcional para el caller).

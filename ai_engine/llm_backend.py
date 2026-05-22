@@ -189,9 +189,19 @@ class OllamaBackend:
         Ollama emite NDJSON con `{"response": "<token>", "done": false}` por línea.
         Yieldeamos `response` de cada chunk. Cuando llega `done=true` cerramos.
 
+        **Safety break por cuenta de tokens** (ADR-016 bug fix 2026-05-22):
+        Ollama NO siempre emite `{"done": true}` cuando termina por
+        `num_predict` (max_tokens) en lugar de end-of-sequence natural. El
+        loop quedaba colgado indefinidamente (httpx `aiter_lines` no respeta
+        el read timeout del AsyncClient para lecturas bloqueadas). Solución:
+        contar chunks emitidos y romper cuando alcancemos `max_tokens × 1.2`
+        (margen 20% por aproximación BPE chunk ≈ token).
+
         Si el LLM falla mid-stream, el caller decide qué hacer con lo recibido.
         """
         payload = self._build_payload(prompt, max_tokens, model, stream=True, kwargs=kwargs)
+        safety_limit = max(int(max_tokens * 1.2), max_tokens + 10)
+        chunks_yielded = 0
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream(
                 "POST", f"{self.host}/api/generate", json=payload
@@ -207,7 +217,18 @@ class OllamaBackend:
                     text = chunk.get("response", "")
                     if text:
                         yield text
+                        chunks_yielded += 1
                     if chunk.get("done"):
+                        break
+                    # Safety break: Ollama puede no emitir done:true en
+                    # num_predict — protegemos contra cuelgue indefinido.
+                    if chunks_yielded >= safety_limit:
+                        log.warning(
+                            "Ollama stream alcanzó %d chunks sin done:true "
+                            "(safety limit=%d). Cerrando conexión.",
+                            chunks_yielded,
+                            safety_limit,
+                        )
                         break
 
 
