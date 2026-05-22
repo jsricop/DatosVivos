@@ -1,23 +1,26 @@
 """POST /api/v1/query — orquesta el Analyzer y stream-ea eventos SSE.
 
-Contrato de eventos (ADR-013):
-    intent          {intent, confidence}
-    dataset_hits    {datasets: [...]}
-    soql            {soql}
-    rows            {count, columns, preview}
-    citations       {citations: [...]}
-    narrative_chunk {text}
-    error           {code, message}
-    done            {elapsed_s}
+Contrato de eventos (ADR-013 + ADR-016 narrativa corta+expandible):
+    intent                      {intent, confidence}
+    dataset_hits                {datasets: [...]}
+    soql                        {soql}
+    rows                        {count, columns, preview}
+    citations                   {citations: [...]}
+    narrative_chunk_summary     {text, done}   — corto, prioritario UX (TTFB ≤ 1s)
+    narrative_chunk_extended    {text, done}   — completo, con bloque verificado
+    narrative_correction        {text}         — opcional: validador censuró cifras
+    narrative_chunk             {text}         — DEPRECADO; alias del extended
+    error                       {code, message}
+    done                        {elapsed_s}
+    dashboard_spec              {...}          — post-`done` (ADR-015)
 
 Diseño:
-- El Analyzer corre `analyze()` completo y luego emitimos los eventos en orden.
-  No streameamos token a token todavía (Ollama lo permite, pero el
-  validador anti-alucinación trabaja sobre la narrativa completa). Iteración
-  futura: streaming verdadero cuando reescriba el validador.
-- Si el Analyzer no se puede cargar (sin índice vectorial, sin red para el
-  modelo de embeddings, etc.), emitimos `error` + `done` para que el cliente
-  reciba retroalimentación clara y no se quede esperando.
+- El Analyzer corre `analyze(defer_narrative=True)`: hace retrieval, intent,
+  SoQL, stats con pandas, pero NO genera la narrativa LLM.
+- El endpoint consume `Analyzer._narrate_with_data_stream(...)` para emitir
+  tokens conforme llegan de Ollama (streaming real, TTFB ~300ms).
+- Si Analyzer no se puede cargar (sin índice vectorial, sin red para el
+  modelo de embeddings, etc.), emitimos `error` + `done`.
 """
 
 from __future__ import annotations
@@ -153,7 +156,11 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
         return
 
     try:
-        result: AnalysisResult = await analyzer.analyze(request.q)
+        # defer_narrative=True: el Analyzer NO llama al LLM para narrative.
+        # El endpoint emite tokens via streaming (TTFB ≤ 1s, ADR-016).
+        result: AnalysisResult = await analyzer.analyze(
+            request.q, defer_narrative=True
+        )
     except Exception as exc:  # noqa: BLE001
         log.exception("Analyzer.analyze falló: %s", exc)
         yield _sse(
@@ -241,14 +248,58 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
             },
         )
 
-    # 7) Narrative — en chunks para sensación de streaming.
-    narrative = result.narrative or ""
-    chunk_size = 240
-    for i in range(0, len(narrative), chunk_size):
-        chunk = narrative[i : i + chunk_size]
-        yield _sse("narrative_chunk", {"text": chunk})
-        # Pequeña pausa para evitar buffering agresivo y permitir cancelación.
-        await asyncio.sleep(0)
+    # 7) Narrativa: streaming real (ADR-016).
+    # Si tenemos top_hit + soql + rows: consumir el AsyncIterator del analyzer
+    # y emitir summary (corto, prioritario) + extended (completo, con bloque
+    # verificado al cierre). TTFB ≤ 1s.
+    # Si no (path metadata-only, no_matches, search): `result.narrative` ya
+    # viene armado (path sync) y lo emitimos en chunks legacy.
+    if (
+        result.top_hit is not None
+        and result.soql_executed
+        and result.rows
+        and analyzer is not None
+    ):
+        try:
+            async for event in analyzer._narrate_with_data_stream(
+                request.q,
+                result.top_hit,
+                result.soql_executed,
+                result.rows,
+                geo_ctx=result.geo_context,
+            ):
+                if event.kind == "summary":
+                    yield _sse(
+                        "narrative_chunk_summary",
+                        {"text": event.text, "done": event.done},
+                    )
+                elif event.kind == "extended":
+                    yield _sse(
+                        "narrative_chunk_extended",
+                        {"text": event.text, "done": event.done},
+                    )
+                    # Backward-compat: clientes legacy esperan `narrative_chunk`.
+                    yield _sse("narrative_chunk", {"text": event.text})
+                elif event.kind == "extended_correction":
+                    yield _sse("narrative_correction", {"text": event.text})
+                elif event.kind == "stats":
+                    # Stats finales — los podríamos exponer al cliente como
+                    # un evento adicional si hace falta. Por ahora se ignoran
+                    # acá (ya están en `result.statistics`).
+                    pass
+                await asyncio.sleep(0)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "Narrative streaming falló (%s); cliente verá la respuesta truncada",
+                exc,
+            )
+    else:
+        narrative = result.narrative or ""
+        chunk_size = 240
+        for i in range(0, len(narrative), chunk_size):
+            chunk = narrative[i : i + chunk_size]
+            yield _sse("narrative_chunk", {"text": chunk})
+            await asyncio.sleep(0)
 
     # 8) Emitir `done` ANTES de esperar el dashboard_spec.
     # Decisión (ADR-015 / plan optimización P95): la narrativa ya tiene los
