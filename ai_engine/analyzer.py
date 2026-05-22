@@ -31,6 +31,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from typing import AsyncIterator, Literal
+
 from ai_engine.geo_attribution import validate_geographic_attribution
 from ai_engine.geo_resolver import GeoContext, GeoResolver, build_comparison_soql
 from ai_engine.intent_classifier import IntentClassifier
@@ -43,6 +45,26 @@ from mcp_server.socrata.metadata_client import MetadataClient
 from mcp_server.socrata.soda_client import SodaClient
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class NarrativeStreamEvent:
+    """Evento emitido por `_narrate_with_data_stream`.
+
+    `kind`:
+      - "summary": chunk del resumen (3 frases, sin bloque verificado).
+      - "extended": chunk de la narrativa completa (incluye bloque verificado al cierre).
+      - "extended_correction": versión censurada del extended (si hubo cifras no autorizadas).
+      - "stats": evento final con el Statistics calculado.
+    `done`: True si es el último chunk de ese kind.
+    `stats`: solo para kind="stats".
+    """
+
+    kind: Literal["summary", "extended", "extended_correction", "stats"]
+    text: str
+    done: bool = False
+    stats: Statistics | None = None
+
 
 # Boost aplicado al score del vector index cuando el mismo dataset aparece
 # en la Discovery API. Empírico — ver journey evaluation 2026-05-18.
@@ -149,6 +171,11 @@ class AnalysisResult:
     narrative: str = ""
     statistics: Statistics | None = None
     geo_context: GeoContext | None = None
+    # Top hit del retrieval (SearchResult, con description). Útil para que el
+    # caller invoque `_narrate_with_data_stream` en modo streaming si quiere
+    # emitir tokens al cliente conforme llegan. Si `narrative` está vacío y
+    # `top_hit` no es None, el caller debe invocar el stream para generarla.
+    top_hit: SearchResult | None = None
 
     def __getitem__(self, key: str):
         # Soporte dict-like para tests que usan result["intent"], etc.
@@ -294,8 +321,20 @@ class Analyzer:
         self.enable_soql_execution = enable_soql_execution
         self.enable_geo_context = enable_geo_context
 
-    async def analyze(self, question: str) -> AnalysisResult:
-        """Pipeline completo. Devuelve resultado estructurado."""
+    async def analyze(
+        self, question: str, *, defer_narrative: bool = False
+    ) -> AnalysisResult:
+        """Pipeline completo. Devuelve resultado estructurado.
+
+        `defer_narrative=True`: skip la llamada LLM para narrative cuando el
+        path es `intent ∈ INTENTS_REQUIRING_DATA + SoQL exitoso`. El caller
+        recibe `top_hit` poblado y debe invocar `_narrate_with_data_stream`
+        para emitir tokens al cliente (modo streaming SSE). Útil para
+        `api/routes/query.py` que prefiere TTFB ≤ 1s sobre tener la narrativa
+        ya armada.
+        Otros paths (no_matches, narrate_metadata_only, narrate_search) NO
+        difieren — generan narrativa inline para mantener simplicidad.
+        """
         question = (question or "").strip()
         if not question:
             return AnalysisResult(
@@ -371,6 +410,24 @@ class Analyzer:
             soql_result = await self._execute_soql(question, hits[0], geo_ctx)
             if soql_result is not None:
                 soql, rows = soql_result
+                if defer_narrative:
+                    # Modo streaming: el caller invoca `_narrate_with_data_stream`.
+                    # No llamamos al LLM acá — solo computamos stats con pandas
+                    # (rápido, determinista) para que el caller los emita en el
+                    # bloque verificado.
+                    stats = StatsComputer.compute(rows, soql)
+                    return AnalysisResult(
+                        question=question,
+                        intent=intent,
+                        datasets_used=datasets_used,
+                        dataset_references=dataset_references,
+                        soql_executed=soql,
+                        rows=rows,
+                        narrative="",  # caller emitirá streaming
+                        statistics=stats,
+                        geo_context=geo_ctx,
+                        top_hit=hits[0],
+                    )
                 narrative, stats = await self._narrate_with_data(
                     question, hits[0], soql, rows, geo_ctx=geo_ctx
                 )
@@ -384,6 +441,7 @@ class Analyzer:
                     narrative=narrative,
                     statistics=stats,
                     geo_context=geo_ctx,
+                    top_hit=hits[0],
                 )
             # Si SoQL falló, caemos al placeholder constreñido.
             narrative = await self._narrate_metadata_only(question, intent, hits)
@@ -769,53 +827,44 @@ class Analyzer:
         )
         return _validate_numbers(raw, None)
 
-    async def _narrate_with_data(
-        self,
+    # ------------------------------------------------------------
+    # Narrativa: builders de prompt + bloque verificado
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _build_summary_prompt(
         question: str,
         top: SearchResult,
-        soql: str,
+        stats: Statistics,
         rows: list[dict[str, Any]],
-        geo_ctx: GeoContext | None = None,
-    ) -> tuple[str, Statistics]:
-        """Genera narrativa con cifras 100% verificables.
+    ) -> str:
+        """Prompt CORTO para resumen ejecutivo (≤3 frases, ~120 tokens)."""
+        numbered = "\n".join(
+            f"  ({i + 1}) {line}" for i, line in enumerate(stats.summary_lines)
+        )
+        return (
+            f"Pregunta del ciudadano colombiano: «{question}»\n"
+            f"Dataset: {top.name}\n"
+            f"Cifras autorizadas (calculadas con pandas):\n{numbered}\n\n"
+            f"Responde en español, MÁXIMO 2-3 frases. Cita la cifra principal "
+            f"de la lista. NO inventes números. Sin markdown, sin viñetas."
+        )
 
-        Diseño (post-journey 2026-05-18):
-        - StatsComputer calcula deterministicamente toda cifra a partir de
-          los rows con pandas.
-        - El LLM recibe los rows + la **ficha de cifras autorizadas** y
-          produce una interpretación cualitativa.
-        - `_validate_numbers` censura cualquier cifra que el LLM mencione
-          fuera de la whitelist.
-        - El bloque "📊 Datos verificados" se concatena al final, siempre
-          presente, generado por pandas.
-
-        Returns:
-            (narrative_text, statistics) — el text incluye el bloque de
-            datos verificados; statistics queda disponible para la UI.
-        """
+    @staticmethod
+    def _build_extended_prompt(
+        question: str,
+        top: SearchResult,
+        stats: Statistics,
+        rows: list[dict[str, Any]],
+    ) -> str:
+        """Prompt EXTENDIDO (narrativa interpretativa, 3-5 frases, ~400 tokens)."""
         entity = top.entity or "entidad no declarada"
-        stats = StatsComputer.compute(rows, soql)
-
-        # 0 filas: no llamamos al LLM. Respuesta determinista.
-        if stats.total_rows == 0:
-            text = (
-                f"La consulta al dataset {top.name} ({top.id}) no devolvió "
-                f"filas. Esto suele significar que el filtro fue demasiado "
-                f"estricto o que el dataset no contiene registros que "
-                f"coincidan con tu pregunta. Entidad publicadora: {entity}.\n\n"
-                f"📊 **Datos verificados**\n"
-                f"- {stats.summary_lines[0]}\n"
-                f"- SoQL ejecutado: `{soql}`"
-            )
-            return text, stats
-
         rows_preview = rows[:20]
         rows_text = "\n".join(f"  - {r}" for r in rows_preview)
         numbered_summary = "\n".join(
             f"  ({i + 1}) {line}" for i, line in enumerate(stats.summary_lines)
         )
-
-        prompt = (
+        return (
             f"Pregunta del ciudadano colombiano: «{question}»\n"
             f"Dataset: {top.name} ({top.id}) — entidad publicadora: {entity}\n"
             f"Descripción del dataset: {(top.description or '')[:300]}\n\n"
@@ -833,31 +882,151 @@ class Analyzer:
             f"- Catálogo es colombiano; NO menciones otros países salvo que "
             f"aparezcan literalmente arriba.\n"
         )
-        raw = await self.llm.generate(
-            prompt, max_tokens=400, model=model_for_task("narrative")
-        )
-        narrative = _validate_numbers(raw, stats)
 
-        # Validación geográfica (PROD_IMPROV #5): si el usuario preguntó por
-        # un territorio específico y los rows NO incluyen filas de ese
-        # territorio, agregar advertencia para evitar atribución incorrecta.
+    def _build_verified_block(
+        self,
+        soql: str,
+        rows: list[dict[str, Any]],
+        stats: Statistics,
+        top: SearchResult,
+        geo_ctx: GeoContext | None,
+    ) -> str:
+        """Bloque determinista de "Datos verificados" que va al final del extended.
+
+        Pandas-driven: cifras de stats + SoQL ejecutado + entidad publicadora +
+        opcional advertencia de atribución geográfica (PROD_IMPROV #5).
+        """
+        entity = top.entity or "entidad no declarada"
         geo_warning_line = ""
         try:
             attr = validate_geographic_attribution(rows, geo_ctx)
             if not attr.matches and attr.warning:
                 geo_warning_line = f"\n- {attr.warning}"
         except Exception as exc:  # noqa: BLE001
-            log.warning("validate_geographic_attribution falló (%s); sigo sin warning", exc)
-
-        # Bloque determinista al final — siempre visible, intocable.
-        verified_block = (
+            log.warning(
+                "validate_geographic_attribution falló (%s); sigo sin warning", exc
+            )
+        return (
             "\n\n📊 **Datos verificados** (calculados con pandas sobre los rows reales):\n"
             + "\n".join(f"- {line}" for line in stats.summary_lines)
             + f"\n- SoQL ejecutado: `{soql}`"
             + f"\n- Entidad publicadora: {entity}"
             + geo_warning_line
         )
-        return narrative + verified_block, stats
+
+    async def _narrate_with_data_stream(
+        self,
+        question: str,
+        top: SearchResult,
+        soql: str,
+        rows: list[dict[str, Any]],
+        geo_ctx: GeoContext | None = None,
+    ) -> AsyncIterator["NarrativeStreamEvent"]:
+        """Versión streaming de la narrativa: emite eventos summary + extended.
+
+        Diseño (TTFB ≤ 1s, plan 2026-05-22):
+        - 1ª llamada LLM con prompt corto (max_tokens=120) → emite tokens de
+          summary conforme llegan.
+        - 2ª llamada LLM con prompt completo (max_tokens=400) → emite tokens
+          de extended conforme llegan.
+        - Al final del extended, emite el bloque "Datos verificados"
+          determinista (pandas).
+        - Si `_validate_numbers` censura cifras del extended completo, emite
+          un evento `extended_correction` con la versión censurada.
+        - El último evento es `stats` con el Statistics calculado (para que el
+          caller pueda almacenarlo aparte si necesita).
+
+        Caso 0 rows: emite respuesta determinista en summary, omite extended.
+        """
+        entity = top.entity or "entidad no declarada"
+        stats = StatsComputer.compute(rows, soql)
+
+        if stats.total_rows == 0:
+            text = (
+                f"La consulta al dataset {top.name} ({top.id}) no devolvió "
+                f"filas. Esto suele significar que el filtro fue demasiado "
+                f"estricto o que el dataset no contiene registros que "
+                f"coincidan con tu pregunta. Entidad publicadora: {entity}."
+            )
+            yield NarrativeStreamEvent("summary", text, done=True)
+            verified_zero = (
+                "\n\n📊 **Datos verificados**\n"
+                f"- {stats.summary_lines[0]}\n"
+                f"- SoQL ejecutado: `{soql}`"
+            )
+            yield NarrativeStreamEvent("extended", verified_zero, done=True)
+            yield NarrativeStreamEvent("stats", "", done=True, stats=stats)
+            return
+
+        # Summary streaming.
+        summary_prompt = self._build_summary_prompt(question, top, stats, rows)
+        try:
+            stream = self.llm.generate_stream(
+                summary_prompt, max_tokens=120, model=model_for_task("narrative")
+            )
+            async for tok in stream:
+                yield NarrativeStreamEvent("summary", tok, done=False)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Summary LLM stream falló (%s)", exc)
+        yield NarrativeStreamEvent("summary", "", done=True)
+
+        # Extended streaming.
+        extended_prompt = self._build_extended_prompt(question, top, stats, rows)
+        extended_buf = ""
+        try:
+            stream = self.llm.generate_stream(
+                extended_prompt, max_tokens=400, model=model_for_task("narrative")
+            )
+            async for tok in stream:
+                extended_buf += tok
+                yield NarrativeStreamEvent("extended", tok, done=False)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Extended LLM stream falló (%s)", exc)
+
+        # Validación post-LLM. Si hay corrección, emitir evento de reemplazo.
+        validated = _validate_numbers(extended_buf, stats)
+        if validated != extended_buf:
+            yield NarrativeStreamEvent(
+                "extended_correction", validated, done=False
+            )
+
+        # Bloque determinista de datos verificados al cierre del extended.
+        verified_block = self._build_verified_block(soql, rows, stats, top, geo_ctx)
+        yield NarrativeStreamEvent("extended", verified_block, done=True)
+
+        # Stats al final (canal lateral, opcional para el caller).
+        yield NarrativeStreamEvent("stats", "", done=True, stats=stats)
+
+    async def _narrate_with_data(
+        self,
+        question: str,
+        top: SearchResult,
+        soql: str,
+        rows: list[dict[str, Any]],
+        geo_ctx: GeoContext | None = None,
+    ) -> tuple[str, Statistics]:
+        """Versión sync (legacy compat): consume el stream y acumula extended.
+
+        Mantenida para tests y callers que esperan `(narrative_text, stats)`
+        en lugar de stream. Internamente usa `_narrate_with_data_stream`.
+        El `summary` se descarta (los callers legacy esperaban solo el extended
+        con el bloque verificado).
+        """
+        extended_buf = ""
+        correction_buf: str | None = None
+        stats: Statistics | None = None
+        async for event in self._narrate_with_data_stream(
+            question, top, soql, rows, geo_ctx
+        ):
+            if event.kind == "extended":
+                extended_buf += event.text
+            elif event.kind == "extended_correction":
+                correction_buf = event.text
+            elif event.kind == "stats":
+                stats = event.stats
+        narrative = correction_buf if correction_buf is not None else extended_buf
+        assert stats is not None  # _narrate_with_data_stream siempre emite stats
+        return narrative, stats
 
     # ------------------------------------------------------------
     # Tier 3 fallback (reformulación)

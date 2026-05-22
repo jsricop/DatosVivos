@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Citation } from "@/components/Citation";
 import { DashboardRenderer } from "@/components/dashboard/DashboardRenderer";
 import { DatasetCitation } from "@/components/DatasetCitation";
 import { DataTable } from "@/components/DataTable";
 import { DisclaimerBeta } from "@/components/DisclaimerBeta";
 import { Icon } from "@/components/Icon";
+import { NarrativeBlock } from "@/components/NarrativeBlock";
 import { SpeechOutput } from "@/components/SpeechOutput";
 import {
   type DashboardSpec,
@@ -28,7 +28,17 @@ type State = {
   intent?: string;
   intentConfidence?: number;
   datasets: Array<{ id: string; name: string; entity?: string | null; score: number }>;
+  /** Resumen corto (2-3 frases, llega primero, TTFB ≤ 1s). */
+  narrativeSummary: string;
+  /** Narrativa extendida (con bloque verificado al cierre). */
   narrative: string;
+  /** True cuando llegó el evento `narrative_chunk_summary` con `done=true`. */
+  summaryComplete: boolean;
+  /** True cuando llegó el evento `narrative_chunk_extended` con `done=true`. */
+  extendedComplete: boolean;
+  /** True si el backend emitió al menos un `narrative_chunk_extended`. En ese
+   *  caso ignoramos el legacy `narrative_chunk` para evitar duplicación. */
+  hasExtendedEvents: boolean;
   rows: Row[];
   rowCount: number;
   columns: string[];
@@ -56,7 +66,11 @@ const INTENT_LABEL: Record<string, string> = {
 export function ResultStream({ question, filters }: ResultStreamProps) {
   const [state, setState] = useState<State>({
     datasets: [],
+    narrativeSummary: "",
     narrative: "",
+    summaryComplete: false,
+    extendedComplete: false,
+    hasExtendedEvents: false,
     rows: [],
     rowCount: 0,
     columns: [],
@@ -75,7 +89,11 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
 
     setState({
       datasets: [],
+      narrativeSummary: "",
       narrative: "",
+      summaryComplete: false,
+      extendedComplete: false,
+      hasExtendedEvents: false,
       rows: [],
       rowCount: 0,
       columns: [],
@@ -180,13 +198,19 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
         </p>
       ) : null}
 
-      {state.narrative ? (
+      {state.narrativeSummary || state.narrative ? (
         <section className="measure">
-          <div className="font-serif text-body-lg leading-[1.7]">
-            {renderNarrative(state.narrative, state.citations.length)}
-          </div>
+          <NarrativeBlock
+            summary={state.narrativeSummary || state.narrative}
+            extended={state.narrative}
+            summaryComplete={state.summaryComplete}
+            extendedComplete={state.extendedComplete}
+            citationCount={state.citations.length}
+          />
           <div className="mt-3">
-            <SpeechOutput text={state.narrative} />
+            <SpeechOutput
+              text={state.narrative || state.narrativeSummary}
+            />
           </div>
         </section>
       ) : null}
@@ -279,7 +303,33 @@ function applyEvent(
       case "soql":
         return { ...s, soql: (payload.soql as string) ?? "" };
       case "narrative_chunk":
+        // Legacy event (ADR-013). Si el backend ya emitió narrative_chunk_extended
+        // ignoramos esto para evitar duplicación.
+        if (s.hasExtendedEvents) return s;
         return { ...s, narrative: s.narrative + ((payload.text as string) ?? "") };
+      case "narrative_chunk_summary": {
+        const text = (payload.text as string) ?? "";
+        const done = Boolean(payload.done);
+        return {
+          ...s,
+          narrativeSummary: s.narrativeSummary + text,
+          summaryComplete: s.summaryComplete || done,
+        };
+      }
+      case "narrative_chunk_extended": {
+        const text = (payload.text as string) ?? "";
+        const done = Boolean(payload.done);
+        return {
+          ...s,
+          narrative: s.narrative + text,
+          extendedComplete: s.extendedComplete || done,
+          hasExtendedEvents: true,
+        };
+      }
+      case "narrative_correction": {
+        // Reemplazo total del extended (el validador censuró cifras).
+        return { ...s, narrative: (payload.text as string) ?? s.narrative };
+      }
       case "rows":
         return {
           ...s,
@@ -311,24 +361,3 @@ function applyEvent(
   });
 }
 
-const CITATION_REGEX = /\[(\d+)\]/g;
-
-function renderNarrative(text: string, maxCitations: number) {
-  const parts: Array<string | { citationIndex: number }> = [];
-  let cursor = 0;
-  for (const match of text.matchAll(CITATION_REGEX)) {
-    const start = match.index ?? 0;
-    if (start > cursor) parts.push(text.slice(cursor, start));
-    const idx = Number(match[1]);
-    if (idx > 0 && idx <= maxCitations) {
-      parts.push({ citationIndex: idx });
-    } else {
-      parts.push(match[0] ?? "");
-    }
-    cursor = start + (match[0]?.length ?? 0);
-  }
-  if (cursor < text.length) parts.push(text.slice(cursor));
-  return parts.map((p, i) =>
-    typeof p === "string" ? <span key={i}>{p}</span> : <Citation key={i} index={p.citationIndex} />,
-  );
-}

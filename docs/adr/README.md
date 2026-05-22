@@ -23,6 +23,7 @@ Formato: cada ADR documenta **decisión + razón + trade-off** en formato breve.
 | [013](./013-fastapi-sse-vs-mcp-http.md) | FastAPI + SSE como contrato Next.js ↔ Python (no MCP HTTP) | Aceptada |
 | [014](./014-reabrir-powerbi-con-login.md) | Reabrir Power BI con login institucional embebido (PostgreSQL activo) | Aceptada |
 | [015](./015-tiered-llm-models.md) | Tiered LLM models por task (Qwen 3B fast + Qwen 7B narrative) | Aceptada |
+| [016](./016-narrative-corta-expandible.md) | Narrativa corta+expandible con streaming real (TTFB ≤ 1s) | Aceptada |
 
 ## Sobre los estados
 
