@@ -971,11 +971,15 @@ class Analyzer:
         yield NarrativeStreamEvent("summary", "", done=True)
 
         # Extended streaming.
+        # max_tokens=220 (era 400): trade-off entre prosa interpretativa y
+        # latencia. Con LLM 7B a ~22 tok/s, 220 tokens = ~10s. El bloque
+        # "Datos verificados" determinista al cierre agrega la trazabilidad
+        # completa sin pasar por el LLM.
         extended_prompt = self._build_extended_prompt(question, top, stats, rows)
         extended_buf = ""
         try:
             stream = self.llm.generate_stream(
-                extended_prompt, max_tokens=400, model=model_for_task("narrative")
+                extended_prompt, max_tokens=220, model=model_for_task("narrative")
             )
             async for tok in stream:
                 extended_buf += tok
