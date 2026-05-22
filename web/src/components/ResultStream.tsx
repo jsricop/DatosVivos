@@ -87,7 +87,11 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
 
     (async () => {
       try {
-        const res = await fetch("/api/proxy/query", {
+        // Usamos el route handler /api/query (Node runtime) en lugar del
+        // rewrite /api/proxy/* que evaluaba API_BASE_URL en build time
+        // (quedaba hardcoded a localhost:8000 dentro del container web,
+        // donde no hay nadie escuchando en ese puerto).
+        const res = await fetch("/api/query", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
