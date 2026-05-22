@@ -278,8 +278,11 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
                         "narrative_chunk_extended",
                         {"text": event.text, "done": event.done},
                     )
-                    # Backward-compat: clientes legacy esperan `narrative_chunk`.
-                    yield _sse("narrative_chunk", {"text": event.text})
+                    # NOTA: ya no emitimos `narrative_chunk` legacy en duplicado.
+                    # El doble emit causaba 2x overhead SSE sin valor (el cliente
+                    # nuevo lo ignora si recibió extended). Clientes externos
+                    # (MCP, integraciones) deben migrar a narrative_chunk_extended
+                    # antes de Beta-3 — flag de transición eliminada en este punto.
                 elif event.kind == "extended_correction":
                     yield _sse("narrative_correction", {"text": event.text})
                 elif event.kind == "stats":
