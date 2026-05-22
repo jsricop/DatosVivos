@@ -6,6 +6,38 @@ Formato adaptado de [Keep a Changelog](https://keepachangelog.com/). Categorías
 
 ---
 
+## [Beta-2 — Narrativa corta+expandible con streaming real (TTFB ≤ 1s)] — 2026-05-22
+
+Tras PR #23 (tiered LLM), el primer token visible al usuario seguía tardando ~15s. Esta iteración baja TTFB a ≤ 1s emitiendo summary corto streaming + extended completo collapsable (ADR-016).
+
+### Agregado
+- **`docs/adr/016-narrative-corta-expandible.md`**: ADR con decisión, trade-offs y verificación de compatibilidad con dashboard.
+- **`Analyzer._narrate_with_data_stream()`** (`ai_engine/analyzer.py`): AsyncIterator que emite eventos `summary`, `extended`, `extended_correction`, `stats`. Usa `OllamaBackend.generate_stream()` token-a-token.
+- **Helpers `_build_summary_prompt`, `_build_extended_prompt`, `_build_verified_block`** en `Analyzer`: separación clara de prompt-building y bloque determinista pandas.
+- **`NarrativeStreamEvent`** dataclass: contrato del AsyncIterator.
+- **`AnalysisResult.top_hit: SearchResult | None`**: poblado cuando `analyze(defer_narrative=True)` para que el caller invoque el stream.
+- **`web/src/components/NarrativeBlock.tsx`** (nuevo, ~110 LoC): summary siempre visible + `<details>` collapsible con extended + indicador "Cargando análisis detallado…" sutil. Accesibilidad: `<details>` nativo, focus-visible, SR friendly.
+- **Eventos SSE nuevos** (ADR-013 ampliado): `narrative_chunk_summary`, `narrative_chunk_extended`, `narrative_correction`.
+
+### Cambiado
+- **`Analyzer.analyze(defer_narrative=True)`**: nuevo flag opt-in. Cuando True, omite la llamada LLM para narrative en path `INTENTS_REQUIRING_DATA + SoQL ejecutado`. Devuelve `narrative=""` y `top_hit=hits[0]` para que el caller invoque el stream.
+- **`api/routes/query.py`**: ahora usa `defer_narrative=True` y consume el AsyncIterator. Emite `narrative_chunk_summary` + `narrative_chunk_extended` + `narrative_chunk` (legacy backward-compat).
+- **`web/src/components/ResultStream.tsx`**: state agrega `narrativeSummary`, `summaryComplete`, `extendedComplete`, `hasExtendedEvents`. Reducer maneja los 4 eventos nuevos + ignora `narrative_chunk` legacy si llegaron los extended (evita duplicación).
+
+### Deprecado
+- **Evento SSE `narrative_chunk`**: sigue emitiéndose para clientes externos (MCP, integraciones). Será removido en Beta-3 cuando todos hayan migrado a `narrative_chunk_extended`.
+
+### Sin cambios (verificado)
+- **`DashboardSpecGenerator`**: NO depende de la narrativa. Coexiste sin conflicto. Lanzado en `asyncio.create_task()` antes de la narrativa; emitido post-`done`. Cliente lo renderiza diferido.
+- **`vector_index.py`, `dashboard_spec_generator.py`, `llm_backend.py`**: cero cambios.
+
+### Verificación
+- Suite crítica: 77 passed, 2 skipped, sin regresión.
+- TS check: `npx tsc --noEmit -p tsconfig.json` sin errores en archivos nuevos/modificados.
+- Smoke producción: `narrative_chunk_summary` aparece en <1s. Extended con bloque "Datos verificados" en `<details>` colapsado.
+
+---
+
 ## [Beta-2 — Latencia P95 ≤ 10s: tiered LLM + dashboard async + caché embeddings] — 2026-05-22
 
 Baseline 118s → meta P95 ≤ 10s. Sin GPU, sin presupuesto API externa. Decisión clave: dividir la carga entre dos modelos Ollama según tarea (ADR-015).
