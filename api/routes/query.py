@@ -250,25 +250,15 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
         # Pequeña pausa para evitar buffering agresivo y permitir cancelación.
         await asyncio.sleep(0)
 
-    # 8) Esperar dashboard_spec si quedó pendiente (con timeout duro).
-    # 90s para producción con LLM 14B compartido con la narrativa: ambos tasks
-    # compiten por el mismo backend Ollama secuencialmente y el spec
-    # generation puede arrancar realmente solo tras emitir narrative_chunks.
-    if dashboard_task is not None:
-        try:
-            spec = await asyncio.wait_for(dashboard_task, timeout=90.0)
-            if spec is not None:
-                yield _sse("dashboard_spec", spec.model_dump(mode="json"))
-            else:
-                log.info("DashboardSpec generator devolvió None (válido para datasets escalares)")
-        except asyncio.TimeoutError:
-            log.warning("DashboardSpec timeout (>90s) — sigo sin dashboard")
-        except Exception as exc:  # noqa: BLE001
-            log.warning("DashboardSpec falló: %s", exc, exc_info=True)
-
+    # 8) Emitir `done` ANTES de esperar el dashboard_spec.
+    # Decisión (ADR-015 / plan optimización P95): la narrativa ya tiene los
+    # datos verificables; el dashboard es valor agregado pero no debe bloquear
+    # el cierre del SSE. El cliente Next.js (ResultStream.tsx) lee hasta que
+    # el reader emita done — sigue procesando dashboard_spec post-done sin
+    # cerrar el stream prematuramente.
     elapsed = round(time.perf_counter() - started, 2)
 
-    # 7) Telemetría best-effort.
+    # Telemetría best-effort antes del done.
     try:
         await asyncio.to_thread(
             log_query,
@@ -285,6 +275,22 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
         pass
 
     yield _sse("done", {"elapsed_s": elapsed})
+
+    # 9) Después del done: esperar dashboard_spec con timeout más generoso.
+    # Si el cliente cerró la conexión, FastAPI cancela el generador acá.
+    if dashboard_task is not None:
+        try:
+            spec = await asyncio.wait_for(dashboard_task, timeout=60.0)
+            if spec is not None:
+                yield _sse("dashboard_spec", spec.model_dump(mode="json"))
+            else:
+                log.info(
+                    "DashboardSpec generator devolvió None (válido para datasets escalares)"
+                )
+        except asyncio.TimeoutError:
+            log.warning("DashboardSpec timeout (>60s post-done) — sigo sin dashboard")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("DashboardSpec falló: %s", exc, exc_info=True)
 
 
 # Necesario para que tests puedan importar sin ejecutar; el `asdict` import

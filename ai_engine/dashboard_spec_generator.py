@@ -102,8 +102,14 @@ class DashboardSpecGenerator:
     # --- internal helpers ---
 
     async def _ask_and_parse(self, prompt: str) -> DashboardSpec | None:
+        from ai_engine.llm_backend import model_for_task
         try:
-            raw = await self.llm.generate(prompt, max_tokens=900, temperature=0)
+            raw = await self.llm.generate(
+                prompt,
+                max_tokens=900,
+                model=model_for_task("dashboard"),
+                temperature=0,
+            )
         except Exception as exc:  # noqa: BLE001
             log.warning("DashboardSpec LLM call falló: %s", exc)
             return None
