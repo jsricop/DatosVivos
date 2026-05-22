@@ -1,6 +1,6 @@
 # ADR-001: Ollama local en vez de API externa
 
-**Estado:** Aceptada
+**Estado:** Aceptada (selección de modelo única superada por [ADR-015](./015-tiered-llm-models.md))
 **Fecha:** Sprint 1
 
 ## Decisión

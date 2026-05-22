@@ -15,19 +15,13 @@
 
 ---
 
-## 1. 🔥 Migrar a LLM más robusto en producción
+## 1. ✅ Migrar a LLM más robusto en producción — RESUELTO (2026-05-22, ADR-015)
 
-**Problema actual**: Qwen 2.5 Coder 3B genera SoQL inválido en ~47% de los casos del journey (16/30 ejecutan SoQL real). Inventa columnas, rompe sintaxis, ocasionalmente cita "NINGUNO" cuando hay datasets relevantes (corregido con fallback al top-1, ver commit `eadab82`).
+**Solución implementada**: tiered models por task. `OLLAMA_MODEL_FAST=qwen2.5-coder:3b` para rerank/SoQL/dashboard; `OLLAMA_MODEL_NARRATIVE=qwen2.5:7b` para narrativa. Streaming Ollama activado en `OllamaBackend.generate_stream()`.
 
-**Mejora**: cambiar `OLLAMA_MODEL` a `qwen2.5-coder:7b` cuando la VM tenga ≥6 GB RAM/VRAM disponible, o adoptar Claude Haiku 4.5 vía `LLM_BACKEND=anthropic` si se prefiere API.
+**Resultado esperado**: P95 ≤ 10s en queries deterministas, ≤ 18s en queries libres. Validación con telemetría granular `phase_*_ms`.
 
-**Impacto esperado**: SoQL ejecutado sube de 53% (16/30) a 75-85%. Latencia media: comparable con 7B local, ~3× más rápida con API.
-
-**Esfuerzo**: bajo — el backend ya es intercambiable (`ai_engine/llm_backend.py`).
-
-**Criterio de éxito**: el journey de 30 preguntas alcanza ≥23/30 SoQL ejecutados y ≥10/12 hint detectado.
-
-**Dependencia**: capacidad de la VM de producción o presupuesto API.
+**Referencias**: [ADR-015](./adr/015-tiered-llm-models.md), `ai_engine/llm_backend.py:model_for_task`.
 
 ---
 

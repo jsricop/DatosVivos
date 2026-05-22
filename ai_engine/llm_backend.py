@@ -1,6 +1,10 @@
 """Abstracción de backend LLM intercambiable: Ollama, OpenAI, Anthropic, Mock.
 
 La selección del backend se hace vía `LLM_BACKEND` env var (MAIN.md ADR-001).
+La selección del MODELO por task se hace vía `get_backend_for(task)` (ADR-015) —
+tiered: modelo rápido (3B) para rerank/SoQL/dashboard, modelo medio (7B) para
+narrative.
+
 Todos exponen `async generate(prompt, **kwargs) -> str` para que el resto del
 motor de IA sea agnóstico del proveedor.
 
@@ -11,9 +15,10 @@ las latencias/no-determinismo del LLM.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
-from typing import Protocol
+from typing import AsyncIterator, Literal, Protocol
 
 import httpx
 
@@ -22,11 +27,16 @@ log = logging.getLogger(__name__)
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:3b"
 
+# Task labels para tiered routing (ADR-015).
+Task = Literal["rerank", "soql", "narrative", "dashboard", "reformulate"]
+
 
 class LLMBackend(Protocol):
     """Contrato común a todos los backends LLM."""
 
-    async def generate(self, prompt: str, max_tokens: int = 500, **kwargs) -> str: ...
+    async def generate(
+        self, prompt: str, max_tokens: int = 500, *, model: str | None = None, **kwargs
+    ) -> str: ...
 
 
 class MockBackend:
@@ -38,9 +48,6 @@ class MockBackend:
         await mock.generate("¿municipios de Antioquia?")  # → "125"
     """
 
-    # Spec demo: se devuelve cuando el prompt es el del DashboardSpecGenerator.
-    # Útil para verificar end-to-end el journey SSE sin Ollama corriendo.
-    # No interfiere con tests unitarios que llaman `add_response` antes.
     _DASHBOARD_DEMO_SPEC: str = (
         '{"version":"1","title":"Vista de los datos","subtitle":"Resumen automático",'
         '"layout":"grid","blocks":['
@@ -51,22 +58,23 @@ class MockBackend:
     def __init__(self, default_response: str = "MOCK_RESPONSE") -> None:
         self.default_response = default_response
         self._responses: list[tuple[str, str]] = []
-        self.calls: list[str] = []  # historial de prompts para introspección en tests
+        self.calls: list[str] = []
 
     def add_response(self, *, prompt_contains: str, response: str) -> None:
-        """Registra una respuesta que se dispara si `prompt_contains in prompt`."""
         self._responses.append((prompt_contains, response))
 
-    async def generate(self, prompt: str, max_tokens: int = 500, **kwargs) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> str:
         self.calls.append(prompt)
         for key, value in self._responses:
             if key.lower() in prompt.lower():
                 return value
-        # Heurística de comodidad opt-in (env `DASHBOARD_DEMO_FALLBACK=1`):
-        # si el prompt es el del DashboardSpecGenerator y no hubo match
-        # pre-grabado, devolver un spec demo con las primeras columnas del
-        # prompt. Permite verificar el journey SSE → DashboardRenderer sin
-        # Ollama. NUNCA activo durante pytest (los tests son congelados).
         if (
             os.getenv("DASHBOARD_DEMO_FALLBACK") == "1"
             and "diseñador de dashboards" in prompt.lower()
@@ -74,15 +82,24 @@ class MockBackend:
             return self._build_demo_spec(prompt)
         return self.default_response
 
+    async def generate_stream(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> AsyncIterator[str]:
+        """Para tests: emite la respuesta completa en un único chunk."""
+        text = await self.generate(prompt, max_tokens, model=model, **kwargs)
+        yield text
+
     @classmethod
     def _build_demo_spec(cls, prompt: str) -> str:
-        """Detecta las primeras columnas del prompt y construye un spec demo."""
-        # Las columnas en el prompt aparecen como `  - <name>` (PLAN_DASHBOARD prompt).
         cols: list[str] = []
         for line in prompt.splitlines():
             stripped = line.strip()
             if stripped.startswith("- ") and len(cols) < 8:
-                # Tomar solo el nombre antes de cualquier paréntesis o coma.
                 name = stripped[2:].split("(")[0].split(",")[0].strip()
                 if name and name not in cols:
                     cols.append(name)
@@ -100,22 +117,25 @@ class MockBackend:
 class OllamaBackend:
     """Cliente HTTP al daemon local de Ollama (`/api/generate`).
 
-    No requiere Ollama corriendo para instanciar (`__init__` es liviano).
-    Sólo el `generate()` o `health_check()` hace la llamada real.
+    Soporta override de modelo por llamada vía `model=` kwarg — útil para
+    tiered routing (ADR-015): rerank/SoQL/dashboard al modelo rápido (3B),
+    narrative al modelo medio (7B).
+
+    `generate()` espera la respuesta completa (`stream=False`).
+    `generate_stream()` emite tokens conforme llegan de Ollama (`stream=True`).
     """
 
     def __init__(
         self,
         host: str | None = None,
         model: str | None = None,
-        timeout: float = 120.0,  # 60s era ajustado bajo carga concurrente (CPU/Metal contention)
+        timeout: float = 120.0,
     ) -> None:
         self.host = (host or os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST)).rstrip("/")
         self.model = model or os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
         self.timeout = timeout
 
     async def health_check(self) -> bool:
-        """True si el daemon responde en `/api/tags`."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.get(f"{self.host}/api/tags")
@@ -123,41 +143,129 @@ class OllamaBackend:
         except httpx.RequestError:
             return False
 
-    async def generate(self, prompt: str, max_tokens: int = 500, **kwargs) -> str:
+    def _build_payload(
+        self,
+        prompt: str,
+        max_tokens: int,
+        model: str | None,
+        stream: bool,
+        kwargs: dict,
+    ) -> dict:
         payload: dict = {
-            "model": self.model,
+            "model": model or self.model,
             "prompt": prompt,
-            "stream": False,
+            "stream": stream,
             "options": {"num_predict": max_tokens},
         }
-        # Permitir override de opciones desde el caller (temperature, top_p, etc.)
         if "temperature" in kwargs:
             payload["options"]["temperature"] = float(kwargs["temperature"])
+        return payload
 
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> str:
+        payload = self._build_payload(prompt, max_tokens, model, stream=False, kwargs=kwargs)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             r = await client.post(f"{self.host}/api/generate", json=payload)
             r.raise_for_status()
             data = r.json()
             return data.get("response", "").strip()
 
+    async def generate_stream(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> AsyncIterator[str]:
+        """Stream tokens de Ollama conforme se generan.
+
+        Ollama emite NDJSON con `{"response": "<token>", "done": false}` por línea.
+        Yieldeamos `response` de cada chunk. Cuando llega `done=true` cerramos.
+
+        Si el LLM falla mid-stream, el caller decide qué hacer con lo recibido.
+        """
+        payload = self._build_payload(prompt, max_tokens, model, stream=True, kwargs=kwargs)
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST", f"{self.host}/api/generate", json=payload
+            ) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    text = chunk.get("response", "")
+                    if text:
+                        yield text
+                    if chunk.get("done"):
+                        break
+
 
 class AnthropicBackend:
-    """Placeholder para Anthropic API (LLM_BACKEND=anthropic).
-
-    Implementación completa pendiente — para Sprint 3 sólo cubrimos
-    Ollama (local) y Mock (tests). Documentado en MAIN.md ADR-001 que
-    el backend es intercambiable; este placeholder mantiene la
-    consistencia de la factory.
-    """
+    """Placeholder para Anthropic API. No implementado en Beta-2."""
 
     def __init__(self, model: str = "claude-haiku-4-5-20251001") -> None:
         self.model = model
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
 
-    async def generate(self, prompt: str, max_tokens: int = 500, **kwargs) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        *,
+        model: str | None = None,
+        **kwargs,
+    ) -> str:
         raise NotImplementedError(
-            "AnthropicBackend pendiente. Para Sprint 3 usar LLM_BACKEND=ollama o mock."
+            "AnthropicBackend pendiente. Para Beta-2 usar LLM_BACKEND=ollama o mock."
         )
+
+
+# ---------------------------------------------------------------
+# Tiered model routing (ADR-015)
+# ---------------------------------------------------------------
+
+# Default fallback si las env vars no están seteadas. Compatible con deploys
+# previos a ADR-015 que solo definían `OLLAMA_MODEL`.
+_DEFAULT_FAST_MODEL = "qwen2.5-coder:3b"
+_DEFAULT_NARRATIVE_MODEL = "qwen2.5:7b"
+
+_TASK_TO_ENV_VAR: dict[Task, str] = {
+    "rerank": "OLLAMA_MODEL_FAST",
+    "soql": "OLLAMA_MODEL_FAST",
+    "dashboard": "OLLAMA_MODEL_FAST",
+    "reformulate": "OLLAMA_MODEL_FAST",
+    "narrative": "OLLAMA_MODEL_NARRATIVE",
+}
+
+
+def model_for_task(task: Task) -> str:
+    """Resuelve el modelo Ollama a usar para un task específico.
+
+    Lee de env var asociada (OLLAMA_MODEL_FAST u OLLAMA_MODEL_NARRATIVE). Si
+    no está seteada, usa el default. Si `OLLAMA_MODEL` (legacy, single-model)
+    está seteado y la específica no, usa el legacy para preservar comportamiento.
+    """
+    env_var = _TASK_TO_ENV_VAR.get(task, "OLLAMA_MODEL_FAST")
+    value = os.getenv(env_var)
+    if value:
+        return value
+    legacy = os.getenv("OLLAMA_MODEL")
+    if legacy:
+        return legacy
+    return (
+        _DEFAULT_NARRATIVE_MODEL if task == "narrative" else _DEFAULT_FAST_MODEL
+    )
 
 
 def get_backend() -> LLMBackend:

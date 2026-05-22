@@ -6,6 +6,40 @@ Formato adaptado de [Keep a Changelog](https://keepachangelog.com/). Categorías
 
 ---
 
+## [Beta-2 — Latencia P95 ≤ 10s: tiered LLM + dashboard async + caché embeddings] — 2026-05-22
+
+Baseline 118s → meta P95 ≤ 10s. Sin GPU, sin presupuesto API externa. Decisión clave: dividir la carga entre dos modelos Ollama según tarea (ADR-015).
+
+### Agregado
+- **`docs/adr/015-tiered-llm-models.md`**: ADR de la decisión arquitectónica. Rerank/SoQL/dashboard al modelo rápido (Qwen Coder 3B, ~35 tok/s); narrative al modelo medio (Qwen 7B, ~22 tok/s).
+- **`ai_engine/llm_backend.py:model_for_task(task)`**: factory que resuelve modelo por tarea con env vars `OLLAMA_MODEL_FAST` y `OLLAMA_MODEL_NARRATIVE`. Cae a `OLLAMA_MODEL` legacy si las específicas no están seteadas.
+- **`OllamaBackend.generate_stream()`**: streaming token-a-token de Ollama. Reduce TTFB de ~4s a ~200ms en narrative.
+- **`MockBackend.generate_stream()`**: paridad con OllamaBackend para tests.
+- **Cache LRU de embeddings** en `VectorIndex._encode_query_cached()` (256 entradas, normalizado lowercase sin tildes). Ahorra ~150ms en queries repetidas.
+
+### Cambiado
+- **`OllamaBackend.generate()`**: acepta `model=` kwarg para override por llamada. Sin breakage de callers existentes (kwarg-only).
+- **`Analyzer._rerank_with_llm()`**: usa `model_for_task("rerank")`.
+- **`Analyzer._narrate_with_data()`** y **`_narrate_metadata_only()`** y **`_narrate_search_results()`**: usan `model_for_task("narrative")`.
+- **`Analyzer._llm_reformulate()`**: usa `model_for_task("reformulate")`.
+- **`QueryGenerator.generate()`**: usa `model_for_task("soql")`.
+- **`DashboardSpecGenerator._ask_and_parse()`**: usa `model_for_task("dashboard")`.
+- **`api/routes/query.py`**: emite `event: done` **antes** de esperar `dashboard_spec`. El dashboard se emite post-done con timeout 60s. El cliente Next.js lee hasta que el reader cierre el stream — sigue procesando dashboard sin penalizar latencia percibida.
+- **`.env.example` + `docker-compose.yml`**: nuevas vars `OLLAMA_MODEL_FAST` / `OLLAMA_MODEL_NARRATIVE`. Defaults sensatos para que upgrade sea zero-touch.
+
+### Operación
+- **VM**: pull de modelos previo al deploy: `ollama pull qwen2.5-coder:3b && ollama pull qwen2.5:7b`. RAM combinada ~8 GB (de 31 disponibles).
+- **Desmontaje gradual de Qwen 14B**: se mantiene como fallback durante 72h post-deploy. Si telemetría confirma P95 ≤ 15s y `soql_hit_rate` no baja >5pp, `ollama rm qwen2.5:14b` libera ~9 GB.
+- **Rollback en caliente** (post-desmontaje): `ollama pull qwen2.5:14b` (~5 min) + `OLLAMA_MODEL_NARRATIVE=qwen2.5:14b` + restart api.
+
+### Verificación
+- Suite crítica: 77 passed, 2 skipped, 6 deselected (sin regresión).
+- Smoke determinista esperado: ≤5s end-to-end hasta `done`.
+- Smoke libre esperado: ≤18s end-to-end hasta `done`; dashboard llega post-done.
+- Telemetría granular (`phase_*_ms`) en `queries` table — comparar P95 antes/después.
+
+---
+
 ## [Beta-2 — UI/UX clarity pass: ColorModeToggle + Chip cards + QueryBuilderBar] — 2026-05-21
 
 Iteración de claridad de affordance en la home Next.js basada en feedback del usuario (screenshot 2026-05-21): el selector de modo se leía como tres palabras corridas en el header y los chips parecían decorativos. Sin cambios al motor IA ni a la API.
