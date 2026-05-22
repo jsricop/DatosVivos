@@ -87,7 +87,11 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
 
     (async () => {
       try {
-        const res = await fetch("/api/proxy/query", {
+        // Fetch DIRECTO a /api/v1/* — nginx tiene location específica con
+        // `proxy_buffering off` y `proxy_read_timeout 300s` (ADR-013). El
+        // route handler /api/query intermedio caía en location `/` genérica
+        // con timeout 60s y además tenía bug ReadableStream locked en cancel.
+        const res = await fetch("/api/v1/query", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
