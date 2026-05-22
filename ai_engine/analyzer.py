@@ -958,45 +958,52 @@ class Analyzer:
             yield NarrativeStreamEvent("stats", "", done=True, stats=stats)
             return
 
-        # Summary streaming.
+        # Summary streaming. Una sola llamada LLM por query — el extended es
+        # determinista (summary + bloque verificado pandas) para evitar la
+        # saturación de Ollama con dos llamadas paralelas competiendo por
+        # CPU. Esto mantiene TTFB <3s y garantiza que el `event: done`
+        # llegue rápido tras el último token del summary.
         summary_prompt = self._build_summary_prompt(question, top, stats, rows)
+        summary_buf = ""
         try:
             stream = self.llm.generate_stream(
-                summary_prompt, max_tokens=120, model=model_for_task("narrative")
+                summary_prompt,
+                max_tokens=180,
+                model=model_for_task("narrative"),
             )
             async for tok in stream:
+                summary_buf += tok
                 yield NarrativeStreamEvent("summary", tok, done=False)
         except Exception as exc:  # noqa: BLE001
             log.warning("Summary LLM stream falló (%s)", exc)
         yield NarrativeStreamEvent("summary", "", done=True)
 
-        # Extended streaming.
-        # max_tokens=220 (era 400): trade-off entre prosa interpretativa y
-        # latencia. Con LLM 7B a ~22 tok/s, 220 tokens = ~10s. El bloque
-        # "Datos verificados" determinista al cierre agrega la trazabilidad
-        # completa sin pasar por el LLM.
-        extended_prompt = self._build_extended_prompt(question, top, stats, rows)
-        extended_buf = ""
-        try:
-            stream = self.llm.generate_stream(
-                extended_prompt, max_tokens=220, model=model_for_task("narrative")
-            )
-            async for tok in stream:
-                extended_buf += tok
-                yield NarrativeStreamEvent("extended", tok, done=False)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Extended LLM stream falló (%s)", exc)
-
         # Validación post-LLM. Si hay corrección, emitir evento de reemplazo.
-        validated = _validate_numbers(extended_buf, stats)
-        if validated != extended_buf:
-            yield NarrativeStreamEvent(
-                "extended_correction", validated, done=False
-            )
+        try:
+            validated = _validate_numbers(summary_buf, stats)
+            if validated != summary_buf and validated:
+                yield NarrativeStreamEvent(
+                    "extended_correction", validated, done=False
+                )
+                summary_buf = validated
+        except Exception as exc:  # noqa: BLE001
+            log.warning("_validate_numbers falló (%s); sigo sin corrección", exc)
 
-        # Bloque determinista de datos verificados al cierre del extended.
-        verified_block = self._build_verified_block(soql, rows, stats, top, geo_ctx)
-        yield NarrativeStreamEvent("extended", verified_block, done=True)
+        # Bloque determinista de datos verificados.
+        try:
+            verified_block = self._build_verified_block(
+                soql, rows, stats, top, geo_ctx
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("_build_verified_block falló (%s); sigo sin bloque", exc)
+            verified_block = ""
+
+        # Extended = summary completo + verified_block (sin segunda llamada LLM).
+        # El ciudadano que expande `<details>` ve: la misma narrativa que el
+        # summary + la trazabilidad determinista pandas. Sin doble inferencia,
+        # latencia mínima.
+        extended_full = (summary_buf or "") + verified_block
+        yield NarrativeStreamEvent("extended", extended_full, done=True)
 
         # Stats al final (canal lateral, opcional para el caller).
         yield NarrativeStreamEvent("stats", "", done=True, stats=stats)

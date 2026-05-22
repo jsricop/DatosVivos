@@ -15,6 +15,7 @@ las latencias/no-determinismo del LLM.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -187,17 +188,52 @@ class OllamaBackend:
         """Stream tokens de Ollama conforme se generan.
 
         Ollama emite NDJSON con `{"response": "<token>", "done": false}` por línea.
-        Yieldeamos `response` de cada chunk. Cuando llega `done=true` cerramos.
+        Yieldeamos `response` de cada chunk.
+
+        **Triple safety net** (ADR-016 bug fix 2026-05-22):
+        Ollama puede no emitir `{"done": true}` correctamente Y dejar el TCP
+        abierto sin enviar más bytes — el loop queda colgado para siempre
+        si solo confiamos en `done:true`. Tres mecanismos de cierre:
+
+        1. `chunk.get("done")` → cierre natural (cuando Ollama lo emite bien).
+        2. Contador `chunks_yielded >= safety_limit` (max_tokens × 1.2)
+           → cierre cuando emitió suficientes tokens.
+        3. `asyncio.wait_for` por cada línea con `idle_timeout` → cierre
+           cuando Ollama deja de enviar bytes (último token sin EOS).
 
         Si el LLM falla mid-stream, el caller decide qué hacer con lo recibido.
         """
         payload = self._build_payload(prompt, max_tokens, model, stream=True, kwargs=kwargs)
+        safety_limit = max(int(max_tokens * 1.2), max_tokens + 10)
+        # Tiempo máximo entre dos tokens consecutivos antes de considerar
+        # que Ollama terminó (sin haber emitido done:true). 8s es generoso
+        # para CPU-only — un token típicamente llega en <500ms.
+        idle_timeout = 8.0
+        chunks_yielded = 0
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream(
                 "POST", f"{self.host}/api/generate", json=payload
             ) as r:
                 r.raise_for_status()
-                async for line in r.aiter_lines():
+                line_iter = r.aiter_lines()
+                while True:
+                    try:
+                        line = await asyncio.wait_for(
+                            line_iter.__anext__(), timeout=idle_timeout
+                        )
+                    except StopAsyncIteration:
+                        # Stream terminó naturalmente.
+                        break
+                    except asyncio.TimeoutError:
+                        # Ollama lleva idle_timeout sin enviar línea nueva
+                        # — asumimos que terminó (caso num_predict sin EOS).
+                        log.info(
+                            "Ollama stream idle por %.1fs sin chunk nuevo; "
+                            "cerrando (chunks=%d).",
+                            idle_timeout,
+                            chunks_yielded,
+                        )
+                        break
                     if not line.strip():
                         continue
                     try:
@@ -207,7 +243,16 @@ class OllamaBackend:
                     text = chunk.get("response", "")
                     if text:
                         yield text
+                        chunks_yielded += 1
                     if chunk.get("done"):
+                        break
+                    if chunks_yielded >= safety_limit:
+                        log.warning(
+                            "Ollama stream alcanzó %d chunks sin done:true "
+                            "(safety limit=%d). Cerrando conexión.",
+                            chunks_yielded,
+                            safety_limit,
+                        )
                         break
 
 
