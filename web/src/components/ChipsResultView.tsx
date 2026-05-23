@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/Icon";
 
@@ -43,6 +43,16 @@ export function ChipsResultView({ filters, refinador }: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const sectionRef = useRef<HTMLElement | null>(null);
+
+  // Cuando llega data, hacer scroll al inicio de los resultados — si el header
+  // (chips activos, breadcrumb) es alto, los datasets pueden quedar abajo del
+  // fold y el usuario no ve nada.
+  useEffect(() => {
+    if (!loading && data && sectionRef.current) {
+      sectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading, data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +97,11 @@ export function ChipsResultView({ filters, refinador }: Props) {
 
   if (loading) {
     return (
-      <div role="status" aria-live="polite" className="py-8 text-ink-2">
+      <div
+        role="status"
+        aria-live="polite"
+        className="py-8 text-ink-2 border-l-2 border-accent pl-4 animate-pulse"
+      >
         Buscando datasets que coincidan con tus filtros…
       </div>
     );
@@ -104,7 +118,7 @@ export function ChipsResultView({ filters, refinador }: Props) {
   if (!data) return null;
 
   return (
-    <section className="flex flex-col gap-6">
+    <section ref={sectionRef} className="flex flex-col gap-6 scroll-mt-4">
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-kicker">Resultado</span>

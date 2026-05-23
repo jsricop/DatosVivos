@@ -53,9 +53,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   // (Fase 1.1 del audit top-down).
   if (!q && hasChips) {
     return (
-      <div className="container-narrow flex flex-col gap-8 py-8">
-        <header className="flex flex-col gap-3 pb-4 hairline-bottom">
-          <div className="flex justify-between gap-4">
+      <div className="container-narrow flex flex-col gap-5 py-6">
+        <header className="flex flex-col gap-2 pb-3 hairline-bottom">
+          <div className="flex justify-between gap-4 items-baseline">
             <span className="text-kicker">Búsqueda por filtros</span>
             <Link
               href="/"
@@ -64,9 +64,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               ← volver al inicio
             </Link>
           </div>
-          <h1 className="font-serif text-h2 m-0 text-ink">
-            Tu consulta
-          </h1>
           <ActiveFilters filters={filters} />
         </header>
 
