@@ -104,15 +104,24 @@ _BOGOTA_TOKENS = (
 _NACIONAL_TOKENS = (
     "ministerio",
     "departamento nacional",
+    "departamento administrativo",   # DAFP, DPS, DANE
     "agencia nacional",
+    "agencia de desarrollo",         # ADR Rural
+    "agencia para la",               # ARN, ADRES
     "instituto nacional",
+    "instituto colombiano",          # ICBF, ICA (también acrónimos)
+    "unidad nacional",
+    "unidad administrativa",         # UAESP, USPEC, etc.
+    "unidad de proyeccion",          # URF
+    "unidad de servicios",
+    "unidad de pension",
     "superintendencia",
     "presidencia",
     "vicepresidencia",
     "consejeria",
     "comision nacional",
+    "comision de regulacion",        # CRA, CREG
     "consejo nacional",
-    "unidad nacional",
     "registraduria nacional",
     "procuraduria",
     "contraloria",
@@ -121,9 +130,34 @@ _NACIONAL_TOKENS = (
     "auditoria general",
     "rama judicial",
     "congreso de la republica",
+    "senado de la republica",
+    "camara de representantes",
     "corte constitucional",
     "consejo de estado",
     "corte suprema",
+    "archivo general de la nacion",
+    "centro de memoria historica",
+    "centro nacional",
+    "escuela superior",              # ESAP
+    "fondo nacional",
+    "fondo de garantias",
+    "fondo para el financiamiento",
+    "fondo para la",
+    "sociedad fiduciaria",
+    "sociedad de activos",
+    "administradora colombiana",     # COLPENSIONES (también)
+    "banco agrario",
+    "banco de la republica",
+    "banco de comercio",
+    "positiva compania",             # Positiva Seguros (estatal nacional)
+    "confecamaras",
+    "hospital militar",
+    "club militar",
+    "ejercito nacional",
+    "armada nacional",
+    "policia nacional",
+    "fuerza aerea",
+    "fuerzas militares",
 )
 _NACIONAL_ACRONIMOS = (
     "dane",
@@ -174,6 +208,30 @@ _NACIONAL_ACRONIMOS = (
     "upme",
     "urt",
     "uariv",
+    # ---- Agregados tras inspección top distrito_capital (Fase 1 prereq) ----
+    "agn",          # Archivo General de la Nación
+    "arn",          # Agencia Reincorporación y Normalización
+    "adr",          # Agencia de Desarrollo Rural
+    "dafp",         # Departamento Administrativo Función Pública
+    "dps",          # Departamento Administrativo para Prosperidad Social
+    "esap",         # Escuela Superior de Administración Pública
+    "finagro",
+    "coljuegos",
+    "urf",          # Unidad de Proyección Normativa
+    "uspec",        # Unidad de Servicios Penitenciarios
+    "fogafin",
+    "fogacoop",
+    "fiduagraria",
+    "sae",          # Sociedad de Activos Especiales
+    "cra",          # Comisión Regulación Agua
+    "creg",         # Comisión Regulación Energía y Gas
+    "adres",        # Administradora de Recursos del SGSSS
+    "colpensiones",
+    "porvenir",
+    "fonade",
+    "enterritorio",
+    "fondes",
+    "imprenta nacional",
 )
 
 # Municipios que ALSO son nombres de departamento (ambiguos): descartarlos
@@ -301,12 +359,19 @@ def _detect_matches(haystacks: list[str]) -> dict[str, Any]:
                         break
             if matches["nacional"] is None and _word_in("nacional", h):
                 matches["nacional"] = ("national_keyword", "nacional")
-        # Dpto
+        # Dpto — registramos TODOS los matches. La selección de cuál usar
+        # (Bogotá vs otro) la hace `infer_jurisdiccion`. Esto evita que el
+        # primer match en orden alfabético se imponga sobre uno semánticamente
+        # más fuerte (ej. "Cundinamarca, Bogotá D.C." → preferir Cundinamarca).
         if matches["dpto"] is None:
+            found: list[tuple[str, str]] = []
             for dpto_norm, (canon, code) in _DEPT_BY_NORM.items():
                 if _word_in(dpto_norm, h):
-                    matches["dpto"] = (canon, code)
-                    break
+                    found.append((canon, code))
+            if found:
+                # Preferir primer dpto NO-Bogotá. Si todos son Bogotá, queda Bogotá.
+                non_bogota = next((f for f in found if f[1] != "11"), None)
+                matches["dpto"] = non_bogota or found[0]
         # Mpio
         if matches["mpio"] is None:
             for mpio_norm, (canon, cod_mpio, cod_dpto) in _MPIO_BY_NORM.items():
