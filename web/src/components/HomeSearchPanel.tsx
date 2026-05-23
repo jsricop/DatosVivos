@@ -58,28 +58,18 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
 
   return (
     <section aria-label="Buscador principal" className="flex flex-col gap-8">
-      <div className="flex flex-col gap-4">
-        <HeroSearch
-          initialValue={voiceQuery}
-          extraQuery={extraQuery}
-          size="display"
-        />
-        <div className="flex justify-between items-center flex-wrap gap-3">
-          <span className="font-mono text-caption text-ink-muted">
-            Pulsa{" "}
-            <kbd className="inline-block border border-hairline-strong px-1.5 py-px font-mono text-[length:var(--type-kicker)] bg-bg-elev text-ink-2">
-              /
-            </kbd>{" "}
-            para enfocar el buscador
-          </span>
-          <SpeechInput onTranscript={setVoiceQuery} />
-        </div>
-      </div>
-
+      {/* PRIMARY: chips estructurados (Fase 1 audit top-down).
+          La consulta se construye marcando chips de Tema/Tipo/Territorio/Entidad. */}
       <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-baseline flex-wrap gap-2">
+          <h2 className="font-serif text-h3 m-0">Construí tu consulta</h2>
+          <span className="font-mono text-caption text-ink-muted">
+            marcá uno o varios filtros
+          </span>
+        </div>
         <p className="font-sans text-caption text-ink-muted max-w-prose">
-          O construye tu consulta con los filtros de abajo. Cada selección se
-          va sumando a la barra inferior.
+          Elegí tema, tipo de pregunta, territorio y entidad. Cuando marques al
+          menos un filtro, se habilita la búsqueda.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
           {(Object.keys(chips) as Axis[]).map((axis) => (
@@ -97,6 +87,35 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
       </div>
 
       <QueryBuilderBar selected={selected} chips={chips} onClear={clearOne} />
+
+      {/* SECONDARY: modo libre detrás de toggle. Durante el período de
+          validación del paradigma chips, mantenemos la barra disponible para
+          power users y comparación A/B. En Fase 2 vuelve como entrada con
+          mapper NL→chips. */}
+      <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
+        <details>
+          <summary className="cursor-pointer font-mono text-caption text-ink-2 hover:text-ink focus-ring">
+            Modo libre (avanzado) — preguntar con texto libre
+          </summary>
+          <div className="mt-4 flex flex-col gap-3">
+            <HeroSearch
+              initialValue={voiceQuery}
+              extraQuery={extraQuery}
+              size="compact"
+            />
+            <div className="flex justify-between items-center flex-wrap gap-3">
+              <span className="font-mono text-caption text-ink-muted">
+                Pulsa{" "}
+                <kbd className="inline-block border border-hairline-strong px-1.5 py-px font-mono text-[length:var(--type-kicker)] bg-bg-elev text-ink-2">
+                  /
+                </kbd>{" "}
+                para enfocar el buscador
+              </span>
+              <SpeechInput onTranscript={setVoiceQuery} />
+            </div>
+          </div>
+        </details>
+      </section>
     </section>
   );
 }
