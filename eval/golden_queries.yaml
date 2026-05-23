@@ -1,0 +1,406 @@
+# Golden set para audit top-down — Fase 0 (ver docs/adr/017 cuando exista).
+#
+# Esquema por entry:
+#   id: identificador estable q001..qNNN
+#   q: pregunta literal del usuario
+#   category: agrupador (geo_count, salud, educacion, contratacion, seguridad,
+#             economia, ambiente, comparativa, temporal, adversarial, known_bad)
+#   expected_intent: count | count_in | list | aggregate | comparative |
+#                    temporal | descriptive | cross_source | search
+#   expected_territory: nombre humano (null si no aplica)
+#   expected_territory_code: DIVIPOLA (str). 2 chars=dpto, 5 chars=mpio. null si nacional.
+#   expected_dataset_id: Socrata 4x4. null si todavía no curado.
+#   expected_dataset_must_match_jurisdiction: true si el dataset DEBE cubrir el territorio
+#   not_acceptable_datasets: lista de ids que SI aparecen como top-1 es failure
+#   needs_curation: true mientras expected_dataset_id sea null
+#   notes: contexto breve
+#
+# Reglas:
+# - Si needs_curation=true, el eval harness NO penaliza por mismatch de dataset,
+#   solo loggea el dataset elegido. Sirve para construir baseline.
+# - Las queries con id qXXX (X≥90) son "known_bad" capturadas desde producción.
+# - Curaduría progresiva: cada PR de retrieval debe convertir ≥3 entries de
+#   needs_curation=true a false.
+
+queries:
+  # ---- Geo count (top de la cobertura territorial) ----
+  - id: q001
+    q: "¿Cuántos municipios tiene Antioquia?"
+    category: geo_count
+    expected_intent: count_in
+    expected_territory: "Antioquia"
+    expected_territory_code: "05"
+    expected_dataset_id: "gdxc-w37w"
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: false
+    notes: "Canon DIVIPOLA. Hoy responde fuc4-tvui (otro dataset); debe ser gdxc-w37w."
+
+  - id: q002
+    q: "¿Cuántos municipios hay en Cundinamarca?"
+    category: geo_count
+    expected_intent: count_in
+    expected_territory: "Cundinamarca"
+    expected_territory_code: "25"
+    expected_dataset_id: "gdxc-w37w"
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: false
+    notes: "Canon DIVIPOLA. Hoy responde 9nns-squt; debe ser gdxc-w37w."
+
+  - id: q003
+    q: "Cuántos departamentos tiene Colombia"
+    category: geo_count
+    expected_intent: count
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: "gdxc-w37w"
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: false
+    notes: "Canon DIVIPOLA nacional. Hoy responde vcjz-niiq."
+
+  # ---- Salud ----
+  - id: q004
+    q: "Vacunación contra COVID-19 en Colombia"
+    category: salud
+    expected_intent: descriptive
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy responde prrv-jnta con 5 filas; validar que sea dataset MinSalud oficial."
+
+  - id: q005
+    q: "Casos de dengue por departamento"
+    category: salud
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy responde fhz2-4x64 con 0 filas. SoQL falla."
+
+  - id: q006
+    q: "Mortalidad materna en zonas rurales"
+    category: salud
+    expected_intent: descriptive
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 22wy-39ih con 50 filas."
+
+  # ---- Educación ----
+  - id: q007
+    q: "Datos sobre educación superior en Colombia"
+    category: educacion
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 5wck-szir con 0 filas."
+
+  - id: q008
+    q: "Cuántas instituciones de educación superior hay por departamento"
+    category: educacion
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 4hrb-y62g con 0 filas. SoQL falla."
+
+  - id: q009
+    q: "Matrícula escolar en básica primaria"
+    category: educacion
+    expected_intent: descriptive
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy ji8i-4anb con 14 filas."
+
+  # ---- Contratación ----
+  - id: q010
+    q: "Contratos del Ministerio de Defensa Nacional"
+    category: contratacion
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy dxs6-mdeg con 0 filas. SECOP candidato."
+
+  - id: q011
+    q: "Contratos de obra pública en Bogotá"
+    category: contratacion
+    expected_intent: list
+    expected_territory: "Bogotá D.C."
+    expected_territory_code: "11"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Hoy uwns-mbwd con 0 filas. Debe ser SECOP filtrado por Bogotá."
+
+  - id: q012
+    q: "Adjudicaciones SECOP del último año"
+    category: contratacion
+    expected_intent: temporal
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 7fix-nd37 con 0 filas."
+
+  # ---- Seguridad ----
+  - id: q013
+    q: "Datos de homicidios en Bogotá"
+    category: seguridad
+    expected_intent: descriptive
+    expected_territory: "Bogotá D.C."
+    expected_territory_code: "11"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Hoy ha6j-pa2r con 0 filas."
+
+  - id: q014
+    q: "Hurto a personas en Medellín"
+    category: seguridad
+    expected_intent: descriptive
+    expected_territory: "Medellín"
+    expected_territory_code: "05001"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Hoy 9vha-vh9n con 0 filas."
+
+  - id: q015
+    q: "Accidentes de tránsito con muertes"
+    category: seguridad
+    expected_intent: descriptive
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy s65h-7665 con 1 fila."
+
+  # ---- Economía ----
+  - id: q016
+    q: "Inflación en Colombia"
+    category: economia
+    expected_intent: temporal
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy kgyi-qc7j con 0 filas."
+
+  - id: q017
+    q: "PIB departamental"
+    category: economia
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy kgyi-qc7j con 1 fila."
+
+  - id: q018
+    q: "Tasa de desempleo por ciudad"
+    category: economia
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 665j-iwk5 con 0 filas."
+
+  # ---- Ambiente ----
+  - id: q019
+    q: "Quiero datos sobre el clima"
+    category: ambiente
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy nsz2-kzcq con 0 filas. Query intencionalmente vaga."
+
+  - id: q020
+    q: "Calidad del aire en Bogotá"
+    category: ambiente
+    expected_intent: descriptive
+    expected_territory: "Bogotá D.C."
+    expected_territory_code: "11"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Hoy kekd-7v7h con 0 filas."
+
+  - id: q021
+    q: "Deforestación en la Amazonía colombiana"
+    category: ambiente
+    expected_intent: descriptive
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy iczg-dyt3 con 0 filas. Amazonía cubre múltiples dptos."
+
+  # ---- Comparativas ----
+  - id: q022
+    q: "Qué departamentos tienen más instituciones de educación superior"
+    category: comparativa
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 4hrb-y62g con 0 filas. Top-N por dpto."
+
+  - id: q023
+    q: "Ranking de municipios por inversión social"
+    category: comparativa
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy deuu-ikix con 5 filas."
+
+  - id: q024
+    q: "Departamentos con mayor cobertura de salud"
+    category: comparativa
+    expected_intent: comparative
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy 6i25-2hdt con 5 filas."
+
+  # ---- Temporales ----
+  - id: q025
+    q: "Evolución de la población colombiana"
+    category: temporal
+    expected_intent: temporal
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy mgr2-njqc con 50 filas."
+
+  - id: q026
+    q: "Histórico de homicidios en los últimos 10 años"
+    category: temporal
+    expected_intent: temporal
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy vtub-3de2 con 50 filas."
+
+  - id: q027
+    q: "Cambio anual de la inflación en Colombia"
+    category: temporal
+    expected_intent: temporal
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: true
+    notes: "Hoy ji8i-4anb (matrícula escolar) con 0 filas — claro mismatch."
+
+  # ---- Adversariales ----
+  - id: q028
+    q: "Datos"
+    category: adversarial
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: false
+    notes: "Esperado: pedir refinamiento al usuario. NO debería devolver dataset random."
+
+  - id: q029
+    q: "Información sobre Colombia"
+    category: adversarial
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: false
+    notes: "Esperado: pedir refinamiento. Demasiado vaga."
+
+  - id: q030
+    q: "Quiero saber sobre Ecuador"
+    category: adversarial
+    expected_intent: search
+    expected_territory: null
+    expected_territory_code: null
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: false
+    needs_curation: false
+    notes: "Out of scope (no es Colombia). Esperado: aviso de cobertura nacional."
+
+  # ============================================================
+  # ---- KNOWN-BAD (capturados desde producción, PR #29 origin) ----
+  # ============================================================
+
+  - id: q090
+    q: "¿Cuántos estudiantes hay en Bogotá?"
+    category: known_bad
+    expected_intent: count
+    expected_territory: "Bogotá D.C."
+    expected_territory_code: "11"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    not_acceptable_datasets:
+      - "nxxq-mwbf"   # UPTC (placeholder — confirmar id real)
+    needs_curation: true
+    notes: |
+      Bug PR#29: hoy retrieval devuelve UPTC (Boyacá) y dashboard mostraba "6".
+      Post-PR#29 dashboard se omite, pero el dataset top-1 sigue siendo UPTC.
+      Debe ser dataset SED Bogotá o equivalente con jurisdicción 11.
+
+  - id: q091
+    q: "¿Cuántos estudiantes hay en Antioquia?"
+    category: known_bad
+    expected_intent: count
+    expected_territory: "Antioquia"
+    expected_territory_code: "05"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Análogo a q090 para Antioquia. Validar que retrieval no devuelva UPTC ni Bogotá."
+
+  - id: q092
+    q: "Estudiantes matriculados en universidades públicas de Boyacá"
+    category: known_bad
+    expected_intent: count
+    expected_territory: "Boyacá"
+    expected_territory_code: "15"
+    expected_dataset_id: null
+    expected_dataset_must_match_jurisdiction: true
+    needs_curation: true
+    notes: "Caso opuesto a q090: aquí UPTC SÍ sería válido. Test de no-overfitting del penalty."
