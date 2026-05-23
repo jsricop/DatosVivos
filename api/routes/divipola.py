@@ -2,6 +2,15 @@
 
 Fuente: `ai_engine.geo_resolver_data.MUNICIPIOS_DIVIPOLA` que se extrae del
 dataset oficial `gdxc-w37w` con `scripts/extract_divipola.py`.
+
+**Estado (auditoría 2026-05-23)**: sin caller actual en frontend. Mantenido
+porque está cubierto por tests `test_rebrand_acceptance.py` y porque será
+necesario cuando el chip TERRITORIO se expanda con drill-down de municipios
+(actualmente expone solo dptos + macroregiones). El catálogo ya está cargado
+en memoria, sin costo significativo de mantenerlo expuesto.
+
+Si el drill-down de municipios no se implementa antes de 2026-09-01, evaluar
+quitar este router y dejar el catálogo solo para consumo interno del backend.
 """
 
 from __future__ import annotations
