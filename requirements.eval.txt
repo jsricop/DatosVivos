@@ -1,0 +1,12 @@
+# Dependencias solo para el harness de evaluación (scripts/run_eval.py).
+# No se instala en el container de la API — uso local/CI únicamente.
+#
+# Instalar:
+#   pip install -r requirements.eval.txt
+#
+# El harness lee golden_queries.yaml + emite reportes en eval/reports/.
+
+PyYAML>=6.0,<7.0
+# httpx ya viene de requirements.api/mcp/ai, pero lo declaro explícito por si
+# se quiere instalar este archivo en un entorno mínimo.
+httpx>=0.27,<1.0

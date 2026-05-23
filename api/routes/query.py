@@ -335,6 +335,27 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
     elapsed = round(time.perf_counter() - started, 2)
 
     # Telemetría best-effort antes del done.
+    top1_id = (
+        result.dataset_references[0].id
+        if result.dataset_references
+        else None
+    )
+    geo_label = (
+        result.geo_context.targets[0].name
+        if result.geo_context and result.geo_context.targets
+        else None
+    )
+    geo_ok_log: bool | None
+    if result.geo_context is None or not result.rows:
+        geo_ok_log = None
+    else:
+        geo_ok_log = bool(geo_ok)
+    if not result.rows:
+        failure = "no_rows"
+    elif geo_ok_log is False:
+        failure = "geo_mismatch"
+    else:
+        failure = None
     try:
         await asyncio.to_thread(
             log_query,
@@ -346,6 +367,12 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
             censored_count=0,
             elapsed_s=elapsed,
             had_statistics=result.statistics is not None,
+            dataset_top1_id=top1_id,
+            dataset_top1_score=None,  # score no expuesto aún por analyzer; Fase 1 lo añade
+            geo_resolved=geo_label,
+            geo_attribution_ok=geo_ok_log,
+            dashboard_emitted=dashboard_task is not None,
+            failure_type=failure,
         )
     except Exception:  # noqa: BLE001
         pass
