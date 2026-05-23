@@ -319,11 +319,21 @@ def test_build_chips_where_subtags_genera_exists():
     assert "cobertura" in params
 
 
-def test_build_chips_where_sin_filtros_devuelve_true():
+def test_build_chips_where_sin_filtros_solo_quality():
+    """Sin filtros pero con default include_low_quality=False, el WHERE incluye
+    solo el filtro quality_flag (D.5)."""
     from api.routes.chips import _build_chips_where
     sql, params = _build_chips_where(None, None, None)
-    assert sql == "TRUE"
+    assert "quality_flag" in sql
     assert params == []
+
+
+def test_build_chips_where_include_low_quality_no_filtra():
+    """include_low_quality=True omite el filtro quality_flag → todos visibles."""
+    from api.routes.chips import _build_chips_where
+    sql, params = _build_chips_where(None, None, None, include_low_quality=True)
+    assert sql == "TRUE"
+    assert "quality_flag" not in sql
 
 
 # ---------- A.2: score compuesto del ELEGIDO ----------

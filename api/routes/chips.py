@@ -233,14 +233,22 @@ def _build_chips_where(
     territorio: str | None,
     subtags: list[str] | None = None,
     refinador: str | None = None,
+    include_low_quality: bool = False,
 ) -> tuple[str, list[Any]]:
     """Arma la cláusula WHERE compartida entre /query/chips y /chips/refine.
 
     Devuelve `(where_sql, params)` listos para usar con %s. `where_sql` ya
     incluye `WHERE` cuando hay condiciones, o `TRUE` si no.
+
+    Por default oculta los datasets con `quality_flag` no-NULL (admin_only,
+    no_rows, etc.). Pasar `include_low_quality=True` para auditoría.
     """
     where: list[str] = []
     params: list[Any] = []
+
+    if not include_low_quality:
+        # NULL = ok = visible. quality_flag asignado = oculto.
+        where.append("(d.quality_flag IS NULL OR d.quality_flag = 'ok')")
 
     if tema:
         where.append("category = %s")
