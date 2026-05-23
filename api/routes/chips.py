@@ -37,16 +37,19 @@ log = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 
 
+# Values DEBEN coincidir con el Literal `ChipTipo` en api/models/schemas.py
+# para que POST /query/chips acepte sin necesidad de mapping. Slugs como
+# "cuantos"/"comparar" fueron eliminados por consistencia (ver fix #36).
 _TIPO_OPTIONS = [
-    ChipOption(value="cuantos", label="Cuántos",
+    ChipOption(value="Cuántos", label="Cuántos",
                hint="Conteo simple: cuántos X hay"),
-    ChipOption(value="comparar", label="Comparar",
+    ChipOption(value="Comparar", label="Comparar",
                hint="Diferencias entre dos o más territorios/categorías"),
-    ChipOption(value="ranking", label="Ranking",
+    ChipOption(value="Ranking", label="Ranking",
                hint="Top N por una métrica"),
-    ChipOption(value="tendencia", label="Tendencia",
+    ChipOption(value="Tendencia", label="Tendencia",
                hint="Evolución temporal"),
-    ChipOption(value="mapa", label="Mapa",
+    ChipOption(value="Mapa", label="Mapa",
                hint="Distribución geográfica (coroplético)"),
 ]
 
