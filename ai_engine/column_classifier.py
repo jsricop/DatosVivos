@@ -315,15 +315,30 @@ _DESC_GEO_CODE = re.compile(
     re.IGNORECASE,
 )
 _DESC_GEO_NAME = re.compile(
-    r"\b(nombre|denominaci[óo]n)\b.{0,20}\b(departamento|municipio|mpio|ciudad|localidad)\b",
+    # Palabras INEQUÍVOCAMENTE geo. NO incluir "nombre" suelto (ambiguo con
+    # "Primer nombre del sujeto" que es identifier). Si quieren "nombre de
+    # municipio", basta con que aparezca "municipio".
+    r"\b(direcci[óo]n|ubicaci[óo]n|ubicado en|lugar donde|ciudad|municipio|mpio|departamento|dpto|pa[íi]s|regi[óo]n|barrio|comuna|localidad|vereda|corregimiento|sede)\b",
     re.IGNORECASE,
 )
 _DESC_FECHA = re.compile(
-    r"\b(fecha|a[nñ]o|periodo|vigencia|year)\b",
+    r"\b(fecha|a[nñ]o|periodo|vigencia|year|d[íi]a|semana|trimestre|mes|momento)\b",
     re.IGNORECASE,
 )
 _DESC_METRICA = re.compile(
-    r"\b(total|cantidad|n[uú]mero de|valor (en )?pesos|monto|tasa|porcentaje)\b",
+    # Expandido: tiempo, área, caudal, velocidad, contenido, nivel de, cobertura.
+    r"\b(total|cantidad|n[uú]mero de|valor (en )?pesos|monto|tasa|porcentaje|tiempo de|[áa]rea|caudal|velocidad|contenido|nivel de|cobertura|capacidad|cupos?)\b",
+    re.IGNORECASE,
+)
+# Status: descripciones que empiezan con "indica si" / "señala si" / "es"
+# son flags booleanos (sí/no/verdadero/falso).
+_DESC_STATUS = re.compile(
+    r"^(indica si|se[ñn]ala si|verifica si|determina si|es( un)? |estado|situaci[óo]n|condici[óo]n)\b",
+    re.IGNORECASE,
+)
+# Identifiers en description: "Nombre del/de la/del sujeto/representante/responsable"
+_DESC_ID = re.compile(
+    r"\b(primer nombre|segundo nombre|primer apellido|apellido|nombre del (sujeto|responsable|representante|funcionario|titular|declarante)|representante legal|identificaci[óo]n|c[ée]dula|nit del)\b",
     re.IGNORECASE,
 )
 
@@ -437,7 +452,7 @@ def classify_column(
                                     f"data_type=number, sin signal de nombre")
 
     # ------------------------------------------------------------------
-    # 5. DIMENSIONS
+    # 5. DIMENSIONS (por nombre)
     # ------------------------------------------------------------------
     if _match_any(_DIM_DEMOGRAPHIC_PATTERNS, name):
         return ColumnClassification("dimension", "demographic", "high",
@@ -453,11 +468,33 @@ def classify_column(
                                     f"name match status: {name}")
 
     # ------------------------------------------------------------------
+    # 5b. DESCRIPTION-driven classification (iter 4 D.6)
+    # Si nombre no matcheó nada, mirar description con regex expandidos.
+    # confidence=medium porque depende de NLP regex sobre texto libre.
+    # ------------------------------------------------------------------
+    if desc:
+        if _DESC_ID.search(desc):
+            return ColumnClassification("exclude", "id", "medium",
+                                        f"description identifies persona/representante: '{desc[:50]}'")
+        if _DESC_STATUS.search(desc):
+            return ColumnClassification("dimension", "status", "medium",
+                                        f"description suggests status flag: '{desc[:50]}'")
+        if dtype in ("number", "money", "numeric", "double", "int") and _DESC_METRICA.search(desc):
+            return ColumnClassification("metrica", "generic", "medium",
+                                        f"number + description suggests métrica: '{desc[:50]}'")
+        if _DESC_GEO_NAME.search(desc):
+            return ColumnClassification("geo", "name", "medium",
+                                        f"description suggests geo name: '{desc[:50]}'")
+        if _DESC_FECHA.search(desc):
+            return ColumnClassification("fecha", "date", "medium",
+                                        f"description mentions fecha/año/día: '{desc[:50]}'")
+
+    # ------------------------------------------------------------------
     # 6. Fallback — text corto sin signal → dimension other / low
     # ------------------------------------------------------------------
     if dtype == "text":
         return ColumnClassification("dimension", "other", "low",
-                                    "text sin signal de nombre, asumido dim other")
+                                    "text sin signal de nombre/desc, asumido dim other")
 
     return ColumnClassification("exclude", "other", "low",
                                 f"sin signal: name={name}, dtype={dtype}")
