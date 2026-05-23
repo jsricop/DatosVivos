@@ -29,6 +29,7 @@ type ChipsQueryResponse = {
 
 type Props = {
   filters: Record<string, string[]>;
+  subtags?: string[];
   refinador?: string;
 };
 
@@ -39,7 +40,7 @@ const AXIS_LABEL: Record<string, string> = {
   entidad: "Entidad",
 };
 
-export function ChipsResultView({ filters, refinador }: Props) {
+export function ChipsResultView({ filters, subtags, refinador }: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,11 +63,12 @@ export function ChipsResultView({ filters, refinador }: Props) {
       // Convertir filters {tema:["X","Y"]} a payload single-value
       // (en Fase 1 cada chip es single-value desde la UI; multi se maneja
       // tomando el primer valor de cada axis. Multi-select se trata en Fase 2.)
-      const body: Record<string, string | null> = {
+      const body: Record<string, string | string[] | null> = {
         tema: filters.tema?.[0] ?? null,
         tipo: filters.tipo?.[0] ?? null,
         territorio: filters.territorio?.[0] ?? null,
         entidad: filters.entidad?.[0] ?? null,
+        subtags: subtags && subtags.length > 0 ? subtags : null,
         refinador: refinador ?? null,
       };
       try {
@@ -93,7 +95,7 @@ export function ChipsResultView({ filters, refinador }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [filters, refinador]);
+  }, [filters, subtags, refinador]);
 
   if (loading) {
     return (

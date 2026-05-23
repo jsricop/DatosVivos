@@ -13,6 +13,7 @@ type SearchPageProps = {
     tipo?: string | string[];
     territorio?: string | string[];
     entidad?: string | string[];
+    subtag?: string | string[];
     refinador?: string;
   }>;
 };
@@ -46,8 +47,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
   const filters = normalizeFilters(params);
+  const subtags = normalizeSubtags(params.subtag);
   const refinador = (params.refinador ?? "").trim();
-  const hasChips = Object.values(filters).some((v) => v.length > 0);
+  const hasChips =
+    Object.values(filters).some((v) => v.length > 0) || subtags.length > 0;
 
   // Modo chips: chips marcados sin texto libre — flujo determinista
   // (Fase 1.1 del audit top-down).
@@ -68,7 +71,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </header>
 
         <Suspense fallback={<p>Procesando…</p>}>
-          <ChipsResultView filters={filters} refinador={refinador || undefined} />
+          <ChipsResultView
+            filters={filters}
+            subtags={subtags}
+            refinador={refinador || undefined}
+          />
         </Suspense>
 
         <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
@@ -164,4 +171,9 @@ function normalizeFilters(
     out[key] = Array.isArray(raw) ? raw : [raw];
   }
   return out;
+}
+
+function normalizeSubtags(raw: string | string[] | undefined): string[] {
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
 }

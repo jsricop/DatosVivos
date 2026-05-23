@@ -6,6 +6,7 @@ import { ChipGroup, type Axis } from "@/components/ChipGroup";
 import { HeroSearch } from "@/components/HeroSearch";
 import { QueryBuilderBar } from "@/components/QueryBuilderBar";
 import { SpeechInput } from "@/components/SpeechInput";
+import { SubtagsBar } from "@/components/SubtagsBar";
 import type { SuggestOption } from "@/lib/types";
 
 type ChipsByAxis = Record<Axis, SuggestOption[]>;
@@ -35,6 +36,7 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
     territorio: [],
     entidad: [],
   });
+  const [subtags, setSubtags] = useState<string[]>([]);
   const [voiceQuery, setVoiceQuery] = useState("");
 
   const extraQuery = useMemo(() => {
@@ -42,8 +44,9 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
     for (const axis of Object.keys(selected) as Axis[]) {
       if (selected[axis].length > 0) q[axis] = selected[axis];
     }
+    if (subtags.length > 0) q.subtags = subtags;
     return q;
-  }, [selected]);
+  }, [selected, subtags]);
 
   function update(axis: Axis, values: string[]) {
     setSelected((s) => ({ ...s, [axis]: values }));
@@ -54,6 +57,10 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
       ...s,
       [axis]: s[axis].filter((v) => v !== value),
     }));
+  }
+
+  function removeSubtag(value: string) {
+    setSubtags((s) => s.filter((v) => v !== value));
   }
 
   return (
@@ -84,9 +91,25 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
             />
           ))}
         </div>
+
+        {/* Capa 2 — sub-tags refinadores del subset filtrado. Solo aparece
+            si hay ≥1 chip capa 1 marcado. */}
+        <SubtagsBar
+          tema={selected.tema[0] ?? null}
+          territorio={selected.territorio[0] ?? null}
+          entidad={selected.entidad[0] ?? null}
+          selected={subtags}
+          onChange={setSubtags}
+        />
       </div>
 
-      <QueryBuilderBar selected={selected} chips={chips} onClear={clearOne} />
+      <QueryBuilderBar
+        selected={selected}
+        chips={chips}
+        subtags={subtags}
+        onClear={clearOne}
+        onClearSubtag={removeSubtag}
+      />
 
       {/* SECONDARY: modo libre detrás de toggle. Durante el período de
           validación del paradigma chips, mantenemos la barra disponible para
