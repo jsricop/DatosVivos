@@ -1,6 +1,7 @@
 """Endpoints de chips — entrada PRIMARIA de búsqueda (Fase 1 audit top-down).
 
 GET  /api/v1/chips           — listas dinámicas de TEMA/TIPO/TERRITORIO/ENTIDAD
+GET  /api/v1/chips/refine    — sub-tags refinadores del subset (capa 2, A.1)
 POST /api/v1/query/chips     — recibe combinación, devuelve subset filtrado
 
 Diseño: SQL determinista, sin retrieval ML. La narrativa LLM solo entra al
@@ -17,7 +18,7 @@ import os
 from typing import Any
 
 import psycopg
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
 from api.models.schemas import (
@@ -25,6 +26,7 @@ from api.models.schemas import (
     ChipsCandidateDataset,
     ChipsQueryRequest,
     ChipsQueryResponse,
+    ChipsRefineResponse,
     ChipsResponse,
 )
 
@@ -63,6 +65,41 @@ _MACRO_REGIONES = {
     "macro:amazonia": ("Amazonía", ["18", "86", "91", "94", "95", "97"]),
     "macro:orinoquia": ("Orinoquía", ["50", "81", "85", "99"]),
 }
+
+# Tags administrativos genéricos que aparecen en muchos datasets pero NO son
+# útiles como sub-temas semánticos (Ley de Transparencia, esquemas de
+# publicación, ITA, etc.). Se filtran del top de `dataset_tags` para que la
+# capa 2 de chips refleje temas reales (matrícula, cobertura, deforestación)
+# y no obligaciones administrativas.
+_TAG_STOPLIST = frozenset({
+    "activos de información",
+    "activos de informacion",
+    "esquema de publicación",
+    "esquema de publicacion",
+    "esquema de publicación de la información",
+    "esquema de publicacion de la informacion",
+    "indice de información clasificada y reservada",
+    "indice de informacion clasificada y reservada",
+    "índice de información clasificada y reservada",
+    "ley 1712",
+    "ley de transparencia",
+    "transparencia",
+    "ita",
+    "gestión documental",
+    "gestion documental",
+    "notaria",
+    "notaría",
+    "categoría",
+    "categoria",
+    "tabla de retención documental",
+    "trd",
+    "informe de gestión",
+    "informe de gestion",
+})
+
+# Cap del subset que tiene sentido refinar — si el subset es enorme (>500),
+# los tags del top reflejan ruido del catálogo más que del query.
+_REFINE_SUBSET_MAX = 500
 
 
 # ----------------------------------------------------------------------
@@ -177,6 +214,127 @@ def _suggest_chips(req: ChipsQueryRequest) -> list[str]:
     return suggestions
 
 
+def _build_chips_where(
+    tema: str | None,
+    entidad: str | None,
+    territorio: str | None,
+    subtags: list[str] | None = None,
+    refinador: str | None = None,
+) -> tuple[str, list[Any]]:
+    """Arma la cláusula WHERE compartida entre /query/chips y /chips/refine.
+
+    Devuelve `(where_sql, params)` listos para usar con %s. `where_sql` ya
+    incluye `WHERE` cuando hay condiciones, o `TRUE` si no.
+    """
+    where: list[str] = []
+    params: list[Any] = []
+
+    if tema:
+        where.append("category = %s")
+        params.append(tema)
+
+    if entidad:
+        try:
+            ent_id = int(entidad)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"entidad inválida: {entidad}")
+        where.append("entity_id = %s")
+        params.append(ent_id)
+
+    if territorio:
+        codes = _territory_codes(territorio)
+        if codes is not None:  # None = nacional, no filtrar
+            placeholders = ", ".join(["%s"] * len(codes))
+            where.append(
+                f"(jurisdiccion_geo_codes ?| array[{placeholders}] "
+                f"OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(jurisdiccion_geo_codes) c "
+                f"          WHERE c LIKE ANY(array[{placeholders}])))"
+            )
+            params.extend(codes)
+            params.extend([f"{c}%" for c in codes])
+
+    if subtags:
+        # Multi-subtags = intersection: el dataset debe tener TODOS los tags
+        # marcados. Se logra con un EXISTS por cada subtag.
+        for tag in subtags:
+            where.append(
+                "EXISTS (SELECT 1 FROM dataset_tags dt "
+                "WHERE dt.dataset_id = d.dataset_id AND dt.tag = %s)"
+            )
+            params.append(tag)
+
+    if refinador:
+        where.append("(d.name ILIKE %s OR d.description ILIKE %s)")
+        ref_like = f"%{refinador}%"
+        params.append(ref_like)
+        params.append(ref_like)
+
+    where_sql = " AND ".join(where) if where else "TRUE"
+    return where_sql, params
+
+
+# ----------------------------------------------------------------------
+# GET /api/v1/chips/refine — capa 2 sub-tags refinadores (A.1)
+# ----------------------------------------------------------------------
+
+
+@router.get("/chips/refine", response_model=ChipsRefineResponse)
+async def refine_chips(
+    tema: str | None = Query(default=None),
+    territorio: str | None = Query(default=None),
+    entidad: str | None = Query(default=None),
+    limit: int = Query(default=15, ge=1, le=30),
+) -> ChipsRefineResponse:
+    """Devuelve los tags más frecuentes del subset filtrado por chips capa 1.
+
+    Se aplica una stoplist de tags administrativos genéricos (Ley 1712, ITA,
+    activos de información, etc.) para que los chips reflejen temas reales.
+
+    Si el subset es muy grande (>500 datasets), retorna lista vacía para no
+    devolver tags-ruido del catálogo entero.
+    """
+    if not any([tema, territorio, entidad]):
+        return ChipsRefineResponse(subset_total=0, subtags=[])
+
+    where_sql, params = _build_chips_where(tema, entidad, territorio)
+
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
+            row = cur.fetchone()
+            total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
+
+        if total == 0 or total > _REFINE_SUBSET_MAX:
+            return ChipsRefineResponse(subset_total=total, subtags=[])
+
+        # Tags top del subset. Excluimos stoplist en SQL para no traer
+        # entries que después tendríamos que descartar.
+        stoplist_sql = "%s, " * len(_TAG_STOPLIST)
+        stoplist_sql = stoplist_sql.rstrip(", ")
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT dt.tag, COUNT(DISTINCT d.dataset_id) AS c
+                FROM datasets d
+                JOIN dataset_tags dt ON dt.dataset_id = d.dataset_id
+                WHERE {where_sql}
+                  AND lower(dt.tag) NOT IN ({stoplist_sql})
+                  AND length(dt.tag) BETWEEN 3 AND 60
+                GROUP BY dt.tag
+                ORDER BY c DESC, dt.tag ASC
+                LIMIT %s
+                """,
+                params + [t.lower() for t in _TAG_STOPLIST] + [limit],
+            )
+            rows = cur.fetchall()
+
+    subtags = [
+        ChipOption(value=r["tag"], label=r["tag"], count=r["c"])
+        for r in rows
+    ]
+    return ChipsRefineResponse(subset_total=total, subtags=subtags)
+
+
 @router.post("/query/chips", response_model=ChipsQueryResponse)
 async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     """Filtra el catálogo por combinación de chips y devuelve top-N candidatos.
@@ -189,55 +347,24 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     completa hace un segundo POST a `/api/v1/query` con `q` derivada de los
     chips. Esto separa concerns y deja la narrativa LLM en su flujo SSE.
     """
-    if not any([req.tema, req.tipo, req.territorio, req.entidad, req.refinador]):
+    if not any([req.tema, req.tipo, req.territorio, req.entidad, req.refinador, req.subtags]):
         raise HTTPException(
             status_code=400,
             detail="Marcá al menos un chip antes de buscar.",
         )
 
-    # Construcción del WHERE
-    where: list[str] = []
-    params: list[Any] = []
-
-    if req.tema:
-        where.append("category = %s")
-        params.append(req.tema)
-
-    if req.entidad:
-        try:
-            ent_id = int(req.entidad)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"entidad inválida: {req.entidad}")
-        where.append("entity_id = %s")
-        params.append(ent_id)
-
-    if req.territorio:
-        codes = _territory_codes(req.territorio)
-        if codes is not None:  # None = nacional, no filtrar
-            # Match: dataset cuya jurisdicción cubre alguno de los códigos pedidos
-            # incluye match por prefijo (dpto code "05" matchea mpios "05001")
-            placeholders = ", ".join(["%s"] * len(codes))
-            where.append(
-                f"(jurisdiccion_geo_codes ?| array[{placeholders}] "
-                f"OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(jurisdiccion_geo_codes) c "
-                f"          WHERE c LIKE ANY(array[{placeholders}])))"
-            )
-            params.extend(codes)
-            params.extend([f"{c}%" for c in codes])
-
-    if req.refinador:
-        # Match en name OR description, case-insensitive
-        where.append("(name ILIKE %s OR description ILIKE %s)")
-        ref_like = f"%{req.refinador}%"
-        params.append(ref_like)
-        params.append(ref_like)
-
-    where_sql = " AND ".join(where) if where else "TRUE"
+    where_sql, params = _build_chips_where(
+        tema=req.tema,
+        entidad=req.entidad,
+        territorio=req.territorio,
+        subtags=req.subtags,
+        refinador=req.refinador,
+    )
 
     # Conteo + top-10
     with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) AS c FROM datasets WHERE {where_sql}", params)
+            cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
             row = cur.fetchone()
             total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
 
