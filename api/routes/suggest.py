@@ -1,17 +1,37 @@
-"""GET /api/v1/suggest — pobla los ChipGroup de la home.
+"""GET /api/v1/suggest — [DEPRECATED 2026-05-23] reemplazado por /api/v1/chips.
 
-Catálogo curado a mano y enriquecido con conteos en cuanto haya telemetría.
-Mantenido cerca del producto, no auto-generado, para que los chips reflejen
-intención editorial y no ruido del índice.
+**Estado**: DEPRECADO. Sunset planeado: 2026-07-01.
+
+**Motivo**: este endpoint devolvía slugs (`count`, `seguridad`, `cundinamarca`) que
+NO coinciden con el formato esperado por `POST /api/v1/query/chips` (labels
+literales como `Cuántos`, `category` real de Socrata como `Seguridad y Defensa`,
+códigos DIVIPOLA como `25`).
+
+**Reemplazo**: `GET /api/v1/chips` (router `api/routes/chips.py`). Frontend
+migrado en PR #35.
+
+**Por qué no eliminarlo todavía**: posibles clientes externos (MCP, integraciones
+de terceros, scripts batch). Los tests `test_rebrand_acceptance.py` también
+verifican el contrato — mantenerlo permite que esos tests sigan corriendo como
+"contract tests" durante el período de gracia.
+
+Cuando llegue 2026-07-01 sin uso registrado en logs → eliminar este archivo +
+quitar router de `api/main.py`.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+import logging
+
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from api.models.schemas import SuggestOption, SuggestResponse
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+_SUNSET_DATE = "2026-07-01"
+_REPLACEMENT_LINK = '</api/v1/chips>; rel="successor-version"'
 
 
 _TEMA: list[SuggestOption] = [
@@ -70,10 +90,26 @@ _CATALOG: dict[str, list[SuggestOption]] = {
 }
 
 
-@router.get("/suggest", response_model=SuggestResponse)
+@router.get("/suggest", response_model=SuggestResponse, deprecated=True)
 async def suggest(
-    axis: str = Query(..., description="Eje del chip: tema | tipo | territorio | entidad"),
+    request: Request,
+    response: Response,
+    axis: str = Query(..., description="[DEPRECADO] Eje del chip. Usar GET /chips."),
 ) -> SuggestResponse:
+    """[DEPRECADO] Devuelve slugs legacy incompatibles con `POST /query/chips`.
+
+    Usar `GET /chips` que devuelve los `value` en el formato correcto.
+    """
+    client = request.client.host if request.client else "?"
+    log.warning(
+        "DEPRECATED endpoint /api/v1/suggest llamado (axis=%s, client=%s). "
+        "Migrar a /api/v1/chips antes de %s.",
+        axis, client, _SUNSET_DATE,
+    )
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = _SUNSET_DATE
+    response.headers["Link"] = _REPLACEMENT_LINK
+
     options = _CATALOG.get(axis)
     if options is None:
         raise HTTPException(

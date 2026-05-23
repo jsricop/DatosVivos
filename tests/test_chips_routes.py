@@ -210,3 +210,117 @@ def test_territory_codigo_directo():
     from api.routes.chips import _territory_codes
     assert _territory_codes("11") == ["11"]
     assert _territory_codes("05001") == ["05001"]
+
+
+# ---------- A.1: GET /chips/refine + POST con subtags ----------
+
+
+def test_refine_sin_chips_devuelve_vacio():
+    """Sin parámetros, no podemos calcular un subset → 0 + lista vacía."""
+    client = TestClient(_get_app())
+    res = client.get("/api/v1/chips/refine")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["subset_total"] == 0
+    assert data["subtags"] == []
+
+
+def test_refine_subset_grande_devuelve_vacio():
+    """Si subset >500, tags son ruido del catálogo. Retornar vacío."""
+    conn, _ = _mock_conn_with_responses({"c": 800})
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.get("/api/v1/chips/refine?tema=Educación")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["subset_total"] == 800
+        assert data["subtags"] == []
+
+
+def test_refine_devuelve_tags_top():
+    """Subset razonable → lista de tags ordenada DESC por count."""
+    count_row = {"c": 56}
+    tags_rows = [
+        {"tag": "educación superior", "c": 10},
+        {"tag": "universidad del cauca", "c": 8},
+        {"tag": "matrícula", "c": 5},
+    ]
+    conn, _ = _mock_conn_with_responses(count_row, tags_rows)
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.get("/api/v1/chips/refine?tema=Educación&territorio=macro:pacifico")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["subset_total"] == 56
+        assert len(data["subtags"]) == 3
+        assert data["subtags"][0]["value"] == "educación superior"
+        assert data["subtags"][0]["count"] == 10
+
+
+def test_query_chips_con_subtags_intersection():
+    """POST /query/chips con subtags=['a','b'] aplica intersection."""
+    count_row = {"c": 3}
+    candidates = [
+        {"dataset_id": "abc-1", "name": "Filtered",
+         "entity_raw": "X", "category": "Y",
+         "row_count": 100, "view_count": 500, "last_updated": None,
+         "url": None, "api_url": None,
+         "jurisdiccion_nivel": "departamental", "jurisdiccion_geo_codes": ["19"]}
+    ]
+    conn, cursors = _mock_conn_with_responses(count_row, candidates)
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Educación", "subtags": ["matrícula", "cobertura"]},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total_in_subset"] == 3
+        # Verificar que el SQL incluye 2 EXISTS clauses para los 2 subtags
+        executed_sql = " ".join(
+            str(call.args[0]) for call in cursors[0].execute.call_args_list
+        )
+        assert executed_sql.count("EXISTS (SELECT 1 FROM dataset_tags") == 2
+
+
+def test_query_chips_solo_subtag_es_chip_valido():
+    """Con SOLO subtag (sin tema/territorio/etc.) NO debe rechazar como 'sin chips'."""
+    count_row = {"c": 1}
+    candidates = [
+        {"dataset_id": "abc-1", "name": "X",
+         "entity_raw": "E", "category": "C",
+         "row_count": 1, "view_count": 1, "last_updated": None,
+         "url": None, "api_url": None,
+         "jurisdiccion_nivel": None, "jurisdiccion_geo_codes": None}
+    ]
+    conn, _ = _mock_conn_with_responses(count_row, candidates)
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.post(
+            "/api/v1/query/chips",
+            json={"subtags": ["matrícula"]},
+        )
+        assert res.status_code == 200
+
+
+def test_build_chips_where_subtags_genera_exists():
+    """El helper genera EXISTS clauses por cada subtag."""
+    from api.routes.chips import _build_chips_where
+    sql, params = _build_chips_where(
+        tema="Educación",
+        entidad=None,
+        territorio=None,
+        subtags=["matrícula", "cobertura"],
+    )
+    assert sql.count("EXISTS") == 2
+    assert "dataset_tags" in sql
+    assert "matrícula" in params
+    assert "cobertura" in params
+
+
+def test_build_chips_where_sin_filtros_devuelve_true():
+    from api.routes.chips import _build_chips_where
+    sql, params = _build_chips_where(None, None, None)
+    assert sql == "TRUE"
+    assert params == []

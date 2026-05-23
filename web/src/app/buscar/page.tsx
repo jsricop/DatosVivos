@@ -13,6 +13,7 @@ type SearchPageProps = {
     tipo?: string | string[];
     territorio?: string | string[];
     entidad?: string | string[];
+    subtag?: string | string[];
     refinador?: string;
   }>;
 };
@@ -46,16 +47,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
   const filters = normalizeFilters(params);
+  const subtags = normalizeSubtags(params.subtag);
   const refinador = (params.refinador ?? "").trim();
-  const hasChips = Object.values(filters).some((v) => v.length > 0);
+  const hasChips =
+    Object.values(filters).some((v) => v.length > 0) || subtags.length > 0;
 
   // Modo chips: chips marcados sin texto libre — flujo determinista
   // (Fase 1.1 del audit top-down).
   if (!q && hasChips) {
     return (
-      <div className="container-narrow flex flex-col gap-8 py-8">
-        <header className="flex flex-col gap-3 pb-4 hairline-bottom">
-          <div className="flex justify-between gap-4">
+      <div className="container-narrow flex flex-col gap-5 py-6">
+        <header className="flex flex-col gap-2 pb-3 hairline-bottom">
+          <div className="flex justify-between gap-4 items-baseline">
             <span className="text-kicker">Búsqueda por filtros</span>
             <Link
               href="/"
@@ -64,14 +67,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               ← volver al inicio
             </Link>
           </div>
-          <h1 className="font-serif text-h2 m-0 text-ink">
-            Tu consulta
-          </h1>
           <ActiveFilters filters={filters} />
         </header>
 
         <Suspense fallback={<p>Procesando…</p>}>
-          <ChipsResultView filters={filters} refinador={refinador || undefined} />
+          <ChipsResultView
+            filters={filters}
+            subtags={subtags}
+            refinador={refinador || undefined}
+          />
         </Suspense>
 
         <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
@@ -167,4 +171,9 @@ function normalizeFilters(
     out[key] = Array.isArray(raw) ? raw : [raw];
   }
   return out;
+}
+
+function normalizeSubtags(raw: string | string[] | undefined): string[] {
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
 }

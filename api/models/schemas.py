@@ -121,10 +121,25 @@ class ChipsQueryRequest(BaseModel):
     tipo: ChipTipo | None = None
     territorio: str | None = None   # código DIVIPOLA "11", "05001", "macro:caribe", "nacional"
     entidad: str | None = None      # entity_id como string
+    # Sub-tags refinadores (capa 2, ver GET /api/v1/chips/refine). Multi =
+    # intersection: el dataset debe tener TODOS los tags marcados.
+    subtags: list[str] | None = None
     refinador: str | None = Field(default=None, max_length=200,
                                   description="Texto libre opcional, refina dentro del subset")
     # Si el usuario explícitamente marcó un dataset (botón "Era este"):
     force_dataset_id: str | None = None
+
+
+class ChipsRefineResponse(BaseModel):
+    """GET /api/v1/chips/refine — capa 2 sub-tags refinadores del subset.
+
+    `subtags` viene ordenado por frecuencia DESC, filtrado de tags
+    administrativos genéricos (ver `_TAG_STOPLIST` en api/routes/chips.py).
+    Vacío si el subset es >500 datasets (demasiado ruido) o 0.
+    """
+
+    subset_total: int                # # datasets que matchean los chips capa 1
+    subtags: list[ChipOption]        # tags top con count
 
 
 class ChipsCandidateDataset(BaseModel):
