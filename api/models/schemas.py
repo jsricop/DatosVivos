@@ -84,3 +84,71 @@ class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     backend: str
     detail: str | None = None
+
+
+# ============================================================
+# Fase 1 — Chips como entrada PRIMARIA (ADR-018 cuando exista)
+# ============================================================
+
+
+ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+
+
+class ChipOption(BaseModel):
+    """Opción de un chip (valor seleccionable). `value` es lo que viaja al
+    backend; `label` es lo que ve el usuario."""
+
+    value: str
+    label: str
+    # Información extra opcional para tooltips o cards.
+    count: int | None = None  # cuántos datasets aplican a este chip
+    hint: str | None = None
+
+
+class ChipsResponse(BaseModel):
+    """GET /api/v1/chips — listas dinámicas para la UI."""
+
+    tema: list[ChipOption]          # desde DISTINCT datasets.category
+    tipo: list[ChipOption]          # hardcoded 5
+    territorio: list[ChipOption]    # Nacional + 32 dptos + macroregiones
+    entidad: list[ChipOption]       # top-N por uso telemetría
+
+
+class ChipsQueryRequest(BaseModel):
+    """POST /api/v1/query/chips — combinación de chips elegida por el usuario."""
+
+    tema: str | None = None         # category de Socrata
+    tipo: ChipTipo | None = None
+    territorio: str | None = None   # código DIVIPOLA "11", "05001", "macro:caribe", "nacional"
+    entidad: str | None = None      # entity_id como string
+    refinador: str | None = Field(default=None, max_length=200,
+                                  description="Texto libre opcional, refina dentro del subset")
+    # Si el usuario explícitamente marcó un dataset (botón "Era este"):
+    force_dataset_id: str | None = None
+
+
+class ChipsCandidateDataset(BaseModel):
+    """Dataset dentro del subset filtrado por chips."""
+
+    dataset_id: str
+    name: str
+    entity: str | None
+    category: str | None
+    row_count: int | None
+    view_count: int | None
+    last_updated: str | None
+    url: str
+    api_url: str
+    jurisdiccion_nivel: str | None
+    jurisdiccion_geo_codes: list[str] | None
+
+
+class ChipsQueryResponse(BaseModel):
+    """Respuesta inicial del POST /chips — la narrativa final llega vía SSE
+    si el cliente pide streaming en un endpoint posterior."""
+
+    total_in_subset: int           # # de datasets que matchean los chips
+    candidates: list[ChipsCandidateDataset]  # top-N para mostrar
+    chosen_dataset_id: str | None  # el seleccionado para ejecutar SoQL
+    suggested_chips: list[str] | None = None  # ["entidad", "territorio"] si subset>10
+    message: str | None = None     # ej. "Hay 746 datasets de Salud. Marcá otro chip para refinar."

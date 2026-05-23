@@ -116,3 +116,41 @@ def test_armenia_capital_quindio_excluida_como_mpio():
     del catálogo para evitar matches espurios. Tampoco está como dpto."""
     nivel, codes, conf, _ = infer_jurisdiccion("Cualquier entidad de Armenia", "", None)
     assert nivel is None
+
+
+# ---------- Bug fix: dpto no-Bogotá gana sobre Bogotá-como-sede ----------
+
+def test_cundinamarca_con_sede_bogota():
+    """'Empresas Públicas de Cundinamarca, Bogotá D.C.' → DEPARTAMENTAL
+    (Cundinamarca, no Bogotá distrito). Bogotá es solo la sede física."""
+    _case("Empresas Públicas de Cundinamarca, Bogotá D.C.", "departamental", ["25"])
+
+
+def test_universidad_cundinamarca_con_sede_bogota():
+    _case("Universidad Colegio Mayor de Cundinamarca, Bogotá D.C.", "departamental", ["25"])
+
+
+# ---------- Falsos positivos descubiertos en cobertura producción ----------
+
+def test_centro_memoria_historica_es_nacional():
+    _case("Centro de Memoria Histórica, Bogotá D.C.", "nacional", [])
+
+
+def test_dafp_es_nacional():
+    """Departamento Administrativo de la Función Pública - cubierto por
+    token 'departamento administrativo'."""
+    _case("Departamento Administrativo de la Función Pública - DAFP, Bogotá D.C.",
+          "nacional", [])
+
+
+def test_esap_es_nacional():
+    _case("Escuela Superior de Administración Pública - ESAP, Bogotá D.C.", "nacional", [])
+
+
+def test_senado_es_nacional():
+    _case("Senado de la República, Bogotá D.C.", "nacional", [])
+
+
+def test_arn_es_nacional():
+    _case("Agencia para la Reincorporación y la Normalización - ARN, Bogotá D.C.",
+          "nacional", [])
