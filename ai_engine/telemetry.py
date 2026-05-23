@@ -26,6 +26,10 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 TELEMETRY_PATH = Path("data/telemetry/queries.csv")
+# CSV mantiene esquema legacy (9 campos) para no romper el append en producción.
+# Los campos de audit (migration 001) viven SOLO en Postgres — fuente de verdad
+# para el eval harness y dashboards. Si se necesita exportar audit a CSV en el
+# futuro, hacer un export desde Postgres.
 _FIELDS = (
     "timestamp_iso",
     "question",
@@ -89,6 +93,14 @@ def log_query(
     censored_count: int,
     elapsed_s: float,
     had_statistics: bool,
+    # --- Audit fields (migration 001). Opcionales para no romper callers viejos. ---
+    dataset_top1_id: str | None = None,
+    dataset_top1_score: float | None = None,
+    geo_resolved: str | None = None,
+    geo_attribution_ok: bool | None = None,
+    dashboard_emitted: bool | None = None,
+    failure_type: str | None = None,
+    user_feedback: str | None = None,
 ) -> None:
     """Appendea un registro de consulta a CSV y (si está activo) Postgres.
 
@@ -103,6 +115,7 @@ def log_query(
     rows_int = int(rows_count)
     censored_int = int(censored_count)
     had_stats = bool(had_statistics)
+    top1_score_round = round(float(dataset_top1_score), 4) if dataset_top1_score is not None else None
 
     # --- CSV (siempre intenta) ---
     try:
@@ -137,9 +150,12 @@ def log_query(
                 """
                 INSERT INTO queries (
                     timestamp_iso, question, intent, datasets_used,
-                    soql_executed, rows_count, censored_count, elapsed_s, had_statistics
+                    soql_executed, rows_count, censored_count, elapsed_s, had_statistics,
+                    dataset_top1_id, dataset_top1_score, geo_resolved,
+                    geo_attribution_ok, dashboard_emitted, failure_type, user_feedback
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (timestamp_iso, question) DO NOTHING
                 RETURNING id
                 """,
@@ -153,6 +169,13 @@ def log_query(
                     censored_int,
                     elapsed_round,
                     had_stats,
+                    dataset_top1_id,
+                    top1_score_round,
+                    geo_resolved,
+                    geo_attribution_ok,
+                    dashboard_emitted,
+                    failure_type,
+                    user_feedback,
                 ),
             )
             row = cur.fetchone()
