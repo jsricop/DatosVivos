@@ -37,6 +37,41 @@ export async function fetchSuggest(axis: string): Promise<SuggestOption[]> {
   }
 }
 
+/**
+ * Nueva fuente PRIMARIA de chips (Fase 1.1 audit top-down).
+ *
+ * Devuelve TEMA/TIPO/TERRITORIO/ENTIDAD desde GET /api/v1/chips, cuyo
+ * `value` por axis es el formato que espera POST /api/v1/query/chips:
+ *   - tema: category literal de Socrata ("Salud y Protección Social")
+ *   - tipo: label literal ("Cuántos", "Comparar", ...)
+ *   - territorio: código DIVIPOLA ("11", "05") o "macro:caribe" o "nacional"
+ *   - entidad: entity_id como string
+ *
+ * Si falla, cae a los fallbacks legacy (slugs como "salud"/"count") que
+ * NO van a funcionar contra el endpoint chips. En ese caso la UI muestra
+ * los chips pero el botón Buscar devolverá 422 — comportamiento esperado
+ * cuando el backend está caído.
+ */
+type ChipsListsResponse = {
+  tema: SuggestOption[];
+  tipo: SuggestOption[];
+  territorio: SuggestOption[];
+  entidad: SuggestOption[];
+};
+
+export async function fetchChipsLists(): Promise<ChipsListsResponse> {
+  try {
+    return await getJson<ChipsListsResponse>("/chips");
+  } catch {
+    return {
+      tema: SUGGEST_FALLBACK.tema ?? [],
+      tipo: SUGGEST_FALLBACK.tipo ?? [],
+      territorio: SUGGEST_FALLBACK.territorio ?? [],
+      entidad: SUGGEST_FALLBACK.entidad ?? [],
+    };
+  }
+}
+
 export async function fetchPopular(limit = 5): Promise<PopularQuery[]> {
   try {
     const data = await getJson<{ popular: PopularQuery[] }>(
