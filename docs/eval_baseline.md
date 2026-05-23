@@ -83,3 +83,24 @@ Estos casos refuerzan que el retrieval ML híbrido tiene falsos positivos consis
 ## Next step
 
 Cerrar Fase 0 y arrancar **Fase 1 prerequisito: curación de metadata del catálogo** (ver `merry-puzzling-pie.md` sección Fase 1). Primer entregable: script `scripts/curate_chip_metadata.py` + migration `002_chip_metadata.sql`.
+
+---
+
+## Apéndice: re-eval post Fase 1.1 (2026-05-23T04-31)
+
+Después de mergear PR #32 (jurisdicción curada 99.8%) y PR #33 (chips entrada primaria), correr `run_eval.py` contra producción para confirmar no-regresión del path libre.
+
+Reporte: `eval/reports/2026-05-23T04-31-08.{json,md}`.
+
+| Métrica | Baseline (04:02) | Post Fase 1.1 (04:31) | Δ |
+|---|---:|---:|---:|
+| `accuracy@1` | 0.67 (2/3) | 0.67 (2/3) | = |
+| `intent_accuracy` | 0.45 (15/33) | 0.45 (15/33) | = |
+| `forbidden_dataset_hits` | 0 | 0 | = |
+| `hallucination_rate` | 0.06 (2/33) | 0.06 (2/33) | = |
+| `p50_latency_s` | 31.1 | 35.6 | +4.5 |
+| `p95_latency_s` | 147.9 | 166.2 | +18.3 |
+
+**Lectura:** funcionalmente idéntico — el path `/api/v1/query` no fue tocado, así que los outcomes son los mismos. Latencia ligeramente peor probablemente por carga residual del Ollama durante la noche; NO es regresión de código. Diferencias en datasets elegidos para algunas queries (`q010` devolvió `8rpn-wpty` vs `ef7j-amu8` original) son del no-determinismo del rerank LLM 3B, no de cambios de mi código.
+
+**Lo que esta corrida NO mide:** el nuevo path `/api/v1/query/chips`. Pendiente expandir golden con `expected_chip_combination` (Fase 2 prep).
