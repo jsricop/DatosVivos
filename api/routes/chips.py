@@ -101,6 +101,19 @@ _TAG_STOPLIST = frozenset({
 # los tags del top reflejan ruido del catálogo más que del query.
 _REFINE_SUBSET_MAX = 500
 
+# Pesos del score compuesto del ELEGIDO (A.2 del roadmap).
+# Reemplaza el `ORDER BY view_count DESC, rows_updated_at DESC` crudo por
+# una combinación normalizada que premia datasets populares Y recientes.
+#   view: log-normalized contra el max del subset → estable cuando hay outliers
+#         con cientos de miles de vistas.
+#   freshness: decae linealmente hasta 0 a los `_FRESHNESS_HALF_LIFE_DAYS`*2
+#         días. 0 si nunca actualizado (rows_updated_at IS NULL).
+# Pesos deliberadamente parejos: la popularidad por sí sola elegía datasets
+# administrativos antiguos pero muy vistos (ej. Esquema de Publicación).
+_SCORE_W_VIEW = 0.55
+_SCORE_W_FRESHNESS = 0.45
+_FRESHNESS_HALF_LIFE_DAYS = 365  # 1 año = score 0.5; 2 años = score 0
+
 
 # ----------------------------------------------------------------------
 # Conexión Postgres — lazy single connection (lecturas chicas)
@@ -369,19 +382,47 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
             total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
 
         with conn.cursor() as cur:
+            # Score compuesto (A.2): view_count log-normalizado contra el max
+            # del subset + freshness lineal decay 2 años. Reemplaza ORDER BY
+            # crudo que elegía datasets popular-pero-viejos.
+            #
+            # Estructura CTE:
+            #   subset → todos los datasets que matchean los chips
+            #   stats  → max(view_count) del subset (constante para
+            #            normalización LN dentro del subset)
+            #
+            # max_view se calcula GREATEST(1) para que LN(0)=undefined no
+            # rompa, y NULLIF para que datasets sin view_count no propaguen
+            # NaN. last_updated NULL → freshness = 0.
             cur.execute(
                 f"""
-                SELECT d.dataset_id, d.name, d.entity_raw,
-                       d.category, d.row_count, d.view_count,
-                       d.rows_updated_at::text AS last_updated,
-                       d.socrata_url AS url, d.api_url,
-                       d.jurisdiccion_nivel, d.jurisdiccion_geo_codes
-                FROM datasets d
-                WHERE {where_sql}
-                ORDER BY d.view_count DESC NULLS LAST, d.rows_updated_at DESC NULLS LAST
+                WITH subset AS (
+                  SELECT d.* FROM datasets d WHERE {where_sql}
+                ),
+                stats AS (
+                  SELECT GREATEST(MAX(view_count), 1) AS max_view FROM subset
+                )
+                SELECT s.dataset_id, s.name, s.entity_raw,
+                       s.category, s.row_count, s.view_count,
+                       s.rows_updated_at::text AS last_updated,
+                       s.socrata_url AS url, s.api_url,
+                       s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
+                       (
+                         %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
+                               NULLIF(LN((SELECT max_view FROM stats)), 0))
+                         +
+                         %s * GREATEST(0, 1 - LEAST(1,
+                            EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
+                            (%s * 2 * 86400)
+                         ))
+                       ) AS score
+                FROM subset s
+                ORDER BY score DESC NULLS LAST,
+                         s.view_count DESC NULLS LAST,
+                         s.rows_updated_at DESC NULLS LAST
                 LIMIT 10
                 """,
-                params,
+                params + [_SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS],
             )
             rows = cur.fetchall()
 
@@ -398,6 +439,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
             api_url=r.get("api_url") or f"https://www.datos.gov.co/resource/{r['dataset_id']}.json",
             jurisdiccion_nivel=r.get("jurisdiccion_nivel"),
             jurisdiccion_geo_codes=r.get("jurisdiccion_geo_codes"),
+            score=(round(float(r["score"]), 4) if r.get("score") is not None else None),
         )
         for r in rows
     ]
