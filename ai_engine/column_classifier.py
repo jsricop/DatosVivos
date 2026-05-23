@@ -74,24 +74,27 @@ _GEO_CODE_PATTERNS = [
     r"^codigo_pais$",
 ]
 _GEO_NAME_PATTERNS = [
-    r"^(nombre[_-]?)?(dpto|departamento|departament)(_residencia|_corte|_atencion|_nacimiento)?$",
-    r"^(nombre[_-]?)?(mun|mpio|municipio|municipal)(_residencia|_corte|_atencion|_nacimiento)?$",
+    r"^(nombre[_-]?)?(dpto|departamento|departament)(_residencia|_corte|_atencion|_nacimiento|_comercial)?$",
+    r"^(nombre[_-]?)?(mun|mpio|municipio|municipal)(_residencia|_corte|_atencion|_nacimiento|_comercial)?$",
     r"^nom[_-]?(dpto|departamento|mun|mpio|municipio)$",
-    r"^depa(_resi|_residencia|_nac|_pro|_pro_colegio|_atencion)?$",
-    r"^ciudad(_resi|_residencia|_nacimiento|_origen|_destino|_pro|_pro_colegio)?$",
-    r"^mpio(_resi|_residencia)?$",
+    r"^depa(_resi|_residencia|_nac|_pro|_pro_colegio|_atencion|_comercial)?$",
+    r"^ciudad(_resi|_residencia|_nacimiento|_origen|_destino|_pro|_pro_colegio|_comercial)?$",
+    r"^mpio(_resi|_residencia|_comercial)?$",
+    r"^mun_comercial$",
     r"^pais(_origen|_nacimiento|_destino|_residencia)?$",
     r"^localidad$",
     r"^region$",
     r"^subregion$",
     r"^zona$",
+    r"^comuna(s)?$",
     r"^barrio$",
     r"^vereda$",
     r"^corregimiento$",
     r"^sede(_principal|_atencion)?$",
     r"^ubicacion$",
-    r"^direccion(_atencion|_residencia)?$",
-    r"^direcci_n$",
+    r"^direccion(_atencion|_residencia|_comercial)?$",
+    r"^direcci_n(_comercial)?$",
+    r"^dir_comercial$",
 ]
 _GEO_COORD_PATTERNS = [
     r"^lat(itud)?$",
@@ -118,15 +121,19 @@ _FECHA_YEAR_PATTERNS = [
 ]
 _FECHA_DATE_PATTERNS = [
     r"^fecha(_de_)?[a-z_]*$",
+    r"^fec_(renovacion|inicio|fin|expedicion|corte|registro|matricula)",  # fec_* truncados
     r"^date$",
     r"^timestamp$",
     r"^periodo[_-]?(inicio|fin|corte)$",
     r"^trimestre$",
     r"^mes(_corte)?$",
+    r"^ult_a[on]o(_ren|_renovacion)?$",   # último año renovación
 ]
 _FECHA_PERIOD_PATTERNS = [
     r"^periodo$",
     r"^semestre$",
+    r"^semana$",
+    r"^d_a$",                              # día (Socrata-truncated)
 ]
 
 # MÉTRICA — números que se SUMAN o promedian
@@ -140,6 +147,13 @@ _METRICA_COUNT_PATTERNS = [
     r"^superficie(_ha)?$",
     r"^poblacion$",
     r"^habitantes$",
+    r"^personal$",                     # ej. personal asignado
+    r"^adiciones$",
+    r"^reducciones$",
+    r"^compromisos$",
+    r"^numerador(_[0-9]{4})?$",         # indicadores año-suffixed
+    r"^denominador(_[0-9]{4})?$",
+    r"^resultado(_[0-9]{4})?$",
 ]
 _METRICA_CURRENCY_PATTERNS = [
     r"^(monto|valor|costo|precio|presupuesto|inversion|gasto|ingreso|salario|recaudo)",
@@ -153,7 +167,7 @@ _METRICA_RATE_PATTERNS = [
 
 # DIMENSIONES por subgrupo
 _DIM_DEMOGRAPHIC_PATTERNS = [
-    r"^(genero|sexo)$",
+    r"^(genero|sexo|g_nero)$",   # g_nero = "género" Socrata-truncated
     r"^edad(_grupo|_rango)?$",
     r"^grupo_etario$",
     r"^etnia$",
@@ -178,17 +192,29 @@ _DIM_EDUCATIONAL_PATTERNS = [
     r"^carrera$",
     r"^grado$",
     r"^calendario$",
+    r"^metodologia$",
+    r"^aptitud$",
+    r"^formacion_academica$",
+    r"^dedicacion$",
+    r"^area_conocimiento$",
+    r"^area_de_conocimiento$",
+    r"^disciplina$",
 ]
 _DIM_ADMINISTRATIVE_PATTERNS = [
     r"^sector$",
-    r"^tipo(_contrato|_documento|_servicio|_proceso|_solicitud|_persona)?$",
-    r"^categoria$",
-    r"^subcategoria$",
+    r"^tipo(_contrato|_documento|_servicio|_proceso|_solicitud|_persona|_entidad|_vinculacion|_cargo)?$",
+    r"^categoria(s)?$",
+    r"^subcategoria(s)?$",
     r"^clasificacion$",
     r"^naturaleza$",
     r"^modalidad_(contrato|proceso)$",
     r"^estado(_proceso|_solicitud)?$",
     r"^entidad$",
+    r"^procedimiento$",
+    r"^cargo$",
+    r"^dependencia(_programa)?$",
+    r"^ciiu(_[0-9]+)?$",
+    r"^actividad(_economica)?$",
 ]
 _DIM_STATUS_PATTERNS = [
     r"^estado$",
@@ -244,11 +270,29 @@ _EXCLUDE_ID_PATTERNS = [
     r"^electr_nica$",           # correo electrónica
     r"^correo$",
     r"^correo_electronico$",
-    # Patrones admin documental (Ley 1712)
+    # Patrones admin documental (Ley 1712, TRD, archivística)
     r"^medio_de_conservaci",
-    r"^fundamento_constitucional",
+    r"^fundamento_(constitucional|jur_dico|juridico|legal)",
     r"^excepci_n",
-    r"^otro_cu_l$",            # "Otro, ¿cuál?" → no clasificable
+    r"^objetivo_(leg_timo|legitimo|estrategico)",
+    r"^otro_cu_l$",                  # "Otro, ¿cuál?"
+    r"^subseries?$",                  # serie/subseries documentales
+    r"^series?_documental$",
+    r"^trd$",                         # Tabla Retención Documental
+    r"^caja$",                        # caja archivo
+    r"^reutilizar$",
+    r"^picar$",
+    r"^reciclar$",
+    r"^conservaci_n$",                # acciones TRD (truncado)
+    r"^digitalizaci_n",
+    r"^eliminaci_n$",
+    r"^f_sico$",                      # físico (medio de conservación)
+    r"^digital$",
+    r"^totales?_(de_)?p_ginas$",      # totales páginas documento
+    r"^url_corta$",                    # admin URL
+    r"^url_completa$",
+    r"^car_carg_periodo$",            # carga periodo administrativo
+    r"^organizacion$",
 ]
 _EXCLUDE_URL_PATTERNS = [
     r"^(url|enlace|link|sitio_web|pagina_web)$",
@@ -256,8 +300,8 @@ _EXCLUDE_URL_PATTERNS = [
     r"_(url|link|enlace)$",
 ]
 _EXCLUDE_TEXT_LONG_PATTERNS = [
-    r"^(observacion|observaciones|descripcion|comentarios?|notas?|justificacion|motivo|detalle)$",
-    r"_(observacion|descripcion|comentarios|notas)$",
+    r"^(observacion|observaciones|descripcion|descripci_n|comentarios?|notas?|justificacion|motivo|detalle)$",
+    r"_(observacion|descripcion|descripci_n|comentarios|notas)$",
 ]
 
 
