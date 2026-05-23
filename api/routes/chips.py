@@ -142,13 +142,16 @@ async def list_chips() -> ChipsResponse:
     - ENTIDAD: top-20 entities por uso real (telemetría dataset_top1_id).
     """
     with _connect() as conn:
-        # TEMA
+        # TEMA — counts solo de datasets útiles (excluye admin_only).
+        # El usuario ve "Educación 1015" representando datos útiles, no
+        # esquemas de publicación inflando el número.
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT category, COUNT(*) AS c
                 FROM datasets
                 WHERE category IS NOT NULL AND category != ''
+                  AND (quality_flag IS NULL OR quality_flag = 'ok')
                 GROUP BY category
                 ORDER BY c DESC
                 LIMIT 12
@@ -159,13 +162,15 @@ async def list_chips() -> ChipsResponse:
                 for r in cur.fetchall()
             ]
 
-        # ENTIDAD — top por uso si hay telemetría, sino por count en datasets
+        # ENTIDAD — counts solo de datasets útiles. Sin esto, notarías y
+        # entidades con muchos esquemas de publicación inflaban el top-20.
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT e.entity_id, e.name AS entity_name, COUNT(d.dataset_id) AS c
                 FROM entities e
                 LEFT JOIN datasets d ON d.entity_id = e.entity_id
+                    AND (d.quality_flag IS NULL OR d.quality_flag = 'ok')
                 GROUP BY e.entity_id, e.name
                 HAVING COUNT(d.dataset_id) > 0
                 ORDER BY c DESC
