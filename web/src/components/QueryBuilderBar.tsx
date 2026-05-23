@@ -75,7 +75,7 @@ export function QueryBuilderBar({
       role="status"
       aria-live="polite"
       aria-label="Consulta construida con filtros"
-      className="border-t border-hairline-strong bg-bg-elev px-6 py-4 flex flex-wrap items-center gap-3"
+      className="sticky bottom-0 z-30 -mx-6 px-6 py-4 border-t-2 border-accent bg-bg-elev/95 backdrop-blur supports-[backdrop-filter]:bg-bg-elev/85 shadow-[0_-6px_18px_-12px_rgba(0,0,0,0.25)] flex flex-wrap items-center gap-3"
     >
       <span className="font-mono text-kicker text-ink-muted uppercase tracking-[0.08em] shrink-0">
         Tu consulta
