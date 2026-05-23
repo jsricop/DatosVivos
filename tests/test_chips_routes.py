@@ -324,3 +324,57 @@ def test_build_chips_where_sin_filtros_devuelve_true():
     sql, params = _build_chips_where(None, None, None)
     assert sql == "TRUE"
     assert params == []
+
+
+# ---------- A.2: score compuesto del ELEGIDO ----------
+
+
+def test_query_chips_devuelve_score_por_candidate():
+    """Cada candidato lleva su score numérico (>=0 y <=1)."""
+    count_row = {"c": 5}
+    candidates = [
+        {"dataset_id": "abc-1", "name": "Top",
+         "entity_raw": "X", "category": "Y",
+         "row_count": 100, "view_count": 50000, "last_updated": None,
+         "url": None, "api_url": None,
+         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": [],
+         "score": 0.87},
+        {"dataset_id": "abc-2", "name": "Bottom",
+         "entity_raw": "X", "category": "Y",
+         "row_count": 100, "view_count": 100, "last_updated": None,
+         "url": None, "api_url": None,
+         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": [],
+         "score": 0.21},
+    ]
+    conn, _ = _mock_conn_with_responses(count_row, candidates)
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.post("/api/v1/query/chips", json={"tema": "Educación"})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["candidates"][0]["score"] == 0.87
+        assert data["candidates"][1]["score"] == 0.21
+
+
+def test_query_chips_score_null_si_no_calculable():
+    """Si SQL devuelve NULL en score (subset sin view_count), exponer None."""
+    count_row = {"c": 1}
+    candidates = [
+        {"dataset_id": "abc-1", "name": "X",
+         "entity_raw": "Y", "category": "Z",
+         "row_count": 0, "view_count": None, "last_updated": None,
+         "url": None, "api_url": None,
+         "jurisdiccion_nivel": None, "jurisdiccion_geo_codes": None,
+         "score": None},
+    ]
+    conn, _ = _mock_conn_with_responses(count_row, candidates)
+    with patch("api.routes.chips._connect", return_value=conn):
+        client = TestClient(_get_app())
+        res = client.post("/api/v1/query/chips", json={"tema": "X"})
+        assert res.json()["candidates"][0]["score"] is None
+
+
+def test_score_constants_sum_to_one():
+    """Los pesos del score deben sumar 1.0 para que score ∈ [0, 1]."""
+    from api.routes.chips import _SCORE_W_VIEW, _SCORE_W_FRESHNESS
+    assert abs(_SCORE_W_VIEW + _SCORE_W_FRESHNESS - 1.0) < 1e-9

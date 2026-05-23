@@ -156,6 +156,9 @@ class ChipsCandidateDataset(BaseModel):
     api_url: str
     jurisdiccion_nivel: str | None
     jurisdiccion_geo_codes: list[str] | None
+    # Score compuesto que decidió el ORDER BY (A.2). Sirve para auditar la
+    # decisión del top-1 sin abrir Postgres. null si no calculable.
+    score: float | None = None
 
 
 class ChipsQueryResponse(BaseModel):
