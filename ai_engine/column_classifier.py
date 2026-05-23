@@ -54,27 +54,44 @@ def _norm(s: str | None) -> str:
 
 
 # GEO: códigos DIVIPOLA. Nombres muy estandarizados en datasets colombianos.
+# Cuidado: Socrata convierte "año"→"a_o", "código"→"c_digo", "ñ"→"_n" en
+# fieldName, así que los patterns deben tolerar truncamientos.
 _GEO_CODE_PATTERNS = [
     r"^cod[_-]?dane[_-]?(dpto|departamento|departament|departamiento)",
     r"^cod[_-]?dane[_-]?(mun|mpio|municipio|municipal)",
     r"^cod[_-]?(dpto|departamento|departamento_residencia|departament|depa|deptos?)$",
     r"^cod[_-]?(mun|mpio|municipio|mpio_residencia)$",
-    r"^codigo[_-]?(dpto|departamento|mun|mpio|municipio)",
+    r"^codigo[_-]?(dpto|departamento|mun|mpio|municipio|dane|divipola)",
+    r"^c_digo[_-]?(dpto|departamento|mun|mpio|municipio|dane|divipola)",
     r"^c_(dpto|mpio|mun)$",
     r"^id[_-]?(dpto|mpio|departamento|municipio)$",
     r"^divipola$",
     r"^cod_localidad$",
     r"^localidad_codigo$",
+    r"^cod_departamento_",       # cod_departamento_atencion, _residencia, etc.
+    r"^cod_municipio_",
+    r"^cod_pais$",
+    r"^codigo_pais$",
 ]
 _GEO_NAME_PATTERNS = [
-    r"^(nombre[_-]?)?(dpto|departamento|departament)(_residencia|_corte)?$",
-    r"^(nombre[_-]?)?(mun|mpio|municipio|municipal)(_residencia|_corte)?$",
+    r"^(nombre[_-]?)?(dpto|departamento|departament)(_residencia|_corte|_atencion|_nacimiento)?$",
+    r"^(nombre[_-]?)?(mun|mpio|municipio|municipal)(_residencia|_corte|_atencion|_nacimiento)?$",
     r"^nom[_-]?(dpto|departamento|mun|mpio|municipio)$",
-    r"^ciudad$",
+    r"^depa(_resi|_residencia|_nac|_pro|_pro_colegio|_atencion)?$",
+    r"^ciudad(_resi|_residencia|_nacimiento|_origen|_destino|_pro|_pro_colegio)?$",
+    r"^mpio(_resi|_residencia)?$",
+    r"^pais(_origen|_nacimiento|_destino|_residencia)?$",
     r"^localidad$",
     r"^region$",
+    r"^subregion$",
+    r"^zona$",
+    r"^barrio$",
+    r"^vereda$",
+    r"^corregimiento$",
+    r"^sede(_principal|_atencion)?$",
     r"^ubicacion$",
-    r"^direccion$",
+    r"^direccion(_atencion|_residencia)?$",
+    r"^direcci_n$",
 ]
 _GEO_COORD_PATTERNS = [
     r"^lat(itud)?$",
@@ -83,13 +100,21 @@ _GEO_COORD_PATTERNS = [
     r"^coordenadas?$",
     r"^geo(_punto)?$",
     r"^punto_(referencia|geografico)$",
+    r"^shape_area$",
+    r"^the_geom$",
+    r"^geom$",
 ]
 
-# FECHA
+# FECHA — soporta tanto "año/ano" como Socrata-truncated "a_o" o "anyo"
 _FECHA_YEAR_PATTERNS = [
-    r"^(an[oñ]o?|year|vigencia|periodo|periodo_anual|annio)$",
-    r"^a[nñ]o(_corte|_reporte|_vigencia|_inicio)?$",
+    r"^(an[oñ]o?|ano|year|vigencia|periodo_anual|annio)$",
+    r"^a[nñ_]o(_corte|_reporte|_vigencia|_inicio|_fin|_egreso|_ingreso|_finalizacion)?$",
+    r"^a_o(_corte|_reporte|_vigencia|_inicio|_fin|_egreso|_ingreso|_finalizacion)?$",
+    r"^a_?o$",  # "a_o" sin sufijo (año Socrata-truncated)
     r"^vigencia(_anual)?$",
+    r"^year_",
+    r"_a[nñ]o$",
+    r"_a_o$",
 ]
 _FECHA_DATE_PATTERNS = [
     r"^fecha(_de_)?[a-z_]*$",
@@ -107,8 +132,14 @@ _FECHA_PERIOD_PATTERNS = [
 # MÉTRICA — números que se SUMAN o promedian
 _METRICA_COUNT_PATTERNS = [
     r"^(total|n_|num_|numero_|cantidad_|count_|conteo_)",
+    r"^cantidad$",
+    r"^total$",
     r"^(personas|estudiantes|matriculados?|matriculas?|nacidos?|fallecidos?|casos|usuarios|beneficiarios|atendidos|graduados|inscritos|contratos|tramites|servicios|alumnos)$",
-    r"_(total|count|n|num|cantidad|matriculas?)$",
+    r"_(total|count|n|num|cantidad|matriculas?|personas|casos|atendidos)$",
+    r"^area(_ha|_hectareas|_geom)?$",   # área en hectáreas
+    r"^superficie(_ha)?$",
+    r"^poblacion$",
+    r"^habitantes$",
 ]
 _METRICA_CURRENCY_PATTERNS = [
     r"^(monto|valor|costo|precio|presupuesto|inversion|gasto|ingreso|salario|recaudo)",
@@ -127,7 +158,16 @@ _DIM_DEMOGRAPHIC_PATTERNS = [
     r"^grupo_etario$",
     r"^etnia$",
     r"^estado_civil$",
+    r"^nacionalidad$",
+    r"^idioma$",
+    r"^religion$",
+    r"^estrato$",
+    r"^estrato_socioeconomico$",
     r"^nivel_socioeconomico$",
+    r"^discapacidad$",
+    r"^victima$",
+    r"^migrante$",
+    r"^lgbtiq$",
 ]
 _DIM_EDUCATIONAL_PATTERNS = [
     r"^nivel(_educativo|_academico|_formacion)?$",
@@ -157,7 +197,7 @@ _DIM_STATUS_PATTERNS = [
     r"^aprobado$",
 ]
 
-# EXCLUIR
+# EXCLUIR — identifiers + textos largos + URLs + nombres-libres
 _EXCLUDE_ID_PATTERNS = [
     r"^id$",
     r"^id_[a-z_]+$",
@@ -167,6 +207,48 @@ _EXCLUDE_ID_PATTERNS = [
     r"^numero_documento$",
     r"^cedula$",
     r"^numero_radicado$",
+    r"^nit(_responsable|_entidad)?$",
+    r"^objectid$",
+    r"^gridcode$",
+    r"^consecutiv(o)?$",
+    r"^c_digo$",                # "código" Socrata-truncated
+    r"^c_digo_(serie|subserie|entidad|interno|expediente)$",
+    r"^codigo$",
+    r"^codigo_(serie|subserie|entidad|interno|expediente|tramite|proceso)$",
+    r"^nombre$",
+    r"^nombre_completo$",
+    r"^nombre_del_responsable",
+    r"^razon_social$",
+    r"^nombre_o_t_tulo_de_la",  # nombre o título de la información
+    r"^documento$",
+    r"^documento_responsable",
+    r"^codigo_entidad$",
+    r"^codigo_organizacion$",
+    r"^identificador_empresa$",
+    r"^item$",
+    r"^no$",                    # "número" muy corto
+    r"^n$",                     # idem
+    r"^serie$",                 # serie documental
+    r"^serie_documental$",
+    r"^subserie$",
+    r"^subserie_documental$",
+    r"^formato$",
+    r"^formato_documental$",
+    r"^az$",                    # carpeta AZ (admin documental)
+    r"^carpeta$",
+    r"^bolsa$",
+    r"^expediente$",
+    r"^tel_com_[0-9]+$",        # telefonos comerciales
+    r"^telefono(_[a-z]+)?$",
+    r"^email(_[a-z]+)?$",
+    r"^electr_nica$",           # correo electrónica
+    r"^correo$",
+    r"^correo_electronico$",
+    # Patrones admin documental (Ley 1712)
+    r"^medio_de_conservaci",
+    r"^fundamento_constitucional",
+    r"^excepci_n",
+    r"^otro_cu_l$",            # "Otro, ¿cuál?" → no clasificable
 ]
 _EXCLUDE_URL_PATTERNS = [
     r"^(url|enlace|link|sitio_web|pagina_web)$",
@@ -284,8 +366,16 @@ def classify_column(
 
     # ------------------------------------------------------------------
     # 4. MÉTRICA — solo si data_type es numérico
+    #    PERO: antes chequeamos si number+nombre demographic (edad, estrato)
+    #    → dimension.demographic. Sin esto, datasets con `edad` como columna
+    #    number se contaban como métrica false positive.
     # ------------------------------------------------------------------
     if dtype in ("number", "money", "numeric", "double", "int"):
+        # Casos number-pero-no-metrica: edad/estrato son numéricos pero
+        # dimensiones demográficas.
+        if _match_any(_DIM_DEMOGRAPHIC_PATTERNS, name):
+            return ColumnClassification("dimension", "demographic", "high",
+                                        f"number con nombre demographic: {name}")
         if _match_any(_METRICA_CURRENCY_PATTERNS, name):
             return ColumnClassification("metrica", "currency", "high",
                                         f"name match currency: {name}")
