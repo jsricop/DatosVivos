@@ -2,22 +2,24 @@ import Link from "next/link";
 
 import { HomeSearchPanel } from "@/components/HomeSearchPanel";
 import { Wordmark } from "@/components/Wordmark";
-import { fetchPopular, fetchSuggest } from "@/lib/api";
+import { fetchChipsLists, fetchPopular } from "@/lib/api";
 import type { Axis } from "@/components/ChipGroup";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [tema, tipo, territorio, entidad, popular] = await Promise.all([
-    fetchSuggest("tema"),
-    fetchSuggest("tipo"),
-    fetchSuggest("territorio"),
-    fetchSuggest("entidad"),
+  const [chipsLists, popular] = await Promise.all([
+    fetchChipsLists(),
     fetchPopular(7),
   ]);
 
-  const chips: Record<Axis, typeof tema> = { tema, tipo, territorio, entidad };
+  const chips: Record<Axis, typeof chipsLists.tema> = {
+    tema: chipsLists.tema,
+    tipo: chipsLists.tipo,
+    territorio: chipsLists.territorio,
+    entidad: chipsLists.entidad,
+  };
 
   return (
     <div className="container-narrow flex flex-col gap-12 py-12">
