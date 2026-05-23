@@ -128,6 +128,8 @@ async def _run_one(client: httpx.AsyncClient, base_url: str, entry: dict[str, An
 def _percentile(values: list[float], p: float) -> float | None:
     if not values:
         return None
+    if len(values) == 1:
+        return round(values[0], 2)
     return round(statistics.quantiles(values, n=100, method="inclusive")[int(p) - 1], 2)
 
 
