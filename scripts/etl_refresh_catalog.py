@@ -326,15 +326,53 @@ def _update_enrichment(cur: psycopg.Cursor, rows: list[tuple]) -> None:
 
 
 # ----------------------------------------------------------------------
+# Incremental: decidir qué recontar
+# ----------------------------------------------------------------------
+
+
+def _load_existing(conn: psycopg.Connection) -> dict[str, tuple[Any, int | None]]:
+    """{dataset_id: (data_updated_at, row_count)} — base para el diff incremental."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT dataset_id, data_updated_at, row_count FROM datasets")
+        return {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+
+
+def _needs_enrichment(
+    rec: dict[str, Any], existing: dict[str, tuple[Any, int | None]] | None
+) -> bool:
+    """Modo incremental: recontar solo si es NUEVO, el DATO cambió, o nunca se contó.
+    Modo full (existing=None): siempre."""
+    if existing is None:
+        return True
+    prev = existing.get(rec["dataset_id"])
+    if prev is None:
+        return True  # nuevo
+    prev_updated, prev_rowcount = prev
+    if prev_rowcount is None or prev_updated is None:
+        return True  # nunca contado / sin fecha previa
+    new_updated = rec.get("data_updated_at")
+    return bool(new_updated is not None and new_updated > prev_updated)  # el dato cambió
+
+
+# ----------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------
 
 
-async def _run_bulk(conn: psycopg.Connection, limit_total: int | None) -> list[str]:
-    """Pasada 1. Devuelve la lista de dataset_ids procesados."""
+async def _run_bulk(
+    conn: psycopg.Connection,
+    limit_total: int | None,
+    existing: dict[str, tuple[Any, int | None]] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Pasada 1 (bulk). Devuelve (todos_los_ids, ids_a_enriquecer).
+
+    En incremental (`existing` no es None) `ids_a_enriquecer` son solo los
+    nuevos/cambiados/sin contar; en full, son todos.
+    """
     client = DiscoveryClient()
     resolve_entity = _build_entity_resolver(conn)
     ids: list[str] = []
+    to_enrich: list[str] = []
     succeeded = failed = 0
     buf: list[dict[str, Any]] = []
 
@@ -360,6 +398,8 @@ async def _run_bulk(conn: psycopg.Connection, limit_total: int | None) -> list[s
             failed += 1
             continue
         ids.append(rec["dataset_id"])
+        if _needs_enrichment(rec, existing):
+            to_enrich.append(rec["dataset_id"])
         buf.append(rec)
         if len(buf) >= 50:
             await flush()
@@ -367,7 +407,7 @@ async def _run_bulk(conn: psycopg.Connection, limit_total: int | None) -> list[s
                 log.info("Bulk: %d datasets procesados", len(ids))
     await flush()
     log.info("Pasada 1 (bulk) terminada. ok=%d fail=%d total=%d", succeeded, failed, len(ids))
-    return ids
+    return ids, to_enrich
 
 
 async def _run_enrich(
@@ -407,18 +447,27 @@ async def main(args: argparse.Namespace) -> int:
         conn.commit()
 
         if args.enrich_only:
+            # Incremental + enrich-only: solo los que nunca se contaron (row_count NULL).
+            where = " WHERE row_count IS NULL" if args.incremental else ""
             with conn.cursor() as cur:
-                sql = "SELECT dataset_id FROM datasets ORDER BY view_count DESC NULLS LAST"
+                sql = f"SELECT dataset_id FROM datasets{where} ORDER BY view_count DESC NULLS LAST"
                 if args.limit:
                     sql += f" LIMIT {int(args.limit)}"
                 cur.execute(sql)
                 ids = [r[0] for r in cur.fetchall()]
+            to_enrich = ids
         else:
-            ids = await _run_bulk(conn, args.limit)
+            existing = _load_existing(conn) if args.incremental else None
+            ids, to_enrich = await _run_bulk(conn, args.limit, existing)
+            if args.incremental:
+                log.info(
+                    "Incremental: %d de %d datasets requieren recuento (nuevos/cambiados/sin contar)",
+                    len(to_enrich), len(ids),
+                )
 
         if not args.no_enrich:
             await _run_enrich(
-                conn, ids, want_count=not args.no_rowcount, want_comments=not args.no_comments
+                conn, to_enrich, want_count=not args.no_rowcount, want_comments=not args.no_comments
             )
 
         with conn.cursor() as cur:
@@ -437,6 +486,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--limit", type=int, default=None, help="cap de datasets (sample)")
     p.add_argument("--no-enrich", action="store_true", help="solo pasada 1 (bulk Discovery)")
     p.add_argument("--enrich-only", action="store_true", help="solo pasada 2 sobre datasets existentes")
+    p.add_argument("--incremental", action="store_true",
+                   help="recontar solo nuevos/cambiados (compara data_updated_at); para refresco recurrente")
     p.add_argument("--no-rowcount", action="store_true", help="omitir count(*) SODA")
     p.add_argument("--no-comments", action="store_true", help="omitir comments/rating Metadata")
     return p.parse_args()
