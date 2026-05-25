@@ -34,3 +34,10 @@ ollama_models/
 
 # Estado operativo personal — no se sube
 STATUS.md
+
+# Documentación interna — se publicará al final.
+# Se mantienen: README.md, prompts cargados por código (ai_engine/prompts/*),
+# y los README.md de paquetes (web/...).
+/docs/
+/CHANGELOG.md
+/PLAN_DASHBOARD.md

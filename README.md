@@ -6,22 +6,6 @@ Incluye un **modo de accesibilidad** para personas con discapacidad visual: entr
 
 > **Concurso "Datos al Ecosistema 2026: IA para Colombia"** — Reto #07 (Innovación y Tecnología). Equipo: Oficina de Tecnología de la **ANI** (Agencia Nacional de Infraestructura).
 
-## 🏛️ Para el jurado MinTIC
-
-| Lo que buscas | Dónde está |
-|---|---|
-| **Resumen y propuesta en una página** | [`docs/crisp_mlq/00_index.md`](docs/crisp_mlq/00_index.md) |
-| **Checklist de criterios del concurso con evidencia** | [`docs/crisp_mlq/08_mintic_checklist.md`](docs/crisp_mlq/08_mintic_checklist.md) |
-| **Metodología CRISP-ML(Q) completa (8 documentos)** | [`docs/crisp_mlq/`](docs/crisp_mlq/) |
-| **Capítulo especial: MCP + Claude + Gemini + clientes propios** | [`docs/crisp_mlq/07_mcp_integrations.md`](docs/crisp_mlq/07_mcp_integrations.md) |
-| **Guion de pitch para sustentación (5 min)** | [`docs/crisp_mlq/09_pitch_sustentacion.md`](docs/crisp_mlq/09_pitch_sustentacion.md) |
-| **Acta de cierre del MVP** | [`docs/crisp_mlq/10_acta_cierre.md`](docs/crisp_mlq/10_acta_cierre.md) |
-| **Decisiones de arquitectura (ADRs 001-008)** | [`docs/adr/`](docs/adr/) |
-| **Historial de cambios** | [`CHANGELOG.md`](CHANGELOG.md) |
-| **Limitaciones honestas y bugs documentados** | [`docs/lessons_learned.md`](docs/lessons_learned.md) + sección "Lo que NO funciona" del cap. 05 |
-
-Cada documento tiene tres lentes: 🏛️ jurado MinTIC · 🛠️ ciudadanía técnica · 👥 ciudadanía general.
-
 ## Arquitectura
 
 Tres capas:
@@ -43,7 +27,7 @@ Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · 
 | `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
 | Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
 | Streamlit + accesibilidad (sin Power BI) | 4 | ✅ Funcional, 16 tests verdes |
-| Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | 5 | ✅ Redactados en `docs/crisp_mlq/` |
+| Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | 5 | ✅ Redactados |
 | **Cifras pandas + whitelist anti-alucinación** | **6** | **✅ 55 tests verdes; 30/30 sin alucinaciones en journey** |
 | **GeoResolver DIVIPOLA + comparativa multi-target** | **6** | **✅ plantillas SoQL deterministas; tests congelados** |
 | **Telemetría CSV + disclaimer beta + enlaces verificables** | **6** | **✅ activa por defecto** |
@@ -63,7 +47,6 @@ ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3: ✅)
 app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: ✅)
 db/           Schema PostgreSQL (referencia)             (sprint posterior)
 scripts/      Indexación, mantenimiento                  (Sprint 2)
-docs/         Documentación CRISP-ML(Q)                  (Sprint 5)
 tests/        Pruebas pytest                             (continuo)
 ```
 
@@ -124,7 +107,7 @@ Si vas a contribuir código, dos disciplinas obligatorias:
 Los tests con criterios de aceptación se escriben **antes** del código de producción. Cada sprint con criterios medibles (accuracy, latencia, cobertura) tiene un archivo `tests/test_sprintN_acceptance.py` con todos los tests `@pytest.mark.skip`. Se va quitando el `@skip` a medida que cada feature se implementa. **Los tests no se modifican** durante el sprint; si fallan, se corrige el código. Ejemplo activo: [`tests/test_sprint2_acceptance.py`](tests/test_sprint2_acceptance.py).
 
 ### Doc-first para cambios visibles
-Toda PR que afecte interfaz pública (comandos, contratos de tools, arquitectura, dependencias) debe actualizar la documentación en el mismo PR. Sin docs, no se mergea. Checklist específico por tipo de cambio: ver MAIN.md §6.5 (interno) o pregúntale a un maintainer.
+Toda PR que afecte interfaz pública (comandos, contratos de tools, arquitectura, dependencias) debe actualizar la documentación en el mismo PR. Sin docs, no se mergea. Para el checklist específico por tipo de cambio, pregúntale a un maintainer.
 
 ### Convención de commits
 Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`. Cada commit debe cerrar con `Co-Authored-By: ANI Team & Claude <noreply@anthropic.com>`. Ver historial reciente para ejemplos.
@@ -137,14 +120,6 @@ Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `cho
 - La VM productiva está detrás de VPN (FortiClient SSL) — no expuesta a internet público
 - Las credenciales viven en `.env` (`.gitignore`d) — nunca en código
 - El repositorio público en GitHub solo contiene código, no datos ni credenciales
-
-## Documentación
-
-- [`docs/architecture.md`](docs/architecture.md) — arquitectura de tres capas, APIs externas, infraestructura objetivo
-- [`docs/accessibility.md`](docs/accessibility.md) — modo accesible (voz in/out, WCAG 2.1, Ley 1618)
-- [`docs/glossary.md`](docs/glossary.md) — términos del dominio (DIVIPOLA, SoQL, MCP, etc.)
-- [`docs/lessons_learned.md`](docs/lessons_learned.md) — bugs no obvios y gotchas capturados durante desarrollo
-- [`docs/crisp_mlq/`](docs/crisp_mlq/) — fases CRISP-ML(Q) + capítulo especial MCP (Sprint 5)
 
 ## Referencias
 
