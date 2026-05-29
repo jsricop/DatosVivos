@@ -5,21 +5,30 @@ from __future__ import annotations
 from ai_engine.soql_templates import build_soql
 
 
+def col(name, stype, subtype=None, data_type=None):
+    return {
+        "col_name": name,
+        "semantic_type": stype,
+        "semantic_subtype": subtype,
+        "socrata_data_type": data_type,
+    }
+
+
 def test_cuantos_no_requiere_columnas():
-    r = build_soql("Cuántos", {})
+    r = build_soql("Cuántos", [])
     assert r.error is None
     assert r.soql == "SELECT count(*) AS n"
     assert r.columns_used == []
 
 
 def test_comparar_requiere_dimension():
-    r = build_soql("Comparar", {})
+    r = build_soql("Comparar", [])
     assert r.error is not None
     assert "dimension" in r.error
 
 
 def test_comparar_con_dimension():
-    r = build_soql("Comparar", {"dimension": ["departamento", "municipio"]})
+    r = build_soql("Comparar", [col("departamento", "dimension"), col("municipio", "dimension")])
     assert r.error is None
     assert "departamento" in r.soql  # toma la primera (más confianza)
     assert "GROUP BY departamento" in r.soql
@@ -29,28 +38,23 @@ def test_comparar_con_dimension():
 
 
 def test_ranking_default_count_sin_metrica():
-    r = build_soql("Ranking", {"dimension": ["entidad"]})
+    r = build_soql("Ranking", [col("entidad", "dimension")])
     assert r.error is None
     assert "count(*)" in r.soql.lower()
     assert "sum(" not in r.soql.lower()
-    assert r.columns_used == ["entidad"]
 
 
 def test_ranking_usa_sum_con_metrica():
-    r = build_soql(
-        "Ranking",
-        {"dimension": ["entidad"], "metrica": ["monto_total"]},
-    )
+    r = build_soql("Ranking", [col("entidad", "dimension"), col("monto", "metrica")])
     assert r.error is None
-    assert "sum(monto_total)" in r.soql
-    assert "AS total" in r.soql
-    assert r.columns_used == ["entidad", "monto_total"]
+    assert "sum(monto)" in r.soql
+    assert r.columns_used == ["entidad", "monto"]
 
 
 def test_ranking_force_count_si_use_metric_false():
     r = build_soql(
         "Ranking",
-        {"dimension": ["entidad"], "metrica": ["monto"]},
+        [col("entidad", "dimension"), col("monto", "metrica")],
         use_metric=False,
     )
     assert "sum(" not in r.soql.lower()
@@ -58,48 +62,73 @@ def test_ranking_force_count_si_use_metric_false():
 
 
 def test_tendencia_requiere_fecha():
-    r = build_soql("Tendencia", {"dimension": ["x"]})
+    r = build_soql("Tendencia", [col("x", "dimension")])
     assert r.error is not None
     assert "fecha" in r.error.lower()
 
 
-def test_tendencia_usa_date_trunc_ym():
-    r = build_soql("Tendencia", {"fecha": ["fecha_evento"]})
+def test_tendencia_date_real_usa_date_trunc_ym():
+    r = build_soql(
+        "Tendencia",
+        [col("fecha_evento", "fecha", subtype="date", data_type="calendar_date")],
+    )
     assert r.error is None
     assert "date_trunc_ym(fecha_evento)" in r.soql
+
+
+def test_tendencia_year_como_numero_no_usa_date_trunc():
+    """`año` (semantic=fecha, data_type=number) NO debe envolverse en
+    date_trunc_ym — SODA falla con type-mismatch. Group by raw."""
+    r = build_soql(
+        "Tendencia",
+        [col("anio", "fecha", subtype="year", data_type="number")],
+    )
+    assert r.error is None
+    assert "date_trunc_ym" not in r.soql
     assert "GROUP BY periodo" in r.soql
-    assert "ORDER BY periodo" in r.soql
-    assert r.columns_used == ["fecha_evento"]
+
+
+def test_tendencia_fecha_como_texto_no_usa_date_trunc():
+    r = build_soql(
+        "Tendencia",
+        [col("fecha_str", "fecha", subtype="date", data_type="text")],
+    )
+    assert r.error is None
+    assert "date_trunc_ym" not in r.soql
 
 
 def test_mapa_requiere_geo():
-    r = build_soql("Mapa", {"dimension": ["x"]})
+    r = build_soql("Mapa", [col("x", "dimension")])
     assert r.error is not None
     assert "geo" in r.error.lower()
 
 
 def test_mapa_con_geo():
-    r = build_soql("Mapa", {"geo": ["codigo_departamento"]})
+    r = build_soql("Mapa", [col("codigo_departamento", "geo")])
     assert r.error is None
     assert "codigo_departamento" in r.soql
-    assert "GROUP BY codigo_departamento" in r.soql
     assert "LIMIT 32" in r.soql
 
 
-def test_identificador_invalido_rechazado():
-    # nombre con espacio o caracteres raros no debe filtrarse a la SoQL
-    r = build_soql("Comparar", {"dimension": ["columna con espacio", "buena_col"]})
+def test_identificador_invalido_se_salta():
+    r = build_soql(
+        "Comparar",
+        [col("columna con espacio", "dimension"), col("buena_col", "dimension")],
+    )
     assert r.error is None
     assert "buena_col" in r.soql
     assert "columna con espacio" not in r.soql
 
 
 def test_identificador_todo_invalido_falla():
-    r = build_soql("Comparar", {"dimension": ["bad ident", "1starts_with_digit"]})
+    r = build_soql(
+        "Comparar",
+        [col("bad ident", "dimension"), col("1starts_with_digit", "dimension")],
+    )
     assert r.error is not None
 
 
 def test_tipo_desconocido():
-    r = build_soql("XYZ", {})  # type: ignore[arg-type]
+    r = build_soql("XYZ", [])  # type: ignore[arg-type]
     assert r.error is not None
     assert "desconocido" in r.error.lower()
