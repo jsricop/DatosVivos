@@ -83,18 +83,23 @@ def _norm(text: str | None) -> str:
 # ----------------------------------------------------------------------
 
 
-# Patrones para distrito capital
+# Patrones para distrito capital. Los multi-palabra son seguros con `in`;
+# los cortos (d.c., d. c., dc) requieren word boundary o pueden caer en
+# falsos positivos (ej. una entidad con "D.C." en otro contexto).
 _BOGOTA_TOKENS = (
     "bogota d.c.",
     "bogota d c",
     "bogota dc",
     "bogota distrito capital",
     "distrito capital",
-    "d.c.",
-    "d. c.",
     "alcaldia mayor de bogota",
     "secretaria distrital",
     "secretaria de educacion del distrito",
+)
+_BOGOTA_TOKENS_BOUNDARY = (
+    "d.c.",
+    "d. c.",
+    "dc",
 )
 
 # "bogota" solo es señal si NO viene en compuestos que la incluyen sin ser geo
@@ -337,15 +342,20 @@ def _detect_matches(haystacks: list[str]) -> dict[str, Any]:
         "mpio": None,        # ('Medellín', '05001', '05') si match
     }
     for h in haystacks:
-        # Distrito
+        # Distrito. Multi-palabra → `in`. Cortos (d.c., dc) → word boundary
+        # para no atrapar entidades con "D.C." en otro contexto.
         if matches["distrito"] is None:
             for tok in _BOGOTA_TOKENS:
                 if tok in h:
                     matches["distrito"] = (tok, "11")
                     break
-            else:
-                if _word_in("bogota", h):
-                    matches["distrito"] = ("bogota", "11")
+            if matches["distrito"] is None:
+                for tok in _BOGOTA_TOKENS_BOUNDARY:
+                    if _word_in(tok, h):
+                        matches["distrito"] = (tok, "11")
+                        break
+            if matches["distrito"] is None and _word_in("bogota", h):
+                matches["distrito"] = ("bogota", "11")
         # Nacional
         if matches["nacional"] is None:
             for tok in _NACIONAL_TOKENS:
