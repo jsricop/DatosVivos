@@ -224,3 +224,34 @@ class ChipsExecuteResponse(BaseModel):
     rows: list[dict]            # filas crudas de SODA
     row_count: int              # len(rows), por conveniencia del cliente
     error: str | None = None    # mensaje si no se pudo construir o ejecutar
+
+
+# ============================================================
+# Hito 1 / Fase D — Narrativa LLM "Explicar" (ADR-017)
+# ============================================================
+
+
+class ChipsExplainRequest(BaseModel):
+    """POST /api/v1/query/chips/explain — pide narrativa LLM sobre el
+    resultado YA verificado. La cifra/filas vienen del cliente para evitar
+    re-ejecutar (idempotente) y para que el LLM tenga el contexto exacto
+    que el ciudadano está viendo en pantalla."""
+
+    dataset_id: str
+    dataset_name: str               # nombre legible
+    tipo: ChipTipo
+    rows: list[dict]                # filas tal como el motor las devolvió
+    columns_used: list[str] = []
+
+
+class ChipsExplainResponse(BaseModel):
+    """Texto corto explicando la cifra. El campo `hallucinated_numbers` lista
+    los números que aparecieron en la respuesta pero NO están en `rows` —
+    si no es vacío, la narrativa se censura."""
+
+    dataset_id: str
+    tipo: ChipTipo
+    narrative: str                  # 2-3 frases; vacío si hubo hallucinación
+    hallucinated_numbers: list[str] = []
+    model: str                      # ej. "qwen2.5:3b-instruct"
+    error: str | None = None
