@@ -183,11 +183,18 @@ BEGIN
     IF f IN ('weekly') THEN RETURN 7; END IF;
     IF f IN ('daily') THEN RETURN 1; END IF;
     IF f IN ('real-time', 'realtime', 'continuous') THEN RETURN 1; END IF;
-    -- Español (Socrata permite cualquier string)
-    IF f LIKE '%anual%' OR f LIKE '%año%' THEN RETURN 365; END IF;
+    -- Español (Socrata permite cualquier string). Orden importa: las
+    -- subcadenas más específicas van primero para que 'semestral' no
+    -- caiga en %mes%, 'cuatrimestral' no caiga en %trimestr%, etc.
+    IF f LIKE '%más de tres año%' OR f LIKE '%mas de tres año%' THEN RETURN 1095; END IF;
+    IF f LIKE '%trieni%' THEN RETURN 1095; END IF;
+    IF f LIKE '%bieni%' THEN RETURN 730; END IF;
+    IF f LIKE '%semestr%' THEN RETURN 182; END IF;
+    IF f LIKE '%cuatrimestr%' THEN RETURN 122; END IF;
     IF f LIKE '%trimestr%' THEN RETURN 91; END IF;
-    IF f LIKE '%mensual%' OR f LIKE '%mes%' THEN RETURN 30; END IF;
     IF f LIKE '%quincen%' THEN RETURN 14; END IF;
+    IF f LIKE '%anual%' OR f LIKE '%año%' THEN RETURN 365; END IF;
+    IF f LIKE '%mensual%' OR f LIKE '%mes%' THEN RETURN 30; END IF;
     IF f LIKE '%semanal%' OR f LIKE '%semana%' THEN RETURN 7; END IF;
     IF f LIKE '%diari%' OR f LIKE '%día%' THEN RETURN 1; END IF;
     IF f LIKE '%tiempo real%' THEN RETURN 1; END IF;
