@@ -244,6 +244,25 @@ class ChipsExplainRequest(BaseModel):
     columns_used: list[str] = []
 
 
+class ChipsFromNLRequest(BaseModel):
+    """POST /api/v1/chips/from-nl — texto libre → combinación de chips
+    pre-marcada. La respuesta es lo que el frontend usará como query params
+    para navegar a /buscar."""
+
+    q: str = Field(..., min_length=1, max_length=300)
+
+
+class ChipsFromNLResponse(BaseModel):
+    """Combinación inferida por el LLM. Cualquier campo puede ser null si
+    el LLM no infirió con confianza."""
+
+    tema: str | None = None
+    tipo: ChipTipo | None = None
+    territorio: str | None = None  # código DIVIPOLA o "macro:*"
+    entidad: str | None = None     # entity_id como string
+    refinador: str | None = None
+
+
 class ChipsExplainResponse(BaseModel):
     """Texto corto explicando la cifra. El campo `hallucinated_numbers` lista
     los números que aparecieron en la respuesta pero NO están en `rows` —

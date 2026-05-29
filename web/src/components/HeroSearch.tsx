@@ -79,15 +79,55 @@ export function HeroSearch({
     [phIndex, placeholders],
   );
 
+  const [isMapping, setIsMapping] = useState(false);
+
   const onSubmit = useCallback(
-    (e: FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault();
       const trimmed = q.trim();
       if (!trimmed) {
         inputRef.current?.focus();
         return;
       }
-      const params = new URLSearchParams({ q: trimmed });
+      // Fase 2: intentar mapear el NL a chips antes de navegar. Si el
+      // mapper devuelve al menos tema o tipo, navego al path de chips;
+      // si no, fallback al path libre (?q=...) como antes.
+      setIsMapping(true);
+      let chipsParams: URLSearchParams | null = null;
+      try {
+        const res = await fetch("/api/chips/from-nl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ q: trimmed }),
+        });
+        if (res.ok) {
+          const j = (await res.json()) as {
+            tema?: string | null;
+            tipo?: string | null;
+            territorio?: string | null;
+            entidad?: string | null;
+            refinador?: string | null;
+          };
+          // Aceptamos el mapeo si hay al menos UN chip inferido —
+          // basta TIPO o TEMA para activar el flujo de chips.
+          const hasAnyChip =
+            !!(j.tema || j.tipo || j.territorio || j.entidad);
+          if (hasAnyChip) {
+            chipsParams = new URLSearchParams();
+            if (j.tema) chipsParams.set("tema", j.tema);
+            if (j.tipo) chipsParams.set("tipo", j.tipo);
+            if (j.territorio) chipsParams.set("territorio", j.territorio);
+            if (j.entidad) chipsParams.set("entidad", j.entidad);
+            if (j.refinador) chipsParams.set("refinador", j.refinador);
+          }
+        }
+      } catch {
+        // Mapping falló → fallback al path libre.
+      } finally {
+        setIsMapping(false);
+      }
+
+      const params = chipsParams ?? new URLSearchParams({ q: trimmed });
       for (const [key, val] of Object.entries(extraQuery)) {
         if (Array.isArray(val)) {
           for (const v of val) params.append(key, v);
@@ -135,10 +175,11 @@ export function HeroSearch({
       />
       <button
         type="submit"
+        disabled={isMapping}
         aria-label="Ejecutar búsqueda"
-        className="inline-flex items-center gap-2.5 px-6 bg-ink text-bg font-sans text-body font-semibold tracking-[0.2px] focus-ring"
+        className="inline-flex items-center gap-2.5 px-6 bg-ink text-bg font-sans text-body font-semibold tracking-[0.2px] focus-ring disabled:opacity-60"
       >
-        <span>Buscar</span>
+        <span>{isMapping ? "Interpretando…" : "Buscar"}</span>
         <Icon name="enter" size={18} aria-hidden />
       </button>
     </form>

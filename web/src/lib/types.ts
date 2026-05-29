@@ -99,6 +99,14 @@ export type ChipsExplainRequest = {
   columns_used?: string[];
 };
 
+export type ChipsFromNLResponse = {
+  tema?: string | null;
+  tipo?: ChipTipo | null;
+  territorio?: string | null;
+  entidad?: string | null;
+  refinador?: string | null;
+};
+
 export type ChipsExplainResponse = {
   dataset_id: string;
   tipo: ChipTipo;
