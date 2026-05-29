@@ -39,6 +39,7 @@ from typing import Any
 import duckdb
 
 from ai_engine.column_classifier import classify_column
+from ai_engine.csv_cache import get_or_download
 
 log = logging.getLogger(__name__)
 
@@ -169,23 +170,36 @@ def _try_with_fallback(url: str, build_sql) -> tuple[Any, str]:
     raise RuntimeError("Sin resultado y sin excepción — estado inválido")
 
 
+def _local_or_url(resolved: str) -> str:
+    """Intenta cache disk-backed; si falla la descarga, cae a la URL
+    original para que DuckDB la abra via httpfs."""
+    try:
+        return get_or_download(resolved)
+    except Exception as exc:  # noqa: BLE001
+        log.info("csv_cache miss para %s: %s — uso URL directa", resolved, exc)
+        return resolved
+
+
 def describe_csv(url: str) -> list[dict[str, Any]]:
     """Schema del CSV + clasificación semántica por columna.
 
     Acepta URLs CKAN (resuelve via resource_show si hace falta) y CSVs
     no-utf-8 (intenta latin-1 y utf-16 si utf-8 falla). Devuelve la lista
-    con el mismo shape que `dataset_columns_curated`.
+    con el mismo shape que `dataset_columns_curated`. Pre-cachea el CSV
+    a disco para que queries siguientes sobre el mismo dataset eviten la
+    descarga.
     """
     if not url:
         raise ValueError("URL vacía")
     resolved = resolve_data_url(url)
+    local_or_url = _local_or_url(resolved)
 
     def _run(con, read_expr):
         return con.execute(
             f"DESCRIBE SELECT * FROM {read_expr} LIMIT 0"
         ).fetchall()
 
-    rows, _enc = _try_with_fallback(resolved, _run)
+    rows, _enc = _try_with_fallback(local_or_url, _run)
     out: list[dict[str, Any]] = []
     for row in rows:
         col_name = str(row[0])
@@ -218,13 +232,14 @@ def execute_csv(url: str, sql: str) -> list[dict[str, Any]]:
     if not url:
         raise ValueError("URL vacía")
     resolved = resolve_data_url(url)
+    local_or_url = _local_or_url(resolved)
 
     if "{src}" in sql:
         def _run(con, read_expr):
             res = con.execute(sql.replace("{src}", read_expr))
             cols = [d[0] for d in res.description]
             return [dict(zip(cols, row)) for row in res.fetchall()]
-        rows, _enc = _try_with_fallback(resolved, _run)
+        rows, _enc = _try_with_fallback(local_or_url, _run)
         return rows
 
     # Modo legacy: SQL ya tiene el FROM embebido. Sin fallback.
