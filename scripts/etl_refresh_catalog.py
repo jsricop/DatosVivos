@@ -34,6 +34,7 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
@@ -95,9 +96,51 @@ def _domain_metadata_dict(classification: dict[str, Any]) -> dict[str, str]:
     return out
 
 
+# Claves canónicas del estándar colombiano (datos.gov.co) por token. Si
+# alguna existe en domain_metadata, gana sobre cualquier otra que solo
+# CONTENGA el token. Evita la misma clase de bug que parse_frequency_days:
+# una clave genérica que matchea por substring (ej. 'frecuencia_*' anidada)
+# antes que la canónica.
+_DM_PREFERRED_KEYS: dict[str, tuple[str, ...]] = {
+    "frecuencia": (
+        "Información-de-Datos_Frecuencia-de-Actualización",
+        "frecuencia_declarada",
+        "frecuencia_actualizacion",
+    ),
+    "cobertura": (
+        "Información-de-Datos_Cobertura-Geográfica",
+        "cobertura_geografica",
+        "cobertura",
+    ),
+    "sector": (
+        "Información-de-la-Entidad_Sector",
+        "sector_administrativo",
+        "sector",
+    ),
+}
+
+
 def _find_by_token(dm: dict[str, str], token: str) -> str | None:
-    """Busca el primer valor cuya clave contiene `token` (case-insensitive)."""
+    """Resuelve una clave de `domain_metadata` por token con prioridad estable:
+
+    1) Coincidencia EXACTA contra la whitelist de claves canónicas.
+    2) Clave que EMPIEZA con el token (case-insensitive).
+    3) Primera clave que CONTIENE el token (último recurso; preserva
+       comportamiento histórico para portales que renombren claves).
+    """
+    if not dm:
+        return None
     tl = token.lower()
+    # (1) whitelist exacta — orden de la tupla = prioridad.
+    for canonical in _DM_PREFERRED_KEYS.get(tl, ()):
+        v = dm.get(canonical)
+        if v is not None:
+            return v
+    # (2) startswith case-insensitive.
+    for k, v in dm.items():
+        if k.lower().startswith(tl):
+            return v
+    # (3) contiene (fallback histórico).
     for k, v in dm.items():
         if tl in k.lower():
             return v
@@ -188,11 +231,39 @@ async def _discovery_sweep(
 # ----------------------------------------------------------------------
 
 
+# Word-boundary "no-letra" para español: cualquier char que NO sea letra/dígito
+# (incluye espacios, puntuación, guiones, paréntesis, comas, etc.). Más permisivo
+# que \b para no romper con acentos.
+_TOKEN_BOUNDARY = re.compile(r"[a-záéíóúñ0-9]", re.IGNORECASE)
+
+
+def _word_match(needle: str, haystack: str) -> bool:
+    """True si `needle` aparece como token completo en `haystack` (ambos ya en
+    lower). Evita falsos positivos como abbrev 'ICA' matcheando 'antioqu**ica**'
+    o 'única' o 'pública'.
+    """
+    if not needle or not haystack:
+        return False
+    # construir patrón con boundary "no-letra-ni-dígito" antes y después
+    pattern = (
+        r"(?:^|[^a-záéíóúñ0-9])"
+        + re.escape(needle)
+        + r"(?:$|[^a-záéíóúñ0-9])"
+    )
+    return bool(re.search(pattern, haystack))
+
+
 def _build_entity_resolver(conn: psycopg.Connection):
+    # ORDER BY length(name) DESC → matches más específicos ganan antes.
     with conn.cursor() as cur:
-        cur.execute("SELECT entity_id, name, abbrev FROM entities")
+        cur.execute(
+            "SELECT entity_id, name, abbrev FROM entities ORDER BY length(name) DESC NULLS LAST"
+        )
         rows = cur.fetchall()
-    catalog = [(eid, name.lower(), (abbrev or "").lower()) for eid, name, abbrev in rows]
+    catalog = [
+        (eid, (name or "").lower(), (abbrev or "").lower())
+        for eid, name, abbrev in rows
+    ]
     cache: dict[str, int | None] = {}
 
     def resolve(entity_raw: str) -> int | None:
@@ -202,13 +273,18 @@ def _build_entity_resolver(conn: psycopg.Connection):
         if key in cache:
             return cache[key]
         best: int | None = None
-        for eid, name, abbrev in catalog:
-            if name and (name in key or key in name):
+        # Paso 1: nombre exacto o contención con word boundary.
+        for eid, name, _abbrev in catalog:
+            if name and (name == key or _word_match(name, key)):
                 best = eid
                 break
-            if abbrev and abbrev in key:
-                best = eid
-                break
+        # Paso 2: abreviatura con word boundary (>=3 chars; las de 2 chars son
+        # demasiado ambiguas, p.ej. 'PN', 'BR').
+        if best is None:
+            for eid, _name, abbrev in catalog:
+                if abbrev and len(abbrev) >= 3 and _word_match(abbrev, key):
+                    best = eid
+                    break
         cache[key] = best
         return best
 
