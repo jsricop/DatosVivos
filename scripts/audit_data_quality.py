@@ -42,12 +42,16 @@ def cmp_str(local: Any, source: Any) -> bool:
 
 
 def cmp_str_truncated(local: Any, source: Any, n: int = 2000) -> bool:
-    """description: el ETL trunca a 2000; comparar contra source[:n]."""
-    a = _nfc(local)
-    b = _nfc(source)
-    if b is not None:
-        b = b[:n]
-    return a == b
+    """description: el ETL trunca a 2000 chars del source CRUDO y luego guarda.
+    Comparar con la misma secuencia (truncar primero, normalizar después)
+    para no perder caracteres cerca del límite por compresión NFC.
+    """
+    if local is None and source is None:
+        return True
+    if local is None or source is None:
+        return False
+    src_trunc = str(source)[:n]
+    return _nfc(local) == _nfc(src_trunc)
 
 
 def cmp_int_exact(local: Any, source: Any) -> bool:
