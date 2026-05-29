@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChipsResultPanel } from "@/components/ChipsResultPanel";
 import { Icon } from "@/components/Icon";
-import type { ChipTipo, ChipsExecuteResponse } from "@/lib/types";
+import type {
+  ChipTipo,
+  ChipsExecuteResponse,
+  ChipsExplainResponse,
+} from "@/lib/types";
 
 /** Espejo de api/models/schemas.py::ChipsCandidateDataset */
 type Candidate = {
@@ -60,11 +64,54 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
   const [execLoading, setExecLoading] = useState(false);
   const [showSoql, setShowSoql] = useState(false);
 
+  // Fase D — narrativa LLM "Explicar" (opt-in por botón).
+  const [explain, setExplain] = useState<ChipsExplainResponse | null>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
+
   // TIPO seleccionado por el usuario (de los chips capa 1).
   const tipo = useMemo<ChipTipo | null>(() => {
     const v = filters.tipo?.[0];
     return isValidTipo(v) ? v : null;
   }, [filters.tipo]);
+
+  // Cuando cambia el resultado, resetear narrativa.
+  useEffect(() => {
+    setExplain(null);
+  }, [exec?.dataset_id, exec?.tipo]);
+
+  async function requestExplain() {
+    if (!exec || !data?.chosen_dataset_id) return;
+    const dsName =
+      data.candidates.find((c) => c.dataset_id === exec.dataset_id)?.name ?? exec.dataset_id;
+    setExplainLoading(true);
+    setExplain(null);
+    try {
+      const res = await fetch("/api/chips/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset_id: exec.dataset_id,
+          dataset_name: dsName,
+          tipo: exec.tipo,
+          rows: exec.rows,
+          columns_used: exec.columns_used,
+        }),
+      });
+      if (!res.ok) throw new Error(`Backend ${res.status}`);
+      const json: ChipsExplainResponse = await res.json();
+      setExplain(json);
+    } catch (e) {
+      setExplain({
+        dataset_id: exec.dataset_id,
+        tipo: exec.tipo,
+        narrative: "",
+        model: "unknown",
+        error: e instanceof Error ? e.message : "Error",
+      });
+    } finally {
+      setExplainLoading(false);
+    }
+  }
 
   // Auto-execute cuando hay dataset elegido + TIPO marcado.
   useEffect(() => {
@@ -274,6 +321,53 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
                 <pre className="font-mono text-caption bg-bg-elev border border-hairline p-3 overflow-x-auto m-0">
                   {exec.soql}
                 </pre>
+              ) : null}
+
+              {/* Fase D — Botón "Explicar" + narrativa */}
+              <div className="flex items-center gap-3 flex-wrap pt-1">
+                <button
+                  type="button"
+                  onClick={requestExplain}
+                  disabled={explainLoading}
+                  className="font-mono text-caption text-ink border border-ink px-3 py-1 hover:bg-ink hover:text-bg disabled:opacity-50 focus-ring"
+                >
+                  {explainLoading
+                    ? "Explicando…"
+                    : explain
+                    ? "Re-explicar"
+                    : "Explicar esta cifra"}
+                </button>
+                {explain?.model ? (
+                  <span className="font-mono text-caption text-ink-muted">
+                    modelo: {explain.model}
+                  </span>
+                ) : null}
+              </div>
+              {explain?.narrative ? (
+                <article className="surface-elev p-4">
+                  <p className="font-serif text-body text-ink m-0 leading-relaxed">
+                    {explain.narrative}
+                  </p>
+                </article>
+              ) : null}
+              {explain?.error ? (
+                <div
+                  role="alert"
+                  className="border border-amber-300 bg-amber-50 p-3 font-sans text-caption text-ink-2"
+                >
+                  No pude generar la explicación: {explain.error}
+                  {explain.hallucinated_numbers &&
+                  explain.hallucinated_numbers.length > 0 ? (
+                    <>
+                      {" "}
+                      (cifras sospechosas:{" "}
+                      <code className="font-mono">
+                        {explain.hallucinated_numbers.join(", ")}
+                      </code>
+                      )
+                    </>
+                  ) : null}
+                </div>
               ) : null}
             </>
           ) : null}

@@ -89,3 +89,21 @@ export type ChipsExecuteResponse = {
   row_count: number;
   error?: string | null;
 };
+
+/** Hito 1 / Fase D — narrativa LLM "Explicar" (ADR-017). */
+export type ChipsExplainRequest = {
+  dataset_id: string;
+  dataset_name: string;
+  tipo: ChipTipo;
+  rows: Row[];
+  columns_used?: string[];
+};
+
+export type ChipsExplainResponse = {
+  dataset_id: string;
+  tipo: ChipTipo;
+  narrative: string;
+  hallucinated_numbers?: string[];
+  model: string;
+  error?: string | null;
+};

@@ -25,12 +25,15 @@ from psycopg.rows import dict_row
 
 from ai_engine.duckdb_executor import describe_csv, execute_csv
 from ai_engine.duckdb_templates import build_duckdb_sql
+from ai_engine.llm_backend import get_backend, model_for_task
 from ai_engine.soql_templates import build_soql
 from api.models.schemas import (
     ChipOption,
     ChipsCandidateDataset,
     ChipsExecuteRequest,
     ChipsExecuteResponse,
+    ChipsExplainRequest,
+    ChipsExplainResponse,
     ChipsQueryRequest,
     ChipsQueryResponse,
     ChipsRefineResponse,
@@ -671,4 +674,120 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
         columns_used=built.columns_used,
         rows=rows,
         row_count=len(rows),
+    )
+
+
+# ----------------------------------------------------------------------
+# POST /api/v1/query/chips/explain (Hito 1 Fase D — narrativa LLM)
+# ----------------------------------------------------------------------
+
+
+import json as _json
+import re as _re
+
+
+def _allowed_numbers(rows: list[dict]) -> set[str]:
+    """Conjunto de strings numéricos que aparecen en las filas, normalizados
+    sin separadores. Cubre '3622', '3.622', '3,622', '647764.10', etc."""
+    out: set[str] = set()
+    for row in rows or []:
+        for v in row.values():
+            if v is None:
+                continue
+            s = str(v)
+            # Extrae cada subcadena numérica (incluye decimales).
+            for m in _re.finditer(r"-?\d+(?:[.,]\d+)?", s):
+                token = m.group(0).replace(",", "").replace(".", "")
+                if token:
+                    out.add(token)
+    return out
+
+
+def _validate_numbers(narrative: str, rows: list[dict]) -> list[str]:
+    """Devuelve la lista de números mencionados en la narrativa que NO
+    aparecen en los datos. Si la lista es vacía, la narrativa es segura."""
+    allowed = _allowed_numbers(rows)
+    found = _re.findall(r"-?\d+(?:[.,]\d+)?", narrative)
+    flagged: list[str] = []
+    for n in found:
+        norm = n.replace(",", "").replace(".", "")
+        if not norm:
+            continue
+        # Aceptamos años (1900-2099) sin verificar — son referencias usuales.
+        if len(norm) == 4 and norm.isdigit() and 1900 <= int(norm) <= 2099:
+            continue
+        if norm not in allowed:
+            flagged.append(n)
+    return flagged
+
+
+_EXPLAIN_PROMPT = """Eres un explicador de cifras públicas colombianas para ciudadanos.
+
+Dataset: {dataset_name}
+TIPO de consulta: {tipo}
+Datos resultantes (JSON):
+{rows_json}
+
+Reglas estrictas:
+- 2 frases en español neutro. NO uses listas.
+- Empieza con la cifra principal.
+- NO INVENTES números. Cada cifra que menciones DEBE estar en los datos arriba.
+- Si la cifra es 0 o vacía, di "no se reportaron datos" sin más.
+
+Respuesta:"""
+
+
+@router.post("/query/chips/explain", response_model=ChipsExplainResponse)
+async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
+    """Narrativa corta sobre el resultado YA verificado. ADR-017: el LLM
+    razona sobre un substrato determinista — nunca produce la cifra."""
+    if not req.rows:
+        return ChipsExplainResponse(
+            dataset_id=req.dataset_id,
+            tipo=req.tipo,
+            narrative="No se reportaron datos para esta combinación.",
+            model="(skipped)",
+        )
+
+    # Recorta filas para no inflar el prompt: top-10 es suficiente para
+    # cualquier TIPO (Cuántos=1, Comparar/Ranking=10, Mapa/Tendencia trunca).
+    sample = req.rows[:10]
+    rows_json = _json.dumps(sample, ensure_ascii=False, default=str)
+    prompt = _EXPLAIN_PROMPT.format(
+        dataset_name=req.dataset_name,
+        tipo=req.tipo,
+        rows_json=rows_json,
+    )
+
+    backend = get_backend()
+    model = model_for_task("narrative")
+    try:
+        narrative = await backend.generate(prompt, max_tokens=180, model=model)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("LLM explain falló para %s: %s", req.dataset_id, exc)
+        return ChipsExplainResponse(
+            dataset_id=req.dataset_id,
+            tipo=req.tipo,
+            narrative="",
+            model=model,
+            error=str(exc),
+        )
+
+    narrative = (narrative or "").strip()
+    flagged = _validate_numbers(narrative, req.rows)
+    if flagged:
+        return ChipsExplainResponse(
+            dataset_id=req.dataset_id,
+            tipo=req.tipo,
+            narrative="",
+            hallucinated_numbers=flagged,
+            model=model,
+            error="Narrativa censurada: contiene cifras que no están en los datos.",
+        )
+
+    return ChipsExplainResponse(
+        dataset_id=req.dataset_id,
+        tipo=req.tipo,
+        narrative=narrative,
+        model=model,
     )
