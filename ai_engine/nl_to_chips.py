@@ -151,18 +151,45 @@ async def map_nl_to_chips(
         out["tipo"] = tipo
 
     # Territorio — código DIVIPOLA o macro:caribe.
+    # Guardrail: el LLM a veces inventa códigos (eligió 08=Atlántico para
+    # "por departamento" genérico). Aceptamos solo si el nombre del
+    # territorio APARECE en el query original — protege contra
+    # alucinaciones sin depender del prompt.
     territorio = _norm(parsed.get("territorio"))
     if territorio:
-        valid_codes = {t["value"] for t in (available.get("territorio") or [])}
-        if territorio in valid_codes:
-            out["territorio"] = territorio
+        terr_options = available.get("territorio") or []
+        valid = {t["value"]: t["label"] for t in terr_options}
+        if territorio in valid:
+            label = valid[territorio].lower()
+            qlow = query.lower()
+            mentioned = (
+                label in qlow
+                or any(tok in qlow for tok in label.split() if len(tok) > 3)
+                or (territorio == "nacional" and any(
+                    w in qlow for w in ("nacional", "nacionales", "colombia", "país", "pais")
+                ))
+                or territorio.startswith("macro:")
+            )
+            if mentioned:
+                out["territorio"] = territorio
 
     # Entidad — entity_id como string.
+    # Guardrail equivalente: solo aceptamos si el nombre/abbrev aparece en
+    # el query. Esto evita falsos positivos cuando el LLM "salta" a una
+    # entidad por inferencia temática.
     entidad = _norm(parsed.get("entidad"))
     if entidad:
-        valid_ents = {str(e["value"]) for e in (available.get("entidad") or [])}
-        if entidad in valid_ents:
-            out["entidad"] = entidad
+        ent_options = available.get("entidad") or []
+        valid = {str(e["value"]): e["label"] for e in ent_options}
+        if entidad in valid:
+            label = valid[entidad].lower()
+            qlow = query.lower()
+            mentioned = (
+                label in qlow
+                or any(tok in qlow for tok in label.split() if len(tok) > 3)
+            )
+            if mentioned:
+                out["entidad"] = entidad
 
     # Refinador — texto libre limitado.
     refinador = _norm(parsed.get("refinador"))

@@ -563,10 +563,31 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                     log.warning(
                         "DuckDB DESCRIBE %s falló: %s", req.dataset_id, exc
                     )
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"No pudimos leer el CSV federado: {exc}",
-                    ) from exc
+                    # HTTP errors (403/404/timeout) → mensaje legible en
+                    # `error` con 200, no 502. El frontend ya tiene un
+                    # panel apropiado para mostrarlo.
+                    msg = str(exc)
+                    if "HTTP" in msg or "403" in msg or "404" in msg:
+                        friendly = (
+                            "El portal del federado no devolvió el archivo "
+                            "(probablemente protegido o caducado)."
+                        )
+                    elif "encod" in msg.lower() or "unicode" in msg.lower():
+                        friendly = (
+                            "El CSV tiene una codificación que no pudimos "
+                            "leer (no UTF-8 / latin-1 / UTF-16)."
+                        )
+                    else:
+                        friendly = f"No pudimos leer el CSV federado: {msg[:120]}"
+                    return ChipsExecuteResponse(
+                        dataset_id=req.dataset_id,
+                        tipo=req.tipo,
+                        soql="",
+                        columns_used=[],
+                        rows=[],
+                        row_count=0,
+                        error=friendly,
+                    )
                 built = build_duckdb_sql(req.tipo, fed_cols, data_url)
                 if built.error:
                     return ChipsExecuteResponse(
