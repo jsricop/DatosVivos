@@ -691,6 +691,10 @@ import re as _re
 # en vez de partirlas en pedacitos.
 _NUMBER_TOKEN_RE = _re.compile(r"-?\d[\d.,]*")
 
+# Denominadores estadísticos ambient — el LLM los usa como contexto
+# ("por cada 1000 habitantes", "del 100%") sin que vengan de los datos.
+_AMBIENT_DENOMINATORS = {"100", "1000", "10000", "100000", "1000000"}
+
 
 def _normalize_digits(token: str) -> str:
     """Quita todos los separadores. '9.192.802.561.842' → '9192802561842'."""
@@ -736,10 +740,39 @@ def _validate_numbers(narrative: str, rows: list[dict]) -> list[str]:
             continue
         if len(norm) == 4 and 1900 <= int(norm) <= 2099:
             continue
+        if norm in _AMBIENT_DENOMINATORS:
+            continue
         if norm in allowed:
             continue
         flagged.append(token)
     return flagged
+
+
+def _format_for_prompt(rows: list[dict]) -> str:
+    """Pre-formatea cifras grandes en castellano legible para que el LLM no
+    tenga que contar ceros. Solo afecta el texto que ve el modelo —
+    la validación corre contra los `rows` originales."""
+    out = []
+    for r in rows:
+        clone: dict[str, str] = {}
+        for k, v in r.items():
+            if v is None:
+                clone[k] = "null"
+                continue
+            s = str(v)
+            try:
+                # Detectar enteros grandes (con o sin separadores).
+                n = int(_normalize_digits(s)) if s.replace(".", "").replace(",", "").isdigit() else None
+            except Exception:
+                n = None
+            if n is None or n < 1_000_000:
+                clone[k] = s
+            else:
+                # Formatear con separadores de miles para que el LLM no
+                # tenga que decidir cuántos ceros poner.
+                clone[k] = f"{n:,}".replace(",", ".")
+        out.append(clone)
+    return _json.dumps(out, ensure_ascii=False)
 
 
 _EXPLAIN_PROMPT = """Eres un explicador de cifras públicas colombianas para ciudadanos.
@@ -772,8 +805,10 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
 
     # Recorta filas para no inflar el prompt: top-10 es suficiente para
     # cualquier TIPO (Cuántos=1, Comparar/Ranking=10, Mapa/Tendencia trunca).
+    # Pre-formateamos cifras grandes para que el LLM no tenga que contar
+    # ceros — esto reduce alucinaciones de magnitud en Ranking.
     sample = req.rows[:10]
-    rows_json = _json.dumps(sample, ensure_ascii=False, default=str)
+    rows_json = _format_for_prompt(sample)
     prompt = _EXPLAIN_PROMPT.format(
         dataset_name=req.dataset_name,
         tipo=req.tipo,
