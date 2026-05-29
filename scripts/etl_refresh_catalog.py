@@ -39,6 +39,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
+import httpx
 import psycopg
 from psycopg.types.json import Jsonb
 
@@ -269,9 +270,20 @@ async def _discovery_sweep(
             )
             if page <= 0:
                 return
-            results = await client.search(
-                query=None, limit=page, offset=offset, only=only_type
-            )
+            try:
+                results = await client.search(
+                    query=None, limit=page, offset=offset, only=only_type
+                )
+            except httpx.HTTPStatusError as e:
+                # Discovery topea offset+limit ≈ 10.000. Llegado el cap,
+                # paramos esa pasada y seguimos con la siguiente.
+                if e.response.status_code == 400 and offset >= 9000:
+                    log.warning(
+                        "Discovery cap alcanzado (only=%s, offset=%d). "
+                        "Cierro pasada.", only_type, offset
+                    )
+                    break
+                raise
             if not results:
                 break
             for r in results:
