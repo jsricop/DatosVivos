@@ -216,19 +216,36 @@ async def main(out_path: str, dsn: str) -> None:
     not_in_socrata = set(snapshot.keys())  # restamos a medida que vemos
 
     client = DiscoveryClient()
-    offset = 0
     PAGE = 1000
     total_seen = 0
-    while True:
-        results = await client.search(query=None, limit=PAGE, offset=offset)
-        if not results:
-            break
-        for r in results:
+
+    async def _iter_only(only_type: str):
+        offset = 0
+        while True:
+            try:
+                results = await client.search(
+                    query=None, limit=PAGE, offset=offset, only=only_type
+                )
+            except Exception as e:
+                # Cap del Discovery a offset>=10K: corta el sweep y sigue.
+                print(f"  [{only_type}] cap a offset={offset}: {e}", file=sys.stderr)
+                return
+            if not results:
+                return
+            for rr in results:
+                yield rr
+            offset += len(results)
+            await asyncio.sleep(0.1)
+
+    for only_type in ("dataset", "federated_href"):
+        n_in_pass = 0
+        async for r in _iter_only(only_type):
             exp = from_discovery(r)
             ds_id = exp["dataset_id"]
             if not ds_id:
                 continue
             total_seen += 1
+            n_in_pass += 1
             loc = snapshot.get(ds_id)
             if not loc:
                 not_in_snapshot += 1
@@ -238,9 +255,7 @@ async def main(out_path: str, dsn: str) -> None:
             for col, cmp in CMP.items():
                 _record(bucket, col, cmp(loc.get(col), exp.get(col)), ds_id,
                         loc.get(col), exp.get(col))
-        offset += len(results)
-        print(f"  procesados {offset}", file=sys.stderr)
-        await asyncio.sleep(0.1)
+        print(f"  pasada only={only_type} procesados={n_in_pass}", file=sys.stderr)
     print(f"Total Discovery: {total_seen}, fed-only-in-snapshot: {len(not_in_socrata)}, "
           f"in-socrata-not-in-snapshot: {not_in_snapshot}", file=sys.stderr)
 
