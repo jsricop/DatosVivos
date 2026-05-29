@@ -29,8 +29,11 @@ Limitaciones (out of scope hoy):
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+import urllib.parse
+import urllib.request
 from typing import Any
 
 import duckdb
@@ -38,6 +41,17 @@ import duckdb
 from ai_engine.column_classifier import classify_column
 
 log = logging.getLogger(__name__)
+
+# Encodings que intentamos para portales colombianos (utf-8 default,
+# luego latin-1 que cubre Bogotá CSVs; utf-16 cubre algunos Valle).
+_ENCODING_FALLBACKS = ("utf-8", "latin-1", "utf-16")
+
+# Portales CKAN cuyo `data_url` apunta a la página del recurso (no al
+# CSV directo). Para esos hay que resolver via /api/3/action/resource_show.
+_CKAN_RESOLVER_HOSTS = ("datos.cali.gov.co",)
+
+# Extensiones no-tabulares — DuckDB no las puede leer como CSV.
+_NON_CSV_EXTENSIONS = (".pdf", ".xlsx", ".xls", ".zip", ".rar", ".doc", ".docx")
 
 
 # Identificador SQL DuckDB seguro para embeber (cuando se rodea con dobles
@@ -62,25 +76,116 @@ def _connection() -> duckdb.DuckDBPyConnection:
     return con
 
 
+def resolve_data_url(data_url: str) -> str:
+    """Si `data_url` apunta a una página CKAN (sin `/download/X.csv`),
+    consulta `/api/3/action/resource_show` para obtener la URL real del
+    archivo. Si ya es URL directa, la devuelve sin cambios. Si el formato
+    no es CSV (PDF/XLS/etc), lanza ValueError.
+    """
+    if not data_url:
+        return data_url
+    lower = data_url.lower()
+    if any(lower.endswith(ext) for ext in _NON_CSV_EXTENSIONS):
+        raise ValueError(f"data_url no es CSV (extensión no soportada): {data_url}")
+
+    parsed = urllib.parse.urlparse(data_url)
+    host = parsed.netloc.lower()
+
+    # Si el path ya contiene `/download/` y termina en .csv, asume URL
+    # directa al archivo — ningún portal CKAN colombiano la cambia.
+    if "/download/" in parsed.path and lower.endswith(".csv"):
+        return data_url
+
+    # CKAN page-style URL: /dataset/<x>/resource/<uuid> sin /download/.
+    if host in _CKAN_RESOLVER_HOSTS or (
+        "/resource/" in parsed.path and "/download/" not in parsed.path
+    ):
+        m = re.search(r"/resource/([a-f0-9-]{32,})", parsed.path)
+        if not m:
+            return data_url  # último intento: probar tal cual
+        res_id = m.group(1)
+        api_url = f"https://{host}/api/3/action/resource_show?id={res_id}"
+        try:
+            with urllib.request.urlopen(api_url, timeout=15) as resp:
+                payload = json.load(resp)
+        except Exception as exc:
+            raise ValueError(
+                f"CKAN resource_show falló para {host} id={res_id}: {exc}"
+            ) from exc
+        result = payload.get("result") or {}
+        fmt = (result.get("format") or "").upper()
+        url = result.get("url")
+        if not url:
+            raise ValueError(f"CKAN no devolvió `url` para id={res_id}")
+        if fmt and fmt != "CSV":
+            raise ValueError(
+                f"Recurso CKAN id={res_id} no es CSV (format={fmt!r})"
+            )
+        return str(url)
+
+    return data_url
+
+
+def _csv_read_expr(url: str, encoding: str) -> str:
+    """SQL `read_csv(...)` con encoding explícito y auto-detección."""
+    safe = url.replace("'", "")
+    if encoding == "utf-8":
+        # read_csv_auto = utf-8 por defecto, más inferencia rápida.
+        return f"read_csv_auto('{safe}')"
+    return (
+        f"read_csv('{safe}', "
+        f"encoding='{encoding}', "
+        f"AUTO_DETECT=TRUE, "
+        f"HEADER=TRUE)"
+    )
+
+
+def _try_with_fallback(url: str, build_sql) -> tuple[Any, str]:
+    """Ejecuta `build_sql(read_expr)` probando encodings en cascada.
+
+    Devuelve `(resultado, encoding_usado)`. Lanza la última excepción si
+    todos los encodings fallan.
+    """
+    last_exc: Exception | None = None
+    for enc in _ENCODING_FALLBACKS:
+        try:
+            read_expr = _csv_read_expr(url, enc)
+            con = _connection()
+            try:
+                result = build_sql(con, read_expr)
+            finally:
+                con.close()
+            return result, enc
+        except Exception as exc:
+            msg = str(exc).lower()
+            # Solo retry si es un problema de encoding; otros errores
+            # (URL no accesible, columna inválida) no mejoran cambiando enc.
+            if "encod" in msg or "unicode" in msg or "byte sequence" in msg:
+                last_exc = exc
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Sin resultado y sin excepción — estado inválido")
+
+
 def describe_csv(url: str) -> list[dict[str, Any]]:
     """Schema del CSV + clasificación semántica por columna.
 
-    Returns:
-        Lista de dicts con la misma forma que `dataset_columns_curated`:
-        `{col_name, socrata_data_type, socrata_description, semantic_type,
-        semantic_subtype, confidence}`. Sirve directamente al motor de
-        plantillas (`build_soql` lo bucketiza por semantic_type).
+    Acepta URLs CKAN (resuelve via resource_show si hace falta) y CSVs
+    no-utf-8 (intenta latin-1 y utf-16 si utf-8 falla). Devuelve la lista
+    con el mismo shape que `dataset_columns_curated`.
     """
     if not url:
         raise ValueError("URL vacía")
-    con = _connection()
-    try:
-        # DESCRIBE en una consulta con LIMIT 0 evita descargar filas.
-        rows = con.execute(
-            f"DESCRIBE SELECT * FROM read_csv_auto('{url}') LIMIT 0"
+    resolved = resolve_data_url(url)
+
+    def _run(con, read_expr):
+        return con.execute(
+            f"DESCRIBE SELECT * FROM {read_expr} LIMIT 0"
         ).fetchall()
-    finally:
-        con.close()
+
+    rows, _enc = _try_with_fallback(resolved, _run)
     out: list[dict[str, Any]] = []
     for row in rows:
         col_name = str(row[0])
@@ -100,14 +205,29 @@ def describe_csv(url: str) -> list[dict[str, Any]]:
 
 
 def execute_csv(url: str, sql: str) -> list[dict[str, Any]]:
-    """Ejecuta SQL contra `read_csv_auto(url)` y devuelve filas como dicts.
+    """Ejecuta SQL contra el CSV en `url` y devuelve filas como dicts.
 
-    Los strings vienen como `str`, números como `int`/`float`. Filas de
-    fecha vuelven como `datetime`/`date` — el cliente JSON las renderea
-    con `default=str` (FastAPI lo hace automáticamente vía pydantic).
+    `sql` debe usar el placeholder `{src}` para el FROM clause, p.ej.
+    `"SELECT count(*) FROM {src}"`. El executor sustituye `{src}` por el
+    `read_csv(...)` con el encoding apropiado.
+
+    Para compatibilidad con call sites anteriores: si `sql` no tiene
+    `{src}` pero menciona `read_csv_auto('<url>')`, se reusa tal cual y
+    no se intenta fallback de encoding.
     """
     if not url:
         raise ValueError("URL vacía")
+    resolved = resolve_data_url(url)
+
+    if "{src}" in sql:
+        def _run(con, read_expr):
+            res = con.execute(sql.replace("{src}", read_expr))
+            cols = [d[0] for d in res.description]
+            return [dict(zip(cols, row)) for row in res.fetchall()]
+        rows, _enc = _try_with_fallback(resolved, _run)
+        return rows
+
+    # Modo legacy: SQL ya tiene el FROM embebido. Sin fallback.
     con = _connection()
     try:
         res = con.execute(sql)
