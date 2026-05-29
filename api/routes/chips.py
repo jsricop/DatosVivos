@@ -36,7 +36,10 @@ from api.models.schemas import (
 )
 from mcp_server.socrata.soda_client import SodaClient
 
-_soda_client = SodaClient(timeout=30.0)
+# Timeout más generoso (60s) que el default 30s del cliente — los datasets
+# gigantes (ej. SECOPII con 28M filas) toman >30s en GROUP BY. 60s sigue
+# protegiendo de abusos pero cubre el long-tail real del catálogo.
+_soda_client = SodaClient(timeout=60.0)
 
 router = APIRouter()
 log = logging.getLogger(__name__)
