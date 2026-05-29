@@ -23,6 +23,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
+from ai_engine.chips_telemetry import emit_event
 from ai_engine.duckdb_executor import describe_csv, execute_csv
 from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.llm_backend import get_backend, model_for_task
@@ -507,6 +508,9 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
 # ----------------------------------------------------------------------
 
 
+import time as _time
+
+
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     """Ejecuta una consulta SoQL determinista sobre el dataset elegido.
@@ -525,6 +529,7 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
           (falta una columna semántica requerida).
       502 si SODA falla (timeout / SoQL inválido).
     """
+    t0 = _time.time()
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -579,6 +584,12 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                         )
                     else:
                         friendly = f"No pudimos leer el CSV federado: {msg[:120]}"
+                    emit_event(
+                        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                        source_type="federated",
+                        elapsed_ms=int((_time.time()-t0)*1000),
+                        row_count=0, error=friendly,
+                    )
                     return ChipsExecuteResponse(
                         dataset_id=req.dataset_id,
                         tipo=req.tipo,
@@ -590,6 +601,12 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                     )
                 built = build_duckdb_sql(req.tipo, fed_cols, data_url)
                 if built.error:
+                    emit_event(
+                        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                        source_type="federated",
+                        elapsed_ms=int((_time.time()-t0)*1000),
+                        row_count=0, error=built.error,
+                    )
                     return ChipsExecuteResponse(
                         dataset_id=req.dataset_id,
                         tipo=req.tipo,
@@ -605,6 +622,12 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                     log.warning(
                         "DuckDB execute %s falló: %s", req.dataset_id, exc
                     )
+                    emit_event(
+                        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                        source_type="federated",
+                        elapsed_ms=int((_time.time()-t0)*1000),
+                        soql_chars=len(built.sql), error=str(exc)[:200],
+                    )
                     raise HTTPException(
                         status_code=502, detail=str(exc)
                     ) from exc
@@ -614,6 +637,12 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                      for k, v in r.items()}
                     for r in rows_out
                 ]
+                emit_event(
+                    endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                    source_type="federated",
+                    elapsed_ms=int((_time.time()-t0)*1000),
+                    row_count=len(rows_norm), soql_chars=len(built.sql),
+                )
                 return ChipsExecuteResponse(
                     dataset_id=req.dataset_id,
                     tipo=req.tipo,
@@ -639,6 +668,12 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             # excederían el timeout 60s del SodaClient (ej. SECOPII 28M).
             if req.tipo == "Cuántos" and local_row_count is not None:
                 soql = "SELECT count(*) AS n"
+                emit_event(
+                    endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                    source_type="socrata",
+                    elapsed_ms=int((_time.time()-t0)*1000),
+                    row_count=1, soql_chars=len(soql),
+                )
                 return ChipsExecuteResponse(
                     dataset_id=req.dataset_id,
                     tipo=req.tipo,
@@ -666,6 +701,11 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     if built.error:
         # No es 5xx — el dataset no soporta este TIPO. El cliente puede
         # ofrecer otro TIPO o explicar al usuario por qué falla.
+        emit_event(
+            endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+            source_type="socrata", elapsed_ms=int((_time.time()-t0)*1000),
+            row_count=0, error=built.error,
+        )
         return ChipsExecuteResponse(
             dataset_id=req.dataset_id,
             tipo=req.tipo,
@@ -683,14 +723,30 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             "SODA %s falló (%s): %s",
             req.dataset_id, exc.response.status_code, built.soql,
         )
+        emit_event(
+            endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+            source_type="socrata", elapsed_ms=int((_time.time()-t0)*1000),
+            soql_chars=len(built.soql),
+            error=f"SODA {exc.response.status_code}",
+        )
         raise HTTPException(
             status_code=502,
             detail=f"SODA respondió {exc.response.status_code}",
         ) from exc
     except Exception as exc:  # noqa: BLE001
         log.warning("SODA %s falló: %s", req.dataset_id, exc)
+        emit_event(
+            endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+            source_type="socrata", elapsed_ms=int((_time.time()-t0)*1000),
+            soql_chars=len(built.soql), error=str(exc)[:200],
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    emit_event(
+        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+        source_type="socrata", elapsed_ms=int((_time.time()-t0)*1000),
+        row_count=len(rows), soql_chars=len(built.soql),
+    )
     return ChipsExecuteResponse(
         dataset_id=req.dataset_id,
         tipo=req.tipo,
@@ -819,7 +875,12 @@ Respuesta:"""
 async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
     """Narrativa corta sobre el resultado YA verificado. ADR-017: el LLM
     razona sobre un substrato determinista — nunca produce la cifra."""
+    t0 = _time.time()
     if not req.rows:
+        emit_event(
+            endpoint="explain", dataset_id=req.dataset_id, tipo=req.tipo,
+            elapsed_ms=int((_time.time()-t0)*1000), row_count=0,
+        )
         return ChipsExplainResponse(
             dataset_id=req.dataset_id,
             tipo=req.tipo,
@@ -845,6 +906,11 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
         narrative = await backend.generate(prompt, max_tokens=180, model=model)
     except Exception as exc:  # noqa: BLE001
         log.warning("LLM explain falló para %s: %s", req.dataset_id, exc)
+        emit_event(
+            endpoint="explain", dataset_id=req.dataset_id, tipo=req.tipo,
+            elapsed_ms=int((_time.time()-t0)*1000),
+            error=f"LLM: {str(exc)[:150]}",
+        )
         return ChipsExplainResponse(
             dataset_id=req.dataset_id,
             tipo=req.tipo,
@@ -856,6 +922,12 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
     narrative = (narrative or "").strip()
     flagged = _validate_numbers(narrative, req.rows)
     if flagged:
+        emit_event(
+            endpoint="explain", dataset_id=req.dataset_id, tipo=req.tipo,
+            elapsed_ms=int((_time.time()-t0)*1000),
+            hallucinated=len(flagged),
+            error="censored",
+        )
         return ChipsExplainResponse(
             dataset_id=req.dataset_id,
             tipo=req.tipo,
@@ -865,6 +937,10 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
             error="Narrativa censurada: contiene cifras que no están en los datos.",
         )
 
+    emit_event(
+        endpoint="explain", dataset_id=req.dataset_id, tipo=req.tipo,
+        elapsed_ms=int((_time.time()-t0)*1000),
+    )
     return ChipsExplainResponse(
         dataset_id=req.dataset_id,
         tipo=req.tipo,
@@ -891,6 +967,7 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
     El frontend usa la respuesta para navegar a
     `/buscar?tema=X&tipo=Y&...` y disparar el flujo de chips.
     """
+    t0 = _time.time()
     chips = await list_chips()
     available = {
         "tema": [opt.value for opt in chips.tema],
@@ -898,6 +975,14 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         "entidad": [{"value": opt.value, "label": opt.label} for opt in chips.entidad],
     }
     mapped = await map_nl_to_chips(req.q, available)
+    picked = sum(1 for v in mapped.values() if v is not None)
+    emit_event(
+        endpoint="from_nl",
+        elapsed_ms=int((_time.time()-t0)*1000),
+        nl_query=req.q,
+        chips_picked=picked,
+        tipo=mapped.get("tipo"),
+    )
     return ChipsFromNLResponse(
         tema=mapped.get("tema"),
         tipo=mapped.get("tipo"),
