@@ -446,9 +446,13 @@ async def _enrich_one(
     dataset_id: str,
     want_count: bool,
     want_comments: bool,
-) -> tuple[str, int | None, int | None, int | None]:
-    """Devuelve (id, row_count, number_of_comments, total_times_rated)."""
+) -> tuple[str, int | None, int | None, int | None, str | None]:
+    """Devuelve (id, row_count, number_of_comments, total_times_rated,
+    license_id). license_id viene de Views API (`licenseId`); el ETL lo
+    captura en la pasada 2 de enriquecimiento.
+    """
     row_count = n_comments = n_rated = None
+    license_id: str | None = None
     async with sem:
         if want_count:
             try:
@@ -462,9 +466,12 @@ async def _enrich_one(
                 m = await meta.get(dataset_id)
                 n_comments = _safe_int(m.get("numberOfComments"))
                 n_rated = _safe_int(m.get("totalTimesRated"))
+                lic = m.get("licenseId")
+                if isinstance(lic, str) and lic.strip():
+                    license_id = lic.strip()[:80]
             except Exception:  # noqa: BLE001
                 pass
-    return dataset_id, row_count, n_comments, n_rated
+    return dataset_id, row_count, n_comments, n_rated, license_id
 
 
 def _update_enrichment(cur: psycopg.Cursor, rows: list[tuple]) -> None:
@@ -473,10 +480,11 @@ def _update_enrichment(cur: psycopg.Cursor, rows: list[tuple]) -> None:
         UPDATE datasets SET
             row_count = COALESCE(%s, row_count),
             number_of_comments = COALESCE(%s, number_of_comments),
-            total_times_rated = COALESCE(%s, total_times_rated)
+            total_times_rated = COALESCE(%s, total_times_rated),
+            license_id = COALESCE(%s, license_id)
         WHERE dataset_id = %s
         """,
-        [(rc, nc, nr, did) for (did, rc, nc, nr) in rows],
+        [(rc, nc, nr, lid, did) for (did, rc, nc, nr, lid) in rows],
     )
 
 
