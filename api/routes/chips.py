@@ -520,7 +520,7 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT source_type FROM datasets WHERE dataset_id = %s",
+                "SELECT source_type, row_count FROM datasets WHERE dataset_id = %s",
                 (req.dataset_id,),
             )
             row = cur.fetchone()
@@ -530,6 +530,7 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                     detail=f"Dataset {req.dataset_id!r} no existe en el catálogo",
                 )
             source_type = row["source_type"]
+            local_row_count = row["row_count"]
             if source_type != "socrata":
                 raise HTTPException(
                     status_code=400,
@@ -539,6 +540,22 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                         "Federados se consultarán vía DuckDB en Reto F.4."
                     ),
                 )
+
+            # Fast-path para Cuántos: Hito Q.7.b probó que `row_count` local
+            # tiene 0% drift vs SODA live (293/293 muestras). Sirvo desde
+            # Postgres → instantáneo y cubre datasets de >10M filas que
+            # excederían el timeout 60s del SodaClient (ej. SECOPII 28M).
+            if req.tipo == "Cuántos" and local_row_count is not None:
+                soql = "SELECT count(*) AS n"
+                return ChipsExecuteResponse(
+                    dataset_id=req.dataset_id,
+                    tipo=req.tipo,
+                    soql=soql,
+                    columns_used=[],
+                    rows=[{"n": str(local_row_count)}],
+                    row_count=1,
+                )
+
             cur.execute(
                 """
                 SELECT col_name, semantic_type, semantic_subtype, socrata_data_type
