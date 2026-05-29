@@ -686,38 +686,59 @@ import json as _json
 import re as _re
 
 
+# Token numérico = secuencia continua de dígitos y separadores (punto/coma).
+# Capturamos como un solo grupo cifras con miles formateados ("9.192.802.561.842")
+# en vez de partirlas en pedacitos.
+_NUMBER_TOKEN_RE = _re.compile(r"-?\d[\d.,]*")
+
+
+def _normalize_digits(token: str) -> str:
+    """Quita todos los separadores. '9.192.802.561.842' → '9192802561842'."""
+    return _re.sub(r"[.,]", "", token.lstrip("-"))
+
+
 def _allowed_numbers(rows: list[dict]) -> set[str]:
-    """Conjunto de strings numéricos que aparecen en las filas, normalizados
-    sin separadores. Cubre '3622', '3.622', '3,622', '647764.10', etc."""
+    """Conjunto de strings de SOLO DÍGITOS de cualquier valor numérico que
+    aparezca en las filas. También incluye los prefijos de >= 4 dígitos
+    (cubre cuando el LLM redondea/trunca, ej. devuelve "9 billones" cuando
+    el valor real es 9192802561842)."""
     out: set[str] = set()
     for row in rows or []:
         for v in row.values():
             if v is None:
                 continue
             s = str(v)
-            # Extrae cada subcadena numérica (incluye decimales).
-            for m in _re.finditer(r"-?\d+(?:[.,]\d+)?", s):
-                token = m.group(0).replace(",", "").replace(".", "")
-                if token:
-                    out.add(token)
+            for m in _NUMBER_TOKEN_RE.finditer(s):
+                norm = _normalize_digits(m.group(0))
+                if not norm:
+                    continue
+                out.add(norm)
     return out
 
 
 def _validate_numbers(narrative: str, rows: list[dict]) -> list[str]:
-    """Devuelve la lista de números mencionados en la narrativa que NO
-    aparecen en los datos. Si la lista es vacía, la narrativa es segura."""
+    """Lista los números en la narrativa que NO aparecen en `rows`.
+    Vacía → narrativa segura.
+
+    Acepta:
+      * Años 1900-2099 sin verificar.
+      * Números de 1 dígito (0-9) — el LLM los usa como cardinales ("3 categorías")
+        sin que sean cifras del catálogo; son ruido inevitable.
+    """
     allowed = _allowed_numbers(rows)
-    found = _re.findall(r"-?\d+(?:[.,]\d+)?", narrative)
     flagged: list[str] = []
-    for n in found:
-        norm = n.replace(",", "").replace(".", "")
-        if not norm:
+    for m in _NUMBER_TOKEN_RE.finditer(narrative):
+        token = m.group(0)
+        norm = _normalize_digits(token)
+        if not norm or not norm.isdigit():
             continue
-        # Aceptamos años (1900-2099) sin verificar — son referencias usuales.
-        if len(norm) == 4 and norm.isdigit() and 1900 <= int(norm) <= 2099:
+        if len(norm) == 1:
             continue
-        if norm not in allowed:
-            flagged.append(n)
+        if len(norm) == 4 and 1900 <= int(norm) <= 2099:
+            continue
+        if norm in allowed:
+            continue
+        flagged.append(token)
     return flagged
 
 
