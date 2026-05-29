@@ -170,3 +170,57 @@ class ChipsQueryResponse(BaseModel):
     chosen_dataset_id: str | None  # el seleccionado para ejecutar SoQL
     suggested_chips: list[str] | None = None  # ["entidad", "territorio"] si subset>10
     message: str | None = None     # ej. "Hay 746 datasets de Salud. Marcá otro chip para refinar."
+
+
+# ============================================================
+# Hito 1 / Fase B — Motor SoQL determinista
+# ============================================================
+
+
+SemanticType = Literal["geo", "fecha", "metrica", "dimension", "exclude"]
+Confidence = Literal["high", "medium", "low"]
+
+
+class CuratedColumn(BaseModel):
+    """Una columna de un dataset, con su clasificación semántica curada
+    (`dataset_columns_curated`, ver migración 004)."""
+
+    col_name: str
+    socrata_data_type: str | None = None
+    socrata_description: str | None = None
+    semantic_type: SemanticType
+    semantic_subtype: str | None = None
+    confidence: Confidence
+
+
+class DatasetCuratedColumns(BaseModel):
+    """GET /api/v1/datasets/{id}/columns — columnas tipadas para construir
+    SoQL determinista por TIPO. `by_type` es un índice por semantic_type
+    ordenado por confidence DESC (high → medium → low) para que el
+    selector tome la columna más confiable primero."""
+
+    dataset_id: str
+    columns: list[CuratedColumn]
+    by_type: dict[SemanticType, list[str]]
+
+
+class ChipsExecuteRequest(BaseModel):
+    """POST /api/v1/query/chips/execute — ejecutar la consulta SoQL sobre
+    el dataset elegido + TIPO. Sin LLM: build_soql + SodaClient."""
+
+    dataset_id: str
+    tipo: ChipTipo
+    # Territorio opcional como filtro adicional (DIVIPOLA code o "macro:*").
+    territorio: str | None = None
+
+
+class ChipsExecuteResponse(BaseModel):
+    """Respuesta del ejecutor SoQL determinista."""
+
+    dataset_id: str
+    tipo: ChipTipo
+    soql: str                   # query exacta enviada a SODA (para transparencia)
+    columns_used: list[str]     # columnas que el template eligió
+    rows: list[dict]            # filas crudas de SODA
+    row_count: int              # len(rows), por conveniencia del cliente
+    error: str | None = None    # mensaje si no se pudo construir o ejecutar
