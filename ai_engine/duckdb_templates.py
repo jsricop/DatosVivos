@@ -52,10 +52,10 @@ def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | Non
 
 
 def _from_clause(url: str) -> str:
-    # URL viene de datasets.data_url (no de user input). Aún así sanitizo
-    # comillas simples para evitar rompimientos.
-    safe = (url or "").replace("'", "")
-    return f"read_csv_auto('{safe}')"
+    # Devuelve el placeholder `{src}` que el executor sustituye por el
+    # `read_csv(...)` con encoding adecuado (UTF-8 / latin-1 / utf-16).
+    # La URL se conserva en el executor para que sepa qué archivo abrir.
+    return "{src}"
 
 
 def _fecha_expr(col: dict[str, Any]) -> str:
@@ -80,8 +80,12 @@ def build_duckdb_sql(
     *,
     use_metric: bool = True,
 ) -> BuildResult:
-    """Construye SQL DuckDB para `tipo` sobre el CSV en `url`."""
-    src = _from_clause(url)
+    """Construye SQL DuckDB para `tipo` sobre el CSV en `url`.
+
+    Emite `{src}` como placeholder del FROM — el executor lo sustituye
+    con `read_csv(...)` con encoding apropiado.
+    """
+    src = _from_clause(url)  # = "{src}", placeholder
 
     if tipo == "Cuántos":
         return BuildResult(
