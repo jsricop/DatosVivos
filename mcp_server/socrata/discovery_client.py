@@ -30,6 +30,7 @@ class DiscoveryClient:
         query: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        only: str = "dataset",
     ) -> list[dict[str, Any]]:
         """Busca datasets en el catálogo del dominio configurado.
 
@@ -38,6 +39,9 @@ class DiscoveryClient:
                 (orden por defecto de Socrata — popularidad/relevancia).
             limit: Máximo de resultados por página.
             offset: Desplazamiento para paginación.
+            only: Filtro de tipo Socrata. Default `"dataset"` (nativos SODA).
+                Otros válidos: `"federated_href"` (datasets cuya atribución es
+                URL externa, ej. MEDATA), o lista coma-separada.
 
         Returns:
             Lista de objetos `result` con `resource`, `classification`, `metadata`.
@@ -46,7 +50,7 @@ class DiscoveryClient:
             "domains": self.domain,
             "limit": limit,
             "offset": offset,
-            "only": "dataset",
+            "only": only,
         }
         if query:
             # Expandir acrónimos del sector público colombiano (MinTIC, DANE, etc.)

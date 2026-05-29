@@ -159,19 +159,61 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
 
     pv = resource.get("page_views") or {}
     dm = _domain_metadata_dict(classification)
+    is_federated = resource.get("type") == "federated_href"
 
-    # Frecuencia declarada (español) — fuente canónica datos.gov.co. Alimenta
-    # también `update_frequency` para que el semáforo use la frecuencia que
-    # la entidad declaró (parse_frequency_days en db ya entiende español).
-    frecuencia = _find_by_token(dm, "frecuencia")
+    # Federados publican vía DCAT (claves Common-Core_*). Nativos usan el
+    # estándar colombiano (Información-de-Datos_*). Para no duplicar lógica,
+    # _find_by_token cubre los nativos y aquí caemos a Common-Core_* si el
+    # dataset es federado y el token canónico no estuvo.
+    if is_federated:
+        frecuencia = (
+            _find_by_token(dm, "frecuencia")
+            or dm.get("Common-Core_Update-Frequency")
+        )
+        cobertura = (
+            _find_by_token(dm, "cobertura")
+            or dm.get("Common-Core_Spatial")
+        )
+        sector = _find_by_token(dm, "sector")  # DCAT no tiene equivalente directo
+        category_val = (
+            classification.get("domain_category")
+            or resource.get("category")
+            or dm.get("Common-Core_Theme")
+        )
+        entity_raw_val = (
+            resource.get("attribution")
+            or dm.get("Common-Core_Publisher")
+            or ""
+        )
+        license_val = result_meta.get("license") or dm.get("Common-Core_License")
+        # URL del CSV externo, si el publicador lo declara en access_points.
+        access_points = result_meta.get("access_points") or {}
+        data_url = access_points.get("text/csv") or access_points.get("text/json")
+        if data_url and "csv" in (access_points.get("text/csv") or "").lower():
+            data_format = "csv"
+        elif data_url:
+            data_format = "json"
+        else:
+            data_format = None
+        federated_status = "ok" if data_url else "no_csv"
+    else:
+        frecuencia = _find_by_token(dm, "frecuencia")
+        cobertura = _find_by_token(dm, "cobertura")
+        sector = _find_by_token(dm, "sector")
+        category_val = classification.get("domain_category") or resource.get("category")
+        entity_raw_val = resource.get("attribution") or ""
+        license_val = result_meta.get("license")
+        data_url = None
+        data_format = None
+        federated_status = None
 
     data_updated = _parse_iso(resource.get("data_updated_at"))
 
     return {
         "dataset_id": dataset_id,
         "name": resource.get("name") or "",
-        "entity_raw": resource.get("attribution") or "",
-        "category": classification.get("domain_category") or resource.get("category"),
+        "entity_raw": entity_raw_val,
+        "category": category_val,
         "description": (resource.get("description") or "")[:2000],
         # rows_updated_at = fecha del DATO (no del metadata) → semáforo correcto.
         "rows_updated_at": data_updated,
@@ -188,14 +230,19 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
         "page_views_last_month": _safe_int(pv.get("page_views_last_month")),
         # Confianza / apertura
         "provenance": resource.get("provenance"),
-        "license": result_meta.get("license"),
+        "license": license_val,
         # Metadata estructurada colombiana
-        "cobertura_geografica": _find_by_token(dm, "cobertura"),
+        "cobertura_geografica": cobertura,
         "frecuencia_declarada": frecuencia,
-        "sector": _find_by_token(dm, "sector"),
+        "sector": sector,
         "domain_metadata": Jsonb(dm) if dm else None,
-        # Tags (domain_tags de la clasificación)
+        # Tags
         "tags": [t for t in (classification.get("domain_tags") or []) if isinstance(t, str)][:25],
+        # Federación
+        "source_type": "federated" if is_federated else "socrata",
+        "data_url": data_url,
+        "data_format": data_format,
+        "federated_status": federated_status,
     }
 
 
@@ -207,23 +254,33 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
 async def _discovery_sweep(
     client: DiscoveryClient, limit_total: int | None
 ) -> AsyncIterator[dict[str, Any]]:
-    """Pagina todo el dominio. Se detiene en página vacía o al alcanzar limit_total."""
-    offset = 0
+    """Pagina dos veces: nativos (`only=dataset`) y federados (`only=federated_href`).
+
+    Se detiene en página vacía dentro de cada pasada o al alcanzar limit_total.
+    Total de resultados conserva el límite global si se pasó.
+    """
     yielded = 0
-    while True:
-        page = min(DISCOVERY_PAGE, (limit_total - yielded) if limit_total else DISCOVERY_PAGE)
-        if page <= 0:
-            return
-        results = await client.search(query=None, limit=page, offset=offset)
-        if not results:
-            return
-        for r in results:
-            yield r
-            yielded += 1
+    for only_type in ("dataset", "federated_href"):
+        offset = 0
+        while True:
+            page = min(
+                DISCOVERY_PAGE,
+                (limit_total - yielded) if limit_total else DISCOVERY_PAGE,
+            )
+            if page <= 0:
+                return
+            results = await client.search(
+                query=None, limit=page, offset=offset, only=only_type
+            )
+            if not results:
+                break
+            for r in results:
+                yield r
+                yielded += 1
             if limit_total and yielded >= limit_total:
                 return
-        offset += len(results)
-        await asyncio.sleep(BATCH_PAUSE_MS / 1000)
+            offset += len(results)
+            await asyncio.sleep(BATCH_PAUSE_MS / 1000)
 
 
 # ----------------------------------------------------------------------
@@ -301,7 +358,8 @@ def _upsert_dataset(cur: psycopg.Cursor, rec: dict[str, Any], entity_id: int | N
             download_count, page_views_total, page_views_last_week,
             page_views_last_month, data_updated_at, metadata_updated_at,
             publication_date, provenance, license, cobertura_geografica,
-            frecuencia_declarada, sector, domain_metadata
+            frecuencia_declarada, sector, domain_metadata,
+            source_type, data_url, data_format, federated_status
         ) VALUES (
             %(dataset_id)s, %(name)s, %(entity_id)s, %(entity_raw)s,
             %(category)s, %(description)s, %(rows_updated_at)s,
@@ -310,7 +368,8 @@ def _upsert_dataset(cur: psycopg.Cursor, rec: dict[str, Any], entity_id: int | N
             %(download_count)s, %(page_views_total)s, %(page_views_last_week)s,
             %(page_views_last_month)s, %(data_updated_at)s, %(metadata_updated_at)s,
             %(publication_date)s, %(provenance)s, %(license)s, %(cobertura_geografica)s,
-            %(frecuencia_declarada)s, %(sector)s, %(domain_metadata)s
+            %(frecuencia_declarada)s, %(sector)s, %(domain_metadata)s,
+            %(source_type)s, %(data_url)s, %(data_format)s, %(federated_status)s
         )
         ON CONFLICT (dataset_id) DO UPDATE SET
             name = EXCLUDED.name,
@@ -337,13 +396,21 @@ def _upsert_dataset(cur: psycopg.Cursor, rec: dict[str, Any], entity_id: int | N
             cobertura_geografica = EXCLUDED.cobertura_geografica,
             frecuencia_declarada = EXCLUDED.frecuencia_declarada,
             sector = EXCLUDED.sector,
-            domain_metadata = EXCLUDED.domain_metadata
+            domain_metadata = EXCLUDED.domain_metadata,
+            source_type = EXCLUDED.source_type,
+            data_url = EXCLUDED.data_url,
+            data_format = EXCLUDED.data_format,
+            federated_status = EXCLUDED.federated_status
         """,
         {
             **rec,
             "entity_id": entity_id,
+            # Para federados, el `api_url` SODA no aplica (datos viven en `data_url`).
             "socrata_url": _SOCRATA_PAGE_URL.format(id=rec["dataset_id"]),
-            "api_url": _SOCRATA_API_URL.format(id=rec["dataset_id"]),
+            "api_url": (
+                None if rec.get("source_type") == "federated"
+                else _SOCRATA_API_URL.format(id=rec["dataset_id"])
+            ),
         },
     )
     cur.execute("DELETE FROM dataset_tags WHERE dataset_id = %s", (rec["dataset_id"],))
@@ -417,7 +484,15 @@ def _needs_enrichment(
     rec: dict[str, Any], existing: dict[str, tuple[Any, int | None]] | None
 ) -> bool:
     """Modo incremental: recontar solo si es NUEVO, el DATO cambió, o nunca se contó.
-    Modo full (existing=None): siempre."""
+    Modo full (existing=None): siempre.
+
+    Federados (`source_type=='federated'`) NO entran a enriquecimiento: el
+    SODA `count(*)` no aplica (la data vive en un CSV externo, no en SODA)
+    y la Metadata API tampoco trae `numberOfComments`/`totalTimesRated`
+    útiles para ellos. Se cuentan vía DuckDB en Hito 2 F.4.
+    """
+    if rec.get("source_type") == "federated":
+        return False
     if existing is None:
         return True
     prev = existing.get(rec["dataset_id"])
