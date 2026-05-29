@@ -1,0 +1,143 @@
+# Golden set para el path de chips → cifra (Hito 1).
+#
+# Cada caso es `(dataset_id, tipo, expected_*)`. El harness eval/run_eval_chips.py
+# llama POST /api/v1/query/chips/execute con el dataset+tipo y valida:
+#   - error es null
+#   - row_count está en el rango esperado
+#   - (opcional) primer row matchea claves esperadas
+#
+# Curaduría: las cifras de referencia se sacan de smoke E2E del 2026-05-29.
+# Para tolerar variaciones legítimas (Socrata data drift, federados
+# que actualizan), usamos rangos en vez de equals salvo donde el dataset
+# es histórico estable (años cerrados).
+
+cases:
+
+  # ---- Nativos SODA — datasets de prueba reutilizados todo el día ----
+  - id: subsidios_vivienda_total
+    dataset_id: h2yr-zfb2
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      first_row_must_contain: { n: "86283" }
+
+  - id: subsidios_vivienda_top_programa
+    dataset_id: h2yr-zfb2
+    tipo: Ranking
+    expect:
+      row_count: 10
+      first_row_must_contain: { categoria: "MI CASA YA" }
+
+  - id: subsidios_vivienda_comparar
+    dataset_id: h2yr-zfb2
+    tipo: Comparar
+    expect:
+      row_count: 10
+      first_row_must_contain: { categoria: "MI CASA YA" }
+
+  - id: subsidios_vivienda_tendencia
+    dataset_id: h2yr-zfb2
+    tipo: Tendencia
+    expect:
+      row_count_min: 10
+      row_count_max: 60
+
+  - id: subsidios_vivienda_mapa
+    dataset_id: h2yr-zfb2
+    tipo: Mapa
+    expect:
+      row_count: 32
+      first_row_must_contain: { region: "5" }   # Antioquia top
+
+  # ---- IPS Salud ----
+  - id: ips_total
+    dataset_id: ugc5-acjp
+    tipo: Cuántos
+    expect:
+      row_count: 1
+
+  - id: ips_mapa
+    dataset_id: ugc5-acjp
+    tipo: Mapa
+    expect:
+      row_count: 32
+
+  # ---- Estadísticas Educación MEN ----
+  - id: educacion_total
+    dataset_id: ji8i-4anb
+    tipo: Cuántos
+    expect:
+      row_count: 1
+
+  - id: educacion_ranking
+    dataset_id: ji8i-4anb
+    tipo: Ranking
+    expect:
+      row_count: 10
+
+  # ---- SECOPII (28M filas — solo Cuántos fast-path) ----
+  - id: secopii_total
+    dataset_id: 9sue-ezhx
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      # SECOPII crece. Verifica que n >= 25M (era 28,4M el 2026-05-29).
+      first_row_field_min: { n: 25000000 }
+
+  - id: secopii_mapa_no_aplica
+    dataset_id: 9sue-ezhx
+    tipo: Mapa
+    expect:
+      error_substring: "geo"   # SECOPII no tiene columna geo curada
+
+  # ---- Federados MEDATA ----
+  - id: medata_nacimientos_total
+    dataset_id: k879-7jb3
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      first_row_must_contain: { n: "51" }
+
+  - id: medata_tarifas_epm_total
+    dataset_id: se7p-ytdd
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      first_row_must_contain: { n: "3622" }
+
+  - id: medata_tarifas_epm_comparar
+    dataset_id: se7p-ytdd
+    tipo: Comparar
+    expect:
+      row_count_min: 2
+      row_count_max: 10
+
+  # ---- Federados Cali CKAN ----
+  - id: cali_reclamaciones_total
+    dataset_id: bgz2-8fh9
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      first_row_must_contain: { n: "30" }
+
+  # ---- Federados Bogotá CKAN ----
+  - id: bogota_pqrs_concesionario_total
+    dataset_id: bog-4f35071c186d4b07
+    tipo: Cuántos
+    expect:
+      row_count: 1
+      first_row_must_contain: { n: "245" }
+
+  # ---- Federado 403 (FONCEP) — error legible, no 502 ----
+  - id: bogota_foncep_403_degrada
+    dataset_id: 5ape-4xav
+    tipo: Cuántos
+    expect:
+      error_substring: "portal"   # mensaje friendly del fix bug 2
+
+  # ---- Dataset inexistente ----
+  - id: dataset_inexistente_404
+    dataset_id: xxxx-yyyy
+    tipo: Cuántos
+    expect:
+      http_status: 404
