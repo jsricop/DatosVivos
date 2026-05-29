@@ -26,6 +26,7 @@ from psycopg.rows import dict_row
 from ai_engine.duckdb_executor import describe_csv, execute_csv
 from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.llm_backend import get_backend, model_for_task
+from ai_engine.nl_to_chips import map_nl_to_chips
 from ai_engine.soql_templates import build_soql
 from api.models.schemas import (
     ChipOption,
@@ -34,6 +35,8 @@ from api.models.schemas import (
     ChipsExecuteResponse,
     ChipsExplainRequest,
     ChipsExplainResponse,
+    ChipsFromNLRequest,
+    ChipsFromNLResponse,
     ChipsQueryRequest,
     ChipsQueryResponse,
     ChipsRefineResponse,
@@ -846,4 +849,38 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
         tipo=req.tipo,
         narrative=narrative,
         model=model,
+    )
+
+
+# ----------------------------------------------------------------------
+# POST /api/v1/chips/from-nl (Hito 1 Fase 2 — mapper NL→chips)
+# ----------------------------------------------------------------------
+
+
+@router.post("/chips/from-nl", response_model=ChipsFromNLResponse)
+async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
+    """Texto libre → combinación de chips pre-marcada.
+
+    Pipeline:
+      1. Carga chips disponibles (mismas listas que `GET /chips`).
+      2. Pide al LLM mapear el texto a {tema, tipo, territorio, entidad,
+         refinador} eligiendo SOLO valores presentes en las listas.
+      3. Valida la respuesta y descarta opciones inválidas.
+
+    El frontend usa la respuesta para navegar a
+    `/buscar?tema=X&tipo=Y&...` y disparar el flujo de chips.
+    """
+    chips = await list_chips()
+    available = {
+        "tema": [opt.value for opt in chips.tema],
+        "territorio": [{"value": opt.value, "label": opt.label} for opt in chips.territorio],
+        "entidad": [{"value": opt.value, "label": opt.label} for opt in chips.entidad],
+    }
+    mapped = await map_nl_to_chips(req.q, available)
+    return ChipsFromNLResponse(
+        tema=mapped.get("tema"),
+        tipo=mapped.get("tipo"),
+        territorio=mapped.get("territorio"),
+        entidad=mapped.get("entidad"),
+        refinador=mapped.get("refinador"),
     )
