@@ -70,3 +70,22 @@ export type QueryEvent =
   | { type: "dashboard_spec"; spec: unknown } // validado con zod en el cliente
   | { type: "error"; code: string; message: string }
   | { type: "done"; elapsed_s: number };
+
+/** Hito 1 / Fase B — Motor SoQL determinista. Espejo de api/models/schemas.py. */
+export type ChipTipo = "Cuántos" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
+
+export type ChipsExecuteRequest = {
+  dataset_id: string;
+  tipo: ChipTipo;
+  territorio?: string | null;
+};
+
+export type ChipsExecuteResponse = {
+  dataset_id: string;
+  tipo: ChipTipo;
+  soql: string;
+  columns_used: string[];
+  rows: Row[];
+  row_count: number;
+  error?: string | null;
+};

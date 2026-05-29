@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ChipsResultPanel } from "@/components/ChipsResultPanel";
 import { Icon } from "@/components/Icon";
+import type { ChipTipo, ChipsExecuteResponse } from "@/lib/types";
 
 /** Espejo de api/models/schemas.py::ChipsCandidateDataset */
 type Candidate = {
@@ -27,6 +29,12 @@ type ChipsQueryResponse = {
   message: string | null;
 };
 
+const TIPO_VALUES: ChipTipo[] = ["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"];
+
+function isValidTipo(s: string | undefined | null): s is ChipTipo {
+  return !!s && (TIPO_VALUES as string[]).includes(s);
+}
+
 type Props = {
   filters: Record<string, string[]>;
   subtags?: string[];
@@ -45,6 +53,56 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const sectionRef = useRef<HTMLElement | null>(null);
+
+  // Fase C — ejecución del SoQL determinista sobre el dataset elegido.
+  const [exec, setExec] = useState<ChipsExecuteResponse | null>(null);
+  const [execError, setExecError] = useState<string | null>(null);
+  const [execLoading, setExecLoading] = useState(false);
+  const [showSoql, setShowSoql] = useState(false);
+
+  // TIPO seleccionado por el usuario (de los chips capa 1).
+  const tipo = useMemo<ChipTipo | null>(() => {
+    const v = filters.tipo?.[0];
+    return isValidTipo(v) ? v : null;
+  }, [filters.tipo]);
+
+  // Auto-execute cuando hay dataset elegido + TIPO marcado.
+  useEffect(() => {
+    const dsId = data?.chosen_dataset_id;
+    if (!dsId || !tipo) {
+      setExec(null);
+      setExecError(null);
+      return;
+    }
+    let cancelled = false;
+    async function go() {
+      setExecLoading(true);
+      setExecError(null);
+      try {
+        const res = await fetch("/api/chips/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataset_id: dsId, tipo }),
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Backend ${res.status}: ${txt}`);
+        }
+        const json: ChipsExecuteResponse = await res.json();
+        if (!cancelled) setExec(json);
+      } catch (e) {
+        if (!cancelled) {
+          setExecError(e instanceof Error ? e.message : "Error desconocido");
+        }
+      } finally {
+        if (!cancelled) setExecLoading(false);
+      }
+    }
+    go();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.chosen_dataset_id, tipo]);
 
   // Cuando llega data, hacer scroll al inicio de los resultados — si el header
   // (chips activos, breadcrumb) es alto, los datasets pueden quedar abajo del
@@ -147,6 +205,80 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
           </p>
         ) : null}
       </header>
+
+      {/* Fase C — render del resultado SoQL determinista cuando hay TIPO + dataset elegido. */}
+      {tipo && data.chosen_dataset_id ? (
+        <section
+          aria-label="Resultado de la consulta"
+          className="flex flex-col gap-3"
+        >
+          {execLoading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="surface-elev p-6 animate-pulse text-ink-2"
+            >
+              Calculando la cifra…
+            </div>
+          ) : execError ? (
+            <div
+              role="alert"
+              className="border border-red-200 bg-red-50 p-4 flex flex-col gap-1"
+            >
+              <span className="text-kicker text-red-900">
+                No pudimos calcular
+              </span>
+              <p className="font-sans text-body text-ink-2 m-0">
+                {execError.includes("502") || execError.includes("SODA")
+                  ? "El servidor de datos.gov.co no respondió a tiempo."
+                  : execError}
+              </p>
+              <a
+                href={
+                  data.candidates.find(
+                    (c) => c.dataset_id === data.chosen_dataset_id,
+                  )?.url
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-caption text-ink hover:underline mt-1"
+              >
+                Ver el dataset directo →
+              </a>
+            </div>
+          ) : exec ? (
+            <>
+              <ChipsResultPanel
+                response={exec}
+                datasetName={
+                  data.candidates.find(
+                    (c) => c.dataset_id === data.chosen_dataset_id,
+                  )?.name ?? exec.dataset_id
+                }
+              />
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="font-mono text-caption text-ink-muted">
+                  {exec.row_count} fila{exec.row_count !== 1 ? "s" : ""} ·
+                  columnas usadas: {exec.columns_used.join(", ") || "(ninguna)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSoql((v) => !v)}
+                  className="font-mono text-caption text-ink hover:underline focus-ring"
+                  aria-expanded={showSoql}
+                >
+                  {showSoql ? "Ocultar" : "Ver"} consulta SoQL
+                </button>
+              </div>
+              {showSoql && exec.soql ? (
+                <pre className="font-mono text-caption bg-bg-elev border border-hairline p-3 overflow-x-auto m-0">
+                  {exec.soql}
+                </pre>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       {data.candidates.length === 0 ? (
         <p className="font-sans text-body text-ink-2">
