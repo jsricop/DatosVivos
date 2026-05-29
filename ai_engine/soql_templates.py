@@ -1,22 +1,30 @@
 """Constructor SoQL determinista por TIPO de chip (Hito 1, Fase B).
 
-Plantillas puras: dado un TIPO y el diccionario de columnas curadas
-(`semantic_type → [col_name]`), devuelve la query SoQL exacta a enviar a
-SODA. Sin LLM, sin IO. La selección de columna usa el primer nombre del
-bucket — el caller debe entregar `by_type` ya ordenado por confidence
-(B.1 lo hace).
+Plantillas puras: dado un TIPO y la lista de columnas curadas del dataset
+(`dataset_columns_curated`), devuelve la query SoQL exacta a enviar a SODA.
+Sin LLM, sin IO. La lista de columnas debe venir YA ordenada por
+confidence DESC (la consulta de B.1 lo hace).
 
 Decisión de diseño (memoria `project_soql_count_default`): `COUNT(*)` es
 la métrica DEFAULT en cada TIPO. `SUM(métrica)` se usa SOLO si el dataset
 tiene una columna curada como `metrica` Y el TIPO lo soporta (Ranking).
-Esto sube cobertura por TIPO de ~30% a ~60-70% (la mayoría de datasets
-no tienen métrica sumable explícita).
+
+Decisión adicional (smoke 2026-05-29): la curación marca algunas columnas
+como `semantic_type='fecha'` aunque su `socrata_data_type` sea `number`
+(años como entero) o `text`. En esos casos `date_trunc_ym(col)` falla en
+SODA (type-mismatch). Para `Tendencia`:
+  - subtype='date' Y data_type ∈ {calendar_date, date, floating_timestamp}
+    → date_trunc_ym(col).
+  - subtype='year' o data_type='number'
+    → GROUP BY col directo (ya es un periodo discreto).
+  - resto (subtype='period', data_type='text')
+    → GROUP BY col directo.
 
 Plantillas:
   Cuántos    → SELECT count(*) AS n
   Comparar   → SELECT {dim}, count(*) AS n GROUP BY {dim} ORDER BY n DESC LIMIT 10
   Ranking    → idem Comparar (default) o con SUM(metrica) si aplica
-  Tendencia  → SELECT date_trunc_ym({fecha}) AS periodo, count(*) AS n GROUP BY periodo ORDER BY periodo LIMIT 60
+  Tendencia  → SELECT {fecha_expr} AS periodo, count(*) AS n GROUP BY periodo ORDER BY periodo LIMIT 60
   Mapa       → SELECT {geo}, count(*) AS n GROUP BY {geo} ORDER BY n DESC LIMIT 32
 """
 
@@ -24,15 +32,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Iterable, Literal
 
 ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
-SemanticType = Literal["geo", "fecha", "metrica", "dimension", "exclude"]
 
-# Identificador SoQL válido: letras/dígitos/guion bajo, debe empezar con letra
-# o guion bajo. SoQL acepta más, pero esto es lo que produce el campo
-# `columns_field_name` del Discovery (snake_case).
+# Identificador SoQL válido — coincide con `columns_field_name` snake_case.
 _IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_DATE_DATATYPES = {"calendar_date", "date", "floating_timestamp"}
 
 
 @dataclass
@@ -44,26 +50,39 @@ class BuildResult:
     error: str | None = None
 
 
-def _safe_ident(name: str) -> str | None:
-    """Devuelve el name si es identificador SoQL válido; None si no."""
+def _safe_ident(name: str | None) -> str | None:
     if not name or not _IDENT_RE.match(name):
         return None
     return name
 
 
-def _pick(by_type: dict[str, list[str]], stype: SemanticType) -> str | None:
-    """Toma la primera columna del bucket (ya viene ordenada por confidence)."""
-    candidates = by_type.get(stype) or []
-    for c in candidates:
-        s = _safe_ident(c)
-        if s:
-            return s
+def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | None:
+    """Devuelve el primer col-dict del tipo semántico solicitado cuyo
+    `col_name` es identificador SoQL válido. Asume orden de confidence DESC."""
+    for c in columns:
+        if c.get("semantic_type") != stype:
+            continue
+        if _safe_ident(c.get("col_name")):
+            return c
     return None
+
+
+def _fecha_expr(col: dict[str, Any]) -> str:
+    """Devuelve la expresión SoQL para agrupar por periodo según subtype y
+    data_type. Para columnas que SODA reconoce como fecha, usa date_trunc_ym;
+    si la fecha está como número (año entero) o texto, agrupa por el valor
+    crudo."""
+    name = col["col_name"]
+    subtype = (col.get("semantic_subtype") or "").lower()
+    data_type = (col.get("socrata_data_type") or "").lower()
+    if subtype == "date" and data_type in _DATE_DATATYPES:
+        return f"date_trunc_ym({name})"
+    return name
 
 
 def build_soql(
     tipo: ChipTipo,
-    by_type: dict[str, list[str]],
+    columns: list[dict[str, Any]],
     *,
     use_metric: bool = True,
 ) -> BuildResult:
@@ -71,28 +90,27 @@ def build_soql(
 
     Args:
         tipo: uno de los 5 chips de TIPO.
-        by_type: índice `semantic_type → [col_name]` (de B.1 — ya ordenado
-            por confidence DESC).
+        columns: lista de col-dicts con al menos `col_name` y
+            `semantic_type`. Opcionalmente `semantic_subtype` y
+            `socrata_data_type` para decisiones data-type-aware
+            (Tendencia). Orden = preferencia (confidence DESC).
         use_metric: si True (default), Ranking usa SUM(metrica) cuando hay
             columna métrica; si False, fuerza COUNT(*).
-
-    Returns:
-        BuildResult con `soql` poblada si se pudo construir, o `error` con
-        el motivo (ej. "Tendencia requiere columna fecha").
     """
     if tipo == "Cuántos":
         return BuildResult(soql="SELECT count(*) AS n", columns_used=[])
 
     if tipo in ("Comparar", "Ranking"):
-        dim = _pick(by_type, "dimension")
-        if not dim:
+        dim_col = _pick(columns, "dimension")
+        if not dim_col:
             return BuildResult(
-                soql="",
-                error=f"{tipo} requiere ≥1 columna de tipo `dimension`",
+                soql="", error=f"{tipo} requiere ≥1 columna de tipo `dimension`"
             )
+        dim = dim_col["col_name"]
         if tipo == "Ranking" and use_metric:
-            metrica = _pick(by_type, "metrica")
-            if metrica:
+            metrica_col = _pick(columns, "metrica")
+            if metrica_col:
+                metrica = metrica_col["col_name"]
                 return BuildResult(
                     soql=(
                         f"SELECT {dim} AS categoria, "
@@ -103,7 +121,6 @@ def build_soql(
                     ),
                     columns_used=[dim, metrica],
                 )
-        # Default COUNT(*) — funciona para Comparar y Ranking sin métrica.
         return BuildResult(
             soql=(
                 f"SELECT {dim} AS categoria, count(*) AS n "
@@ -115,27 +132,29 @@ def build_soql(
         )
 
     if tipo == "Tendencia":
-        fecha = _pick(by_type, "fecha")
-        if not fecha:
+        fecha_col = _pick(columns, "fecha")
+        if not fecha_col:
             return BuildResult(
                 soql="", error="Tendencia requiere ≥1 columna de tipo `fecha`"
             )
+        expr = _fecha_expr(fecha_col)
         return BuildResult(
             soql=(
-                f"SELECT date_trunc_ym({fecha}) AS periodo, count(*) AS n "
+                f"SELECT {expr} AS periodo, count(*) AS n "
                 f"GROUP BY periodo "
                 f"ORDER BY periodo "
                 f"LIMIT 60"
             ),
-            columns_used=[fecha],
+            columns_used=[fecha_col["col_name"]],
         )
 
     if tipo == "Mapa":
-        geo = _pick(by_type, "geo")
-        if not geo:
+        geo_col = _pick(columns, "geo")
+        if not geo_col:
             return BuildResult(
                 soql="", error="Mapa requiere ≥1 columna de tipo `geo`"
             )
+        geo = geo_col["col_name"]
         return BuildResult(
             soql=(
                 f"SELECT {geo} AS region, count(*) AS n "

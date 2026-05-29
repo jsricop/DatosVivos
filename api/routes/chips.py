@@ -538,7 +538,7 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                 )
             cur.execute(
                 """
-                SELECT col_name, semantic_type
+                SELECT col_name, semantic_type, semantic_subtype, socrata_data_type
                 FROM dataset_columns_curated
                 WHERE dataset_id = %s
                 ORDER BY
@@ -550,11 +550,7 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             )
             cols = cur.fetchall()
 
-    by_type: dict[str, list[str]] = {}
-    for c in cols:
-        by_type.setdefault(c["semantic_type"], []).append(c["col_name"])
-
-    built = build_soql(req.tipo, by_type)
+    built = build_soql(req.tipo, list(cols))
     if built.error:
         # No es 5xx — el dataset no soporta este TIPO. El cliente puede
         # ofrecer otro TIPO o explicar al usuario por qué falla.
