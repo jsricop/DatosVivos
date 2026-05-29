@@ -23,6 +23,8 @@ import psycopg
 from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
+from ai_engine.duckdb_executor import describe_csv, execute_csv
+from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.soql_templates import build_soql
 from api.models.schemas import (
     ChipOption,
@@ -520,7 +522,10 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT source_type, row_count FROM datasets WHERE dataset_id = %s",
+                """
+                SELECT source_type, row_count, data_url, federated_status
+                FROM datasets WHERE dataset_id = %s
+                """,
                 (req.dataset_id,),
             )
             row = cur.fetchone()
@@ -531,13 +536,73 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                 )
             source_type = row["source_type"]
             local_row_count = row["row_count"]
+            data_url = row["data_url"]
+            federated_status = row["federated_status"]
+
+            # ---- Rama FEDERADO (Reto F.4 — DuckDB sobre CSV externo) ----
+            if source_type == "federated":
+                if federated_status != "ok" or not data_url:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Dataset {req.dataset_id!r} es federado pero no "
+                            "expone CSV consultable (federated_status="
+                            f"{federated_status!r}). Sólo es descubrible."
+                        ),
+                    )
+                # Descubrir columnas via DuckDB DESCRIBE (sin descargar filas).
+                try:
+                    fed_cols = describe_csv(data_url)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "DuckDB DESCRIBE %s falló: %s", req.dataset_id, exc
+                    )
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"No pudimos leer el CSV federado: {exc}",
+                    ) from exc
+                built = build_duckdb_sql(req.tipo, fed_cols, data_url)
+                if built.error:
+                    return ChipsExecuteResponse(
+                        dataset_id=req.dataset_id,
+                        tipo=req.tipo,
+                        soql="",
+                        columns_used=[],
+                        rows=[],
+                        row_count=0,
+                        error=built.error,
+                    )
+                try:
+                    rows_out = execute_csv(data_url, built.sql)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(
+                        "DuckDB execute %s falló: %s", req.dataset_id, exc
+                    )
+                    raise HTTPException(
+                        status_code=502, detail=str(exc)
+                    ) from exc
+                # Normaliza valores no-JSON (datetime, Decimal) a string.
+                rows_norm = [
+                    {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v))
+                     for k, v in r.items()}
+                    for r in rows_out
+                ]
+                return ChipsExecuteResponse(
+                    dataset_id=req.dataset_id,
+                    tipo=req.tipo,
+                    soql=built.sql,
+                    columns_used=built.columns_used,
+                    rows=rows_norm,
+                    row_count=len(rows_norm),
+                )
+
+            # ---- Rama NATIVO (Fase B — SoQL contra SODA) ----
             if source_type != "socrata":
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"Dataset {req.dataset_id!r} es {source_type!r}; "
-                        "la ejecución SoQL solo aplica a nativos. "
-                        "Federados se consultarán vía DuckDB en Reto F.4."
+                        f"Dataset {req.dataset_id!r} tiene source_type "
+                        f"{source_type!r} no soportado."
                     ),
                 )
 
