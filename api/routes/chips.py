@@ -1,8 +1,9 @@
 """Endpoints de chips — entrada PRIMARIA de búsqueda (Fase 1 audit top-down).
 
-GET  /api/v1/chips           — listas dinámicas de TEMA/TIPO/TERRITORIO/ENTIDAD
-GET  /api/v1/chips/refine    — sub-tags refinadores del subset (capa 2, A.1)
-POST /api/v1/query/chips     — recibe combinación, devuelve subset filtrado
+GET  /api/v1/chips                  — listas dinámicas TEMA/TIPO/TERRITORIO/ENTIDAD
+GET  /api/v1/chips/refine           — sub-tags refinadores del subset (capa 2, A.1)
+POST /api/v1/query/chips            — recibe combinación, devuelve subset filtrado
+POST /api/v1/query/chips/execute    — ejecuta SoQL determinista del TIPO sobre el dataset elegido (Fase B)
 
 Diseño: SQL determinista, sin retrieval ML. La narrativa LLM solo entra al
 final si el endpoint avanza a ejecución (TIPO marcado → SoQL → narrativa).
@@ -17,18 +18,25 @@ import logging
 import os
 from typing import Any
 
+import httpx
 import psycopg
 from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
+from ai_engine.soql_templates import build_soql
 from api.models.schemas import (
     ChipOption,
     ChipsCandidateDataset,
+    ChipsExecuteRequest,
+    ChipsExecuteResponse,
     ChipsQueryRequest,
     ChipsQueryResponse,
     ChipsRefineResponse,
     ChipsResponse,
 )
+from mcp_server.socrata.soda_client import SodaClient
+
+_soda_client = SodaClient(timeout=30.0)
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -480,4 +488,106 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
         chosen_dataset_id=chosen,
         suggested_chips=suggested,
         message=msg,
+    )
+
+
+# ----------------------------------------------------------------------
+# POST /api/v1/query/chips/execute (Fase B — motor SoQL determinista)
+# ----------------------------------------------------------------------
+
+
+@router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
+async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
+    """Ejecuta una consulta SoQL determinista sobre el dataset elegido.
+
+    Flujo:
+      1. Lee `source_type` y columnas curadas del dataset desde Postgres.
+      2. Si el dataset NO es nativo (`source_type='socrata'`) → 400 con
+         explicación (los federados se ejecutan vía DuckDB en Reto F.4).
+      3. Construye SoQL con `build_soql(tipo, by_type)` — pura Python.
+      4. Ejecuta vía `SodaClient.query()` contra `https://www.datos.gov.co`.
+      5. Devuelve `{soql, columns_used, rows, row_count}` para transparencia.
+
+    Errores comunes:
+      404 si dataset no existe o no tiene curación.
+      400 si dataset es federated_href o si TIPO no se puede construir
+          (falta una columna semántica requerida).
+      502 si SODA falla (timeout / SoQL inválido).
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT source_type FROM datasets WHERE dataset_id = %s",
+                (req.dataset_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Dataset {req.dataset_id!r} no existe en el catálogo",
+                )
+            source_type = row["source_type"]
+            if source_type != "socrata":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Dataset {req.dataset_id!r} es {source_type!r}; "
+                        "la ejecución SoQL solo aplica a nativos. "
+                        "Federados se consultarán vía DuckDB en Reto F.4."
+                    ),
+                )
+            cur.execute(
+                """
+                SELECT col_name, semantic_type
+                FROM dataset_columns_curated
+                WHERE dataset_id = %s
+                ORDER BY
+                    CASE confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1
+                                    WHEN 'low' THEN 2 ELSE 3 END,
+                    col_name
+                """,
+                (req.dataset_id,),
+            )
+            cols = cur.fetchall()
+
+    by_type: dict[str, list[str]] = {}
+    for c in cols:
+        by_type.setdefault(c["semantic_type"], []).append(c["col_name"])
+
+    built = build_soql(req.tipo, by_type)
+    if built.error:
+        # No es 5xx — el dataset no soporta este TIPO. El cliente puede
+        # ofrecer otro TIPO o explicar al usuario por qué falla.
+        return ChipsExecuteResponse(
+            dataset_id=req.dataset_id,
+            tipo=req.tipo,
+            soql="",
+            columns_used=[],
+            rows=[],
+            row_count=0,
+            error=built.error,
+        )
+
+    try:
+        rows = await _soda_client.query(req.dataset_id, soql_query=built.soql)
+    except httpx.HTTPStatusError as exc:
+        log.warning(
+            "SODA %s falló (%s): %s",
+            req.dataset_id, exc.response.status_code, built.soql,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"SODA respondió {exc.response.status_code}",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        log.warning("SODA %s falló: %s", req.dataset_id, exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return ChipsExecuteResponse(
+        dataset_id=req.dataset_id,
+        tipo=req.tipo,
+        soql=built.soql,
+        columns_used=built.columns_used,
+        rows=rows,
+        row_count=len(rows),
     )
