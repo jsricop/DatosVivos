@@ -69,13 +69,13 @@ export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
           La consulta se construye marcando chips de Tema/Tipo/Territorio/Entidad. */}
       <div className="flex flex-col gap-3">
         <div className="flex justify-between items-baseline flex-wrap gap-2">
-          <h2 className="font-serif text-h3 m-0">Construí tu consulta</h2>
+          <h2 className="font-serif text-h3 m-0">Construye tu consulta</h2>
           <span className="font-mono text-caption text-ink-muted">
-            marcá uno o varios filtros
+            marca uno o varios filtros
           </span>
         </div>
         <p className="font-sans text-caption text-ink-muted max-w-prose">
-          Elegí tema, tipo de pregunta, territorio y entidad. Cuando marques al
+          Elige tema, tipo de pregunta, territorio y entidad. Al marcar al
           menos un filtro, se habilita la búsqueda.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">

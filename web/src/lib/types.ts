@@ -1,6 +1,6 @@
 /**
  * Tipos compartidos client/server. Espejo de los pydantic schemas en api/models/schemas.py.
- * Si cambias acá, también allá.
+ * Si cambias aquí, también allá.
  */
 
 export type Intent =

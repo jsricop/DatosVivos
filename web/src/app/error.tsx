@@ -29,8 +29,8 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
       </h1>
       <p className="font-sans text-body-lg text-ink-2 leading-relaxed">
         El error se registró en consola del servidor para que el equipo lo
-        revise. Si querés intentar de nuevo, usá el botón. Si el problema
-        persiste, regresá al inicio y reformulá la pregunta.
+        revise. Si quieres intentar de nuevo, usa el botón. Si el problema
+        persiste, regresa al inicio y reformula la pregunta.
       </p>
       <pre className="font-mono text-caption text-ink-2 surface-elev p-3 overflow-auto whitespace-pre-wrap">
         {error.message || "Error sin mensaje"}
