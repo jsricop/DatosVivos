@@ -241,7 +241,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
               <>
                 {" "}
                 <span className="text-ink-muted">
-                  Sugerencia: marcá también{" "}
+                  Sugerencia: marca también{" "}
                   {data.suggested_chips
                     .map((s) => AXIS_LABEL[s] ?? s)
                     .join(", ")}
