@@ -225,10 +225,13 @@ def _enrich_bogota(row: dict[str, Any], pkg: dict[str, Any]) -> None:
         v = pkg.get(k)
         if v:
             dm[k] = v
-    # update_frequencies puede ser array; tomar el primero si existe
+    # update_frequencies: Bogotá lo expone como string ("Anual"); algunos
+    # portales lo devuelven como array. Soportar ambos.
     ufs = pkg.get("update_frequencies")
     if isinstance(ufs, list) and ufs:
         row["update_frequency"] = str(ufs[0])
+    elif isinstance(ufs, str) and ufs.strip():
+        row["update_frequency"] = ufs.strip()
     # groups dan pista de sector temático
     groups = pkg.get("groups") or []
     if groups:
