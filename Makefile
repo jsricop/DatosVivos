@@ -120,6 +120,10 @@ harvest-cali:
 harvest-valle:
 	@ssh $(SSH) 'docker exec $(API) python -m scripts.harvest_ckan --portal valle'
 
+.PHONY: harvest-medellin
+harvest-medellin:  ## Cosecha MEDATA (Medellín, protocolo DCAT JSON-LD)
+	@ssh $(SSH) 'docker exec $(API) python -m scripts.harvest_dcat --portal medellin'
+
 
 # ----------------------------------------------------------------------
 # Migraciones (solo aplicar la última)
