@@ -32,6 +32,7 @@ from typing import Any, Iterator
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 PAGE_SIZE = 100
 USER_AGENT = "DatosVivos/F.5-harvester (+https://github.com/jsricop/DatosVivos)"
@@ -111,16 +112,44 @@ def _parse_iso(s: str | None):
         return None
 
 
+def _extras_to_dict(extras: list[dict[str, Any]] | None) -> dict[str, str]:
+    """Convierte CKAN `extras` (lista de {key,value}) a dict plano."""
+    if not extras:
+        return {}
+    return {e.get("key", ""): str(e.get("value", "")) for e in extras if e.get("key")}
+
+
+def _normalize_license_id(raw: str | None) -> str | None:
+    """Normaliza el license_id CKAN al vocabulario usado en license_id (migración 017).
+
+    CKAN entrega códigos como 'CC-BY-4.0', 'cc-by-sa', 'cc-by'. El catálogo
+    nativo usa 'CC_40_BY_SA', 'CC_40_BY', 'CC_40_BY_ND', 'PUBLIC_DOMAIN',
+    'CC0_10', 'OGL-PEI'. Mapeo determinista; lo no reconocido → NULL.
+    """
+    if not raw:
+        return None
+    r = raw.lower().strip()
+    if r in ("cc-by-4.0", "cc-by-40", "cc-by"): return "CC_40_BY"
+    if r in ("cc-by-sa", "cc-by-sa-4.0", "cc-by-sa-40"): return "CC_40_BY_SA"
+    if r in ("cc-by-nd", "cc-by-nd-4.0"): return "CC_40_BY_ND"
+    if r in ("cc-zero", "cc0", "cc0-1.0", "public-domain"): return "CC0_10"
+    return None
+
+
 def _build_row(
     pkg: dict[str, Any], res: dict[str, Any], host: str, prefix: str
 ) -> dict[str, Any]:
-    """Mapea (package, resource) a una fila de `datasets`."""
+    """Mapea (package, resource) a una fila de `datasets`.
+
+    Estructura: extractor común → enriquecimiento por portal. Cali/Bogotá/
+    Valle exponen metadata diferente (extras estandarizado, GeoJSON spatial,
+    top-level custom fields respectivamente).
+    """
     res_id = res.get("id") or ""
     dataset_id = _build_dataset_id(res_id, prefix)
 
     pkg_title = pkg.get("title") or pkg.get("name") or ""
     res_name = (res.get("name") or "").strip()
-    # Si el resource tiene nombre distinto al paquete, anexar.
     if res_name and res_name.lower() not in pkg_title.lower():
         name = f"{pkg_title} — {res_name}"
     else:
@@ -134,7 +163,7 @@ def _build_row(
     last_mod = _parse_iso(res.get("last_modified") or pkg.get("metadata_modified"))
     created = _parse_iso(res.get("created") or pkg.get("metadata_created"))
 
-    return {
+    row: dict[str, Any] = {
         "dataset_id": dataset_id,
         "name": name,
         "entity_raw": entity_raw,
@@ -147,6 +176,10 @@ def _build_row(
         "created_at_socrata": created,
         "provenance": "official",
         "license": pkg.get("license_title") or None,
+        "license_id": _normalize_license_id(pkg.get("license_id")),
+        "update_frequency": None,
+        "sector": None,
+        "domain_metadata": None,
         "source_type": "federated",
         "source_portal": host,
         "data_url": res.get("url"),
@@ -155,6 +188,71 @@ def _build_row(
         "socrata_url": f"https://{host}/dataset/{pkg.get('name')}",
         "api_url": None,
     }
+
+    if host == "datos.cali.gov.co":
+        _enrich_cali(row, pkg, entity_raw)
+    elif host == "datosabiertos.bogota.gov.co":
+        _enrich_bogota(row, pkg)
+    elif host == "datosabiertos.valledelcauca.gov.co":
+        _enrich_valle(row, pkg)
+
+    return row
+
+
+def _enrich_cali(row: dict[str, Any], pkg: dict[str, Any], entity_raw: str | None) -> None:
+    """Cali: 10 keys consistentes en `extras` (Cobertura/Frecuencia/Sector/...)."""
+    ex = _extras_to_dict(pkg.get("extras"))
+    row["update_frequency"] = ex.get("Frecuencia de Actualización") or None
+    row["sector"] = ex.get("Sector") or None
+    # entity_raw mejorado si extras lo trae más completo
+    entity_extras = ex.get("Nombre de la Entidad")
+    if entity_extras and len(entity_extras) > len(entity_raw or ""):
+        row["entity_raw"] = entity_extras
+    # Domain metadata = TODOS los extras (preserva trazabilidad)
+    if ex:
+        row["domain_metadata"] = ex
+
+
+def _enrich_bogota(row: dict[str, Any], pkg: dict[str, Any]) -> None:
+    """Bogotá: campos ricos top-level + GeoJSON spatial + tags + qua_summary."""
+    dm: dict[str, Any] = {}
+    for k in (
+        "ideca_languages", "presentation_types", "responsable_types",
+        "qua_summary", "ref_systems", "dis_scope", "idnt_spatial_resolution",
+        "inf_metadata_scope", "inf_citation_date", "topic_main_categories",
+        "license_url", "spatial",
+    ):
+        v = pkg.get(k)
+        if v:
+            dm[k] = v
+    # update_frequencies puede ser array; tomar el primero si existe
+    ufs = pkg.get("update_frequencies")
+    if isinstance(ufs, list) and ufs:
+        row["update_frequency"] = str(ufs[0])
+    # groups dan pista de sector temático
+    groups = pkg.get("groups") or []
+    if groups:
+        row["sector"] = (groups[0].get("title") or groups[0].get("name") or "").replace("-", " ").title() or None
+    if dm:
+        row["domain_metadata"] = dm
+
+
+def _enrich_valle(row: dict[str, Any], pkg: dict[str, Any]) -> None:
+    """Valle del Cauca: campos custom top-level (frecuencia_actualizacion, etc.)."""
+    dm: dict[str, Any] = {}
+    for k in ("ciudad", "departamento", "consolidado", "category"):
+        v = pkg.get(k)
+        if v:
+            dm[k] = v
+    row["update_frequency"] = pkg.get("frecuencia_actualizacion") or None
+    # Valle expone `category` top-level (puede competir con groups)
+    if pkg.get("category") and not row.get("category"):
+        row["category"] = pkg.get("category")
+    groups = pkg.get("groups") or []
+    if groups:
+        row["sector"] = (groups[0].get("title") or groups[0].get("name") or "").replace("-", " ").title() or None
+    if dm:
+        row["domain_metadata"] = dm
 
 
 def _resolve_entity_id(cur: psycopg.Cursor, entity_raw: str | None) -> int | None:
@@ -176,14 +274,16 @@ _UPSERT_SQL = """
 INSERT INTO datasets (
     dataset_id, name, entity_id, entity_raw, category, description,
     rows_updated_at, data_updated_at, metadata_updated_at, publication_date,
-    created_at_socrata, provenance, license, source_type, source_portal,
+    created_at_socrata, provenance, license, license_id, update_frequency,
+    sector, domain_metadata, source_type, source_portal,
     data_url, data_format, federated_status, socrata_url, api_url,
     last_refreshed_at
 ) VALUES (
     %(dataset_id)s, %(name)s, %(entity_id)s, %(entity_raw)s, %(category)s,
     %(description)s, %(rows_updated_at)s, %(data_updated_at)s,
     %(metadata_updated_at)s, %(publication_date)s, %(created_at_socrata)s,
-    %(provenance)s, %(license)s, %(source_type)s, %(source_portal)s,
+    %(provenance)s, %(license)s, %(license_id)s, %(update_frequency)s,
+    %(sector)s, %(domain_metadata)s, %(source_type)s, %(source_portal)s,
     %(data_url)s, %(data_format)s, %(federated_status)s, %(socrata_url)s,
     %(api_url)s, NOW()
 )
@@ -191,12 +291,16 @@ ON CONFLICT (dataset_id) DO UPDATE SET
     name = EXCLUDED.name,
     entity_id = EXCLUDED.entity_id,
     entity_raw = EXCLUDED.entity_raw,
-    category = EXCLUDED.category,
+    category = COALESCE(EXCLUDED.category, datasets.category),
     description = EXCLUDED.description,
     rows_updated_at = EXCLUDED.rows_updated_at,
     data_updated_at = EXCLUDED.data_updated_at,
     metadata_updated_at = EXCLUDED.metadata_updated_at,
     license = EXCLUDED.license,
+    license_id = COALESCE(EXCLUDED.license_id, datasets.license_id),
+    update_frequency = COALESCE(EXCLUDED.update_frequency, datasets.update_frequency),
+    sector = COALESCE(EXCLUDED.sector, datasets.sector),
+    domain_metadata = COALESCE(EXCLUDED.domain_metadata, datasets.domain_metadata),
     data_url = EXCLUDED.data_url,
     last_refreshed_at = NOW()
 """
@@ -245,6 +349,9 @@ def main(portal_key: str, limit: int | None, dry_run: bool) -> None:
         with conn.cursor() as cur:
             for row in rows_to_insert:
                 row["entity_id"] = _resolve_entity_id(cur, row["entity_raw"])
+                # domain_metadata es JSONB en DB; envolver dict para psycopg
+                if row.get("domain_metadata"):
+                    row["domain_metadata"] = Jsonb(row["domain_metadata"])
                 try:
                     cur.execute(_UPSERT_SQL, row)
                     n_inserted += 1

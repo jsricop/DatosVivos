@@ -25,10 +25,18 @@ from fastapi.responses import Response
 router = APIRouter()
 
 # name del path → view real. Whitelist: evita inyección y expone solo lo curado.
+#
+# Vistas _decisor (Hito R 2026-06-08): versión curada con drop de duplicados
+# literales (view_count, data_updated_at, frecuencia_declarada) + drop de
+# columnas técnicas (api_url, last_refreshed_at). Mantienen el resto con
+# lectura honesta de NULL (señal real, no censura). Coexisten con las viejas
+# 2-4 semanas para migrar PowerBI sin romper el modelo M.
 _VIEWS = {
     "datasets": "v_dataset_status",
     "entities": "v_entity_summary",
     "top": "v_top_datasets",
+    "datasets_decisor": "v_dataset_status_decisor",
+    "entities_decisor": "v_entity_summary_decisor",
 }
 
 
