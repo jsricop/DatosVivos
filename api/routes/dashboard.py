@@ -57,6 +57,19 @@ def _view_to_csv(view: str) -> bytes:
     return bytes(out)
 
 
+def _max_last_refreshed() -> str | None:
+    """MAX(last_refreshed_at) de `datasets` formateado como header HTTP-date
+    (RFC 7231). Reemplaza `last_refreshed_at` que se dropeó de las vistas
+    _decisor (Hito R FU.3): mover frescura del CSV al header."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT MAX(last_refreshed_at) FROM datasets")
+        row = cur.fetchone()
+    if not row or not row[0]:
+        return None
+    # RFC 7231: 'Day, DD Mon YYYY HH:MM:SS GMT'
+    return row[0].astimezone().strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+
 @router.get("/dashboard/{name}.csv")
 async def dashboard_csv(name: str) -> Response:
     """CSV público de una view del tablero. Anónimo a propósito (Power BI lo
@@ -65,12 +78,16 @@ async def dashboard_csv(name: str) -> Response:
     if not view:
         raise HTTPException(status_code=404, detail=f"recurso desconocido: {name}")
     csv_bytes = _view_to_csv(view)
+    headers = {
+        "Content-Disposition": f'inline; filename="{name}.csv"',
+        # Cache 1h: alinea con el refresco diario; alivia hits repetidos.
+        "Cache-Control": "public, max-age=3600",
+    }
+    last_mod = _max_last_refreshed()
+    if last_mod:
+        headers["Last-Modified"] = last_mod
     return Response(
         content=csv_bytes,
         media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'inline; filename="{name}.csv"',
-            # Cache 1h: alinea con el refresco diario; alivia hits repetidos.
-            "Cache-Control": "public, max-age=3600",
-        },
+        headers=headers,
     )
