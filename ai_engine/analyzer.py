@@ -832,7 +832,22 @@ class Analyzer:
                     rows = await self.soda.query(
                         dataset_id=top.id, soql_query=templated_soql
                     )
-                    return templated_soql, rows[:50]
+                    # Plantilla determinista (build_comparison_soql) → correcta por
+                    # construcción. ADR-022: devolver SoqlOutcome verificado, no una
+                    # tupla (el caller espera SoqlOutcome).
+                    return SoqlOutcome(
+                        soql=templated_soql,
+                        rows=rows[:50],
+                        verified=True,
+                        fallback="template",
+                        constraints=extract_constraints(
+                            question,
+                            has_geo_filter=bool(
+                                geo_ctx and (geo_ctx.dpto_code or geo_ctx.mpio_code)
+                            ),
+                        ),
+                        curated_columns=schema.get("curated_columns", []),
+                    )
                 except Exception as exc:  # noqa: BLE001
                     log.warning(
                         "SoQL determinista falló (%s): %s — caigo a query_gen LLM",
