@@ -828,31 +828,45 @@ class Analyzer:
                     geo_ctx.comparison_mode,
                     templated_soql,
                 )
-                try:
-                    rows = await self.soda.query(
-                        dataset_id=top.id, soql_query=templated_soql
-                    )
-                    # Plantilla determinista (build_comparison_soql) → correcta por
-                    # construcción. ADR-022: devolver SoqlOutcome verificado, no una
-                    # tupla (el caller espera SoqlOutcome).
-                    return SoqlOutcome(
-                        soql=templated_soql,
-                        rows=rows[:50],
-                        verified=True,
-                        fallback="template",
-                        constraints=extract_constraints(
-                            question,
-                            has_geo_filter=bool(
-                                geo_ctx and (geo_ctx.dpto_code or geo_ctx.mpio_code)
-                            ),
-                        ),
-                        curated_columns=schema.get("curated_columns", []),
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "SoQL determinista falló (%s): %s — caigo a query_gen LLM",
-                        templated_soql,
-                        exc,
+                # La plantilla garantiza SQL bien formado, NO que el dataset sea el
+                # correcto ni que responda la pregunta (ej. retrieval eligió DIVIPOLA
+                # para una pregunta de contratos). Por eso NO se auto-confía: pasa por
+                # el verificador semántico igual que el camino generativo. Si no
+                # verifica (ej. falta el filtro geo), se cae al generativo/refusal.
+                cmp_constraints = extract_constraints(
+                    question,
+                    has_geo_filter=bool(
+                        geo_ctx and (geo_ctx.dpto_code or geo_ctx.mpio_code)
+                    ),
+                )
+                cmp_curated = schema.get("curated_columns", [])
+                cmp_vr = verify_static(
+                    templated_soql, valid_cols=col_names,
+                    curated_columns=cmp_curated, constraints=cmp_constraints,
+                )
+                if cmp_vr.ok:
+                    try:
+                        rows = await self.soda.query(
+                            dataset_id=top.id, soql_query=templated_soql
+                        )
+                        return SoqlOutcome(
+                            soql=templated_soql,
+                            rows=rows[:50],
+                            verified=True,
+                            fallback="template",
+                            constraints=cmp_constraints,
+                            curated_columns=cmp_curated,
+                            columns_used=sorted(cmp_vr.columns_referenced),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning(
+                            "SoQL determinista falló (%s): %s — caigo a query_gen LLM",
+                            templated_soql, exc,
+                        )
+                else:
+                    log.info(
+                        "Plantilla comparativa NO verifica [%s]: %s — caigo a generativo",
+                        cmp_vr.layer_failed, templated_soql,
                     )
 
         # --- (2) Fallback: query_gen LLM con hints de geo si aplican ---
