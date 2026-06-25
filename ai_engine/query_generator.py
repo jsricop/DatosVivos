@@ -257,3 +257,39 @@ class QueryGenerator:
             raw_llm_output=last_raw,
             retries=self.max_retries,
         )
+
+    async def repair(
+        self,
+        question: str,
+        schema: dict[str, Any],
+        prev_soql: str,
+        error_message: str,
+    ) -> str:
+        """Una reparación dirigida (ADR-022 Fase 3): repara, no regenera.
+
+        Le devuelve al LLM su SoQL anterior + el error específico del verificador
+        para que corrija SOLO ese problema. La orquestación del bucle (verificar →
+        reparar → reverificar) vive en `Analyzer._execute_soql`.
+        """
+        from ai_engine.llm_backend import model_for_task
+
+        samples = schema.get("sample_rows") if isinstance(schema, dict) else None
+        base = PROMPT_TEMPLATE.format(
+            columns=self._format_columns(schema),
+            samples_block=_format_samples(samples),
+            question=question,
+        )
+        repair_prompt = (
+            f"{base}\n\n"
+            f"Tu intento anterior fue:\n{prev_soql}\n\n"
+            f"ERROR DEL VERIFICADOR: {error_message}\n"
+            f"Corrige SOLO ese problema, conservando el resto. "
+            f"Devuelve únicamente la query SoQL corregida.\n\nQUERY SOQL:"
+        )
+        raw = await self.backend.generate(
+            repair_prompt,
+            max_tokens=300,
+            model=model_for_task("soql"),
+            temperature=0.1,
+        )
+        return self._postprocess(raw)

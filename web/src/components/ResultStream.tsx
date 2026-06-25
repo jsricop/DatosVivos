@@ -7,6 +7,10 @@ import { DatasetCitation } from "@/components/DatasetCitation";
 import { DataTable } from "@/components/DataTable";
 import { DisclaimerBeta } from "@/components/DisclaimerBeta";
 import { Icon } from "@/components/Icon";
+import {
+  InterpretationBlock,
+  type Interpretation,
+} from "@/components/InterpretationBlock";
 import { NarrativeBlock } from "@/components/NarrativeBlock";
 import { SpeechOutput } from "@/components/SpeechOutput";
 import {
@@ -48,6 +52,11 @@ type State = {
   status: "idle" | "streaming" | "done" | "error";
   elapsed?: number;
   errorMessage?: string;
+  /** Rehúso verificado (ADR-022 Fase 4): el motor no afirma una cifra no
+   *  verificable. Cuando está presente, no se renderiza figura ni narrativa. */
+  refusal?: { reason: string; message: string; suggestion: string };
+  /** "Esto entendí" (ADR-022 Fase 5): interpretación informativa de la consulta. */
+  interpretation?: Interpretation;
 };
 
 const INTENT_LABEL: Record<string, string> = {
@@ -182,7 +191,9 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
     state.status === "done" &&
     state.citations.length === 0 &&
     state.rowCount === 0 &&
-    !state.dashboardSpec;
+    !state.dashboardSpec &&
+    !state.refusal;
+  const refusal = state.refusal;
 
   return (
     <article className="flex flex-col gap-8" aria-live="polite">
@@ -206,6 +217,18 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
         </p>
       ) : null}
 
+      {refusal ? (
+        <section className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2">
+          <span className="text-kicker text-ink">
+            No puedo afirmar esta cifra con confianza
+          </span>
+          <p className="font-sans text-body text-ink-2 m-0">{refusal.message}</p>
+          <p className="font-sans text-body-sm text-ink-muted m-0">
+            {refusal.suggestion}
+          </p>
+        </section>
+      ) : null}
+
       {noDatasets ? (
         <section className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2">
           <span className="text-kicker text-ink">No encontré datasets relevantes</span>
@@ -217,6 +240,11 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
         </section>
       ) : (
         <>
+          {/* 0) "Esto entendí" — interpretación antes de la cifra (ADR-022 Fase 5). */}
+          {state.interpretation ? (
+            <InterpretationBlock data={state.interpretation} />
+          ) : null}
+
           {/* 1) Figura/visualización verificada (determinista) primero. */}
           {state.dashboardSpec ? (
             <DashboardRenderer
@@ -327,6 +355,34 @@ function applyEvent(
         return { ...s, datasets: (payload.datasets as State["datasets"]) ?? [] };
       case "soql":
         return { ...s, soql: (payload.soql as string) ?? "" };
+      case "refusal":
+        // ADR-022 Fase 4: el motor rehúsa afirmar una cifra no verificable.
+        return {
+          ...s,
+          refusal: {
+            reason: (payload.reason as string) ?? "unverifiable",
+            message: (payload.message as string) ?? "",
+            suggestion: (payload.suggestion as string) ?? "",
+          },
+        };
+      case "interpretation": {
+        // ADR-022 Fase 5: "esto entendí" — informativo, no bloqueante.
+        const v = (payload.verificacion as Record<string, unknown>) ?? {};
+        return {
+          ...s,
+          interpretation: {
+            intent: payload.intent as string | undefined,
+            dataset: (payload.dataset as Interpretation["dataset"]) ?? null,
+            filtros: (payload.filtros as Interpretation["filtros"]) ?? [],
+            columnasUsadas: (payload.columnas_usadas as string[]) ?? [],
+            verificacion: {
+              passed: Boolean(v.passed),
+              repairs: (v.repairs as number) ?? 0,
+              fallback: (v.fallback as string | null) ?? null,
+            },
+          },
+        };
+      }
       case "narrative_chunk":
         // Legacy event (ADR-013). Si el backend ya emitió narrative_chunk_extended
         // ignoramos esto para evitar duplicación.

@@ -170,6 +170,70 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
         yield _sse("done", {"elapsed_s": round(time.perf_counter() - started, 2)})
         return
 
+    # 0) Refusal (ADR-022 Fase 4): el motor rehúsa afirmar una cifra no verificable.
+    # Mostramos intención + datasets relacionados + el mensaje de rehúso, SIN cifra.
+    if getattr(result, "refusal", False):
+        yield _sse("intent", {"intent": result.intent, "confidence": 1.0})
+        if result.dataset_references:
+            yield _sse(
+                "dataset_hits",
+                {
+                    "datasets": [
+                        {"id": ref.id, "name": ref.name, "entity": ref.entity, "score": 1.0}
+                        for ref in result.dataset_references
+                    ]
+                },
+            )
+        yield _sse(
+            "refusal",
+            {
+                "reason": result.refusal_reason or "unverifiable",
+                "message": result.narrative,
+                "suggestion": (
+                    "Probá reformular especificando el periodo, el territorio o la "
+                    "medida exacta, o revisá los datasets citados."
+                ),
+            },
+        )
+        if result.dataset_references:
+            yield _sse(
+                "citations",
+                {
+                    "citations": [
+                        {
+                            "index": i + 1,
+                            "id": ref.id,
+                            "name": ref.name,
+                            "entity": ref.entity,
+                            "url": ref.url,
+                            "api_url": ref.api_url,
+                        }
+                        for i, ref in enumerate(result.dataset_references)
+                    ]
+                },
+            )
+        yield _sse("done", {"elapsed_s": round(time.perf_counter() - started, 2)})
+        try:
+            await asyncio.to_thread(
+                log_query,
+                question=request.q,
+                intent=result.intent,
+                datasets_used=result.datasets_used or [],
+                soql_executed=None,
+                rows_count=0,
+                censored_count=0,
+                elapsed_s=time.perf_counter() - started,
+                had_statistics=False,
+                dataset_top1_id=(result.datasets_used or [None])[0],
+                dataset_top1_score=result.top_hit_score,
+                failure_type="refused",
+                verification_passed=False,
+                verification_layer_failed=result.soql_layer_failed,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        return
+
     # 1) Intent
     yield _sse("intent", {"intent": result.intent, "confidence": 1.0})
 
@@ -202,6 +266,41 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
                 "count": len(result.rows),
                 "columns": columns,
                 "preview": result.rows[:50],
+            },
+        )
+
+    # 4.5) "Esto entendí" (ADR-022 Fase 5): interpretación informativa, no
+    # bloqueante. Muestra dataset elegido + territorio + columnas usadas + estado
+    # de verificación ANTES de afirmar la cifra. Si el ciudadano ve que entendimos
+    # mal, reformula. Solo cuando hubo consulta ejecutada.
+    if result.soql_executed:
+        filtros = []
+        if result.geo_context and result.geo_context.targets:
+            for tgt in result.geo_context.targets:
+                filtros.append(
+                    {
+                        "campo": "territorio",
+                        "valor": getattr(tgt, "code", None),
+                        "etiqueta": getattr(tgt, "name", None),
+                    }
+                )
+        top_ref = result.dataset_references[0] if result.dataset_references else None
+        yield _sse(
+            "interpretation",
+            {
+                "intent": result.intent,
+                "dataset": (
+                    {"id": top_ref.id, "name": top_ref.name, "entity": top_ref.entity}
+                    if top_ref
+                    else None
+                ),
+                "filtros": filtros,
+                "columnas_usadas": result.columns_used,
+                "verificacion": {
+                    "passed": result.soql_verified,
+                    "repairs": result.soql_repairs,
+                    "fallback": result.soql_fallback,
+                },
             },
         )
 
@@ -368,11 +467,17 @@ async def _event_stream(request: QueryRequest) -> AsyncIterator[str]:
             elapsed_s=elapsed,
             had_statistics=result.statistics is not None,
             dataset_top1_id=top1_id,
-            dataset_top1_score=None,  # score no expuesto aún por analyzer; Fase 1 lo añade
+            dataset_top1_score=result.top_hit_score,  # ADR-022 Fase 1: score expuesto por analyzer
             geo_resolved=geo_label,
             geo_attribution_ok=geo_ok_log,
             dashboard_emitted=dashboard_task is not None,
             failure_type=failure,
+            verification_repairs=getattr(result, "soql_repairs", None),
+            verification_passed=(
+                getattr(result, "soql_verified", None)
+                if result.soql_executed else None
+            ),
+            verification_layer_failed=getattr(result, "soql_layer_failed", None),
         )
     except Exception:  # noqa: BLE001
         pass

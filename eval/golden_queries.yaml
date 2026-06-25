@@ -404,3 +404,71 @@ queries:
     expected_dataset_must_match_jurisdiction: true
     needs_curation: true
     notes: "Caso opuesto a q090: aquí UPTC SÍ sería válido. Test de no-overfitting del penalty."
+
+  # ----------------------------------------------------------------------
+  # TRAMPAS (ADR-022 Fase 6) — consulta plausible-pero-equivocada.
+  # El motor genera SoQL que devuelve un número REAL pero que responde OTRA
+  # pregunta. El ÉXITO es rehusar / degradar a template / marcar sin-verificar
+  # (outcome seguro). El FALLO (falso-verificado) es afirmar la cifra como
+  # verificada. `expected_verification: safe` = cualquiera de los seguros.
+  # KPI primario: falsos-verificados → ~0.
+  # ----------------------------------------------------------------------
+  - id: t001
+    q: "¿Cuál es el promedio de homicidios por municipio en Antioquia?"
+    category: trap
+    trap_type: wrong_aggregation
+    expected_intent: aggregate
+    expected_territory: "Antioquia"
+    expected_territory_code: "05"
+    expected_dataset_id: null
+    needs_curation: true
+    expected_verification: safe
+    notes: "Tienta count(*) en vez de avg(). Un conteo es número real pero responde 'cuántos', no 'promedio'."
+
+  - id: t002
+    q: "Homicidios por año en Antioquia"
+    category: trap
+    trap_type: wrong_groupby
+    expected_intent: temporal
+    expected_territory: "Antioquia"
+    expected_territory_code: "05"
+    expected_dataset_id: null
+    needs_curation: true
+    expected_verification: safe
+    notes: "Tienta GROUP BY municipio en vez de por columna fecha. Cifra real, dimensión equivocada → capa 3 (temporal→fecha)."
+
+  - id: t003
+    q: "¿Cuántos contratos firmó la Alcaldía de Medellín?"
+    category: trap
+    trap_type: missing_filter
+    expected_intent: count_in
+    expected_territory: "Medellín"
+    expected_territory_code: "05001"
+    expected_dataset_id: null
+    needs_curation: true
+    expected_verification: safe
+    notes: "Tienta omitir el WHERE → devuelve total nacional como si fuera Medellín. Capa 3 requires_geo_filter."
+
+  - id: t004
+    q: "Tendencia de la deserción escolar en Chocó"
+    category: trap
+    trap_type: unanswerable_temporal
+    expected_intent: temporal
+    expected_territory: "Chocó"
+    expected_territory_code: "27"
+    expected_dataset_id: null
+    needs_curation: true
+    expected_verification: safe
+    notes: "Si el dataset elegido no tiene columna fecha, una 'tendencia' no es respondible → debe rehusar, no inventar un GROUP BY."
+
+  - id: t005
+    q: "¿Cuál es el municipio con más contratos en Cundinamarca?"
+    category: trap
+    trap_type: ranking_sin_limit
+    expected_intent: comparative
+    expected_territory: "Cundinamarca"
+    expected_territory_code: "25"
+    expected_dataset_id: null
+    needs_curation: true
+    expected_verification: safe
+    notes: "Ranking 'el que más' exige ORDER BY DESC LIMIT 1; tienta devolver un conteo total. Capa 3 requires_orderby_limit."
