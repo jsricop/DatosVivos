@@ -10,7 +10,7 @@ type WordmarkProps = {
 /**
  * Wordmark canónico `Datos|Vivos` (BRAND.md §7.1).
  *
- * - Composición: IBM Plex Serif 600, letter-spacing -0.01em.
+ * - Composición: Nunito Sans ExtraBold, letter-spacing -0.02em.
  * - La pleca `|` se renderiza en var(--accent) — es estructura, no decoración.
  * - Bajo el wordmark va siempre `── datos.gov.co` en Plex Mono (§7.2).
  */
@@ -26,8 +26,8 @@ export function Wordmark({ asHeading = false, size = "header" }: WordmarkProps) 
         className="inline-block focus-ring"
       >
         <Tag
-          className={`${sizeClass} font-serif font-semibold text-ink m-0 leading-none`}
-          style={{ letterSpacing: "-0.01em" }}
+          className={`${sizeClass} font-serif font-extrabold text-ink m-0 leading-none`}
+          style={{ letterSpacing: "-0.02em" }}
         >
           Datos
           <span className="text-accent" aria-hidden="true">

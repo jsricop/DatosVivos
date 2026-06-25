@@ -20,19 +20,19 @@ export function Button({
 }: ButtonProps) {
   const variantClass =
     variant === "primary"
-      ? "border-2 border-accent bg-accent text-bg"
+      ? "border border-accent bg-accent text-bg hover:bg-accent-2 hover:border-accent-2"
       : variant === "secondary"
-        ? "border border-hairline-strong text-ink bg-transparent"
-        : "border border-transparent text-ink bg-transparent";
+        ? "border border-accent text-accent bg-transparent hover:bg-bg-overlay"
+        : "border border-transparent text-accent bg-transparent hover:bg-bg-overlay";
   const sizeClass =
-    size === "lg" ? "px-5 py-3 text-body-lg" : "px-[14px] py-2 text-body";
+    size === "lg" ? "px-6 py-3 text-body-lg" : "px-4 py-2 text-body";
 
   return (
     <button
       type="button"
       {...rest}
       className={[
-        "inline-flex items-center gap-2 font-sans font-semibold rounded-none transition-colors focus-ring",
+        "inline-flex items-center gap-2 font-sans font-bold rounded-[var(--radius-1)] transition-colors focus-ring",
         variantClass,
         sizeClass,
         rest.disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer",

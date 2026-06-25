@@ -64,9 +64,9 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
     return (
       <article
         role="status"
-        className="border border-amber-300 bg-amber-50 p-4 flex flex-col gap-2"
+        className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2"
       >
-        <span className="text-kicker text-amber-900">
+        <span className="text-kicker text-ink">
           Este dataset no soporta {tipo}
         </span>
         <p className="font-sans text-body text-ink-2 m-0">{error}</p>
@@ -84,7 +84,7 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
     return (
       <article
         role="status"
-        className="border border-hairline-strong bg-bg p-4 flex flex-col gap-2"
+        className="surface-card p-4 flex flex-col gap-2"
       >
         <span className="text-kicker">Sin datos</span>
         <p className="font-sans text-body text-ink-2 m-0">
@@ -105,7 +105,12 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       value_from: "n",
       format: "number_es_co",
     };
-    return <KPICardBlock block={block} rows={rowsTyped} stats={null} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <KPICardBlock block={block} rows={rowsTyped} stats={null} />
+        <VerifiedNote countNote />
+      </div>
+    );
   }
 
   if (tipo === "Comparar" || tipo === "Ranking") {
@@ -119,7 +124,12 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       x_column: "categoria",
       y_column: yCol,
     };
-    return <BarChartBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <BarChartBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   if (tipo === "Tendencia") {
@@ -129,7 +139,12 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       x_column: "periodo",
       y_column: "n",
     };
-    return <LineChartBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <LineChartBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   if (tipo === "Mapa") {
@@ -141,10 +156,35 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       metric_column: "n",
       legend_format: "number_es_co",
     };
-    return <ChoroplethMapBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <ChoroplethMapBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   // Type guard exhaustivo: TIPO desconocido (no debería pasar — el backend
   // valida el enum).
   return null;
+}
+
+/**
+ * Nota de verificación bajo la cifra/visualización determinista. Refuerza el
+ * pilar de Verificabilidad: la cifra sale del SoQL real, no de IA.
+ * `countNote` añade la advertencia COUNT(*)≠suma (ADR-017).
+ */
+function VerifiedNote({ countNote = false }: { countNote?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex items-center gap-1.5 font-sans text-caption font-semibold text-ok">
+        <span aria-hidden>✓</span> Cifra verificada — sale del dataset, no de IA
+      </span>
+      {countNote ? (
+        <span className="font-sans text-caption text-ink-muted">
+          ⓘ Cuenta registros del dataset, no suma valores.
+        </span>
+      ) : null}
+    </div>
+  );
 }

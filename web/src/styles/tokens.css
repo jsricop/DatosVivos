@@ -1,73 +1,84 @@
 /* tokens.css — Variables CSS de DatosVivos por modo de color.
- * Fuente de verdad: docs/BRAND.md §3.
+ * Fuente de verdad: docs/BRAND.md §3 (Sistema de diseño alineado con gov.co, ADR-021).
+ * Paleta institucional gov.co (Kit UI v9.2 MinTIC): azul #004884 / #3366CC,
+ * semánticos verde #068460, dorado #FFAB00, rojo #F42F63.
  * NO editar valores hex aquí sin actualizar BRAND.md.
  */
 
 :root,
 :root[data-theme="light"] {
-  /* Surfaces */
-  --bg: #F3EFE3;
-  --bg-elev: #E8E1CE;
-  --bg-overlay: rgba(22, 19, 14, 0.08);
+  /* Surfaces — institucional claro (blanco + gris frío suave) */
+  --bg: #FFFFFF;
+  --bg-elev: #F4F6FA;
+  --bg-overlay: rgba(0, 72, 132, 0.06);
 
-  /* Ink */
-  --ink: #16130E;
-  --ink-2: #3B342A;
-  --ink-muted: #776A55;
+  /* Ink — neutro casi-negro */
+  --ink: #16161D;
+  --ink-2: #3D4351;
+  --ink-muted: #636B7A;
 
   /* Structure */
-  --hairline: #B7A98B;
-  --hairline-strong: #3B342A;
+  --hairline: #D6DBE3;
+  --hairline-strong: #004884;
 
-  /* Accent */
-  --accent: #A52A2A;
-  --accent-2: #B8860B;
-  --focus-ring: #A52A2A;
-  --danger: #7A1212;
+  /* Accent — azul institucional gov.co */
+  --accent: #004884;       /* texto/enlaces sobre blanco (9.3:1) */
+  --accent-2: #3366CC;     /* rellenos interactivos con texto blanco (5.4:1) */
+  --focus-ring: #3366CC;
+  --danger: #C32D4B;       /* rojo texto-seguro (5.6:1 con texto blanco) */
+
+  /* Semánticos — semáforo de frescura (Hito R) */
+  --ok: #068460;           /* actualizado (4.7:1) */
+  --warn: #FFAB00;         /* por vencer (usar con tinta oscura, 9.5:1) */
+  --bad: #C32D4B;          /* desactualizado */
 
   /* Computed */
-  --selection-bg: #B8860B;
-  --selection-fg: #16130E;
+  --selection-bg: #C9E2FF;
+  --selection-fg: #16161D;
   --hairline-width: 1px;
   --hairline-width-strong: 2px;
 
   /* Paleta categórica para charts multi-serie (BRAND.md §8.9).
    * Cada token = una serie distinta. Hasta 5 series legibles. */
-  --chart-1: #A52A2A; /* granate accent */
-  --chart-2: #B8860B; /* ámbar */
-  --chart-3: #1F3A5F; /* azul tinta */
-  --chart-4: #5C6B4D; /* verde tinta */
-  --chart-5: #3B342A; /* ink-2 marrón */
+  --chart-1: #004884; /* azul institucional */
+  --chart-2: #FFAB00; /* dorado */
+  --chart-3: #068460; /* verde */
+  --chart-4: #F3561F; /* naranja */
+  --chart-5: #7A1FA2; /* púrpura (5ª serie distinta) */
 }
 
 :root[data-theme="dark"] {
-  --bg: #0E0C08;
-  --bg-elev: #1A1612;
-  --bg-overlay: rgba(232, 225, 206, 0.08);
+  --bg: #0E1422;
+  --bg-elev: #1A2433;
+  --bg-overlay: rgba(127, 176, 255, 0.08);
 
-  --ink: #E8E1CE;
-  --ink-2: #B0A88F;
-  --ink-muted: #7A7158;
+  --ink: #E8ECF2;
+  --ink-2: #B4BECE;
+  --ink-muted: #7E8BA0;
 
-  --hairline: #3B342A;
-  --hairline-strong: #B0A88F;
+  --hairline: #2A3647;
+  --hairline-strong: #5B91FF;
 
-  --accent: #C24A4A;
-  --accent-2: #D4A24A;
-  --focus-ring: #D4A24A;
-  --danger: #E07070;
+  --accent: #5B91FF;
+  --accent-2: #7FB0FF;
+  --focus-ring: #7FB0FF;
+  --danger: #FF6B85;
 
-  --selection-bg: #D4A24A;
-  --selection-fg: #0E0C08;
+  --ok: #2BB17E;
+  --warn: #FFC24A;
+  --bad: #FF6B85;
+
+  --selection-bg: #1F4E8C;
+  --selection-fg: #E8ECF2;
   --hairline-width: 1px;
   --hairline-width-strong: 2px;
 
-  /* Paleta categórica modo oscuro — luminosidad invertida (BRAND.md §8.9). */
-  --chart-1: #C24A4A; /* granate luminoso */
-  --chart-2: #D4A24A; /* ámbar luminoso */
-  --chart-3: #5B91FF; /* azul ultramar luminoso */
-  --chart-4: #8FB57C; /* verde tinta luminoso */
-  --chart-5: #B0A88F; /* ink-2 luminoso */
+  /* Paleta categórica modo oscuro — luminosidad elevada (BRAND.md §8.9). */
+  --chart-1: #5B91FF; /* azul luminoso */
+  --chart-2: #FFC24A; /* dorado luminoso */
+  --chart-3: #2BB17E; /* verde luminoso */
+  --chart-4: #FF8A5B; /* naranja luminoso */
+  --chart-5: #C490E4; /* púrpura luminoso */
 }
 
 :root[data-theme="contrast-light"] {
@@ -77,17 +88,21 @@
 
   --ink: #000000;
   --ink-2: #000000;
-  --ink-muted: #333333;
+  --ink-muted: #1A1A1A;
 
   --hairline: #000000;
   --hairline-strong: #000000;
 
-  --accent: #0033A0;
-  --accent-2: #0033A0;
-  --focus-ring: #0033A0;
+  --accent: #003A8C;
+  --accent-2: #003A8C;
+  --focus-ring: #003A8C;
   --danger: #9B0000;
 
-  --selection-bg: #0033A0;
+  --ok: #00513B;
+  --warn: #7A4F00;
+  --bad: #9B0000;
+
+  --selection-bg: #003A8C;
   --selection-fg: #FFFFFF;
   --hairline-width: 2px;
   --hairline-width-strong: 3px;
@@ -95,7 +110,7 @@
   /* Paleta categórica alto contraste sobre blanco — los 5 tokens deben
    * todos pasar ≥7:1 contra el fondo. Patrones SVG distinguen visualmente
    * para usuarios con daltonismo. (BRAND.md §8.9) */
-  --chart-1: #0033A0; /* azul ultramar */
+  --chart-1: #003A8C; /* azul institucional oscuro */
   --chart-2: #6B0F6B; /* púrpura oscuro */
   --chart-3: #006400; /* verde oscuro */
   --chart-4: #9B0000; /* granate oscuro */
@@ -118,6 +133,10 @@
   --accent-2: #FFD400;
   --focus-ring: #FFD400;
   --danger: #FF6B6B;
+
+  --ok: #7CFC00;
+  --warn: #FFD400;
+  --bad: #FF6B6B;
 
   --selection-bg: #FFD400;
   --selection-fg: #000000;
@@ -142,61 +161,67 @@
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="auto"] {
-    --bg: #0E0C08;
-    --bg-elev: #1A1612;
-    --bg-overlay: rgba(232, 225, 206, 0.08);
-    --ink: #E8E1CE;
-    --ink-2: #B0A88F;
-    --ink-muted: #7A7158;
-    --hairline: #3B342A;
-    --hairline-strong: #B0A88F;
-    --accent: #C24A4A;
-    --accent-2: #D4A24A;
-    --focus-ring: #D4A24A;
-    --danger: #E07070;
-    --selection-bg: #D4A24A;
-    --selection-fg: #0E0C08;
+    --bg: #0E1422;
+    --bg-elev: #1A2433;
+    --bg-overlay: rgba(127, 176, 255, 0.08);
+    --ink: #E8ECF2;
+    --ink-2: #B4BECE;
+    --ink-muted: #7E8BA0;
+    --hairline: #2A3647;
+    --hairline-strong: #5B91FF;
+    --accent: #5B91FF;
+    --accent-2: #7FB0FF;
+    --focus-ring: #7FB0FF;
+    --danger: #FF6B85;
+    --ok: #2BB17E;
+    --warn: #FFC24A;
+    --bad: #FF6B85;
+    --selection-bg: #1F4E8C;
+    --selection-fg: #E8ECF2;
     --hairline-width: 1px;
     --hairline-width-strong: 2px;
-    --chart-1: #C24A4A;
-    --chart-2: #D4A24A;
-    --chart-3: #5B91FF;
-    --chart-4: #8FB57C;
-    --chart-5: #B0A88F;
+    --chart-1: #5B91FF;
+    --chart-2: #FFC24A;
+    --chart-3: #2BB17E;
+    --chart-4: #FF8A5B;
+    --chart-5: #C490E4;
   }
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="auto"] {
-    --bg: #F3EFE3;
-    --bg-elev: #E8E1CE;
-    --bg-overlay: rgba(22, 19, 14, 0.08);
-    --ink: #16130E;
-    --ink-2: #3B342A;
-    --ink-muted: #776A55;
-    --hairline: #B7A98B;
-    --hairline-strong: #3B342A;
-    --accent: #A52A2A;
-    --accent-2: #B8860B;
-    --focus-ring: #A52A2A;
-    --danger: #7A1212;
-    --selection-bg: #B8860B;
-    --selection-fg: #16130E;
+    --bg: #FFFFFF;
+    --bg-elev: #F4F6FA;
+    --bg-overlay: rgba(0, 72, 132, 0.06);
+    --ink: #16161D;
+    --ink-2: #3D4351;
+    --ink-muted: #636B7A;
+    --hairline: #D6DBE3;
+    --hairline-strong: #004884;
+    --accent: #004884;
+    --accent-2: #3366CC;
+    --focus-ring: #3366CC;
+    --danger: #C32D4B;
+    --ok: #068460;
+    --warn: #FFAB00;
+    --bad: #C32D4B;
+    --selection-bg: #C9E2FF;
+    --selection-fg: #16161D;
     --hairline-width: 1px;
     --hairline-width-strong: 2px;
-    --chart-1: #A52A2A;
-    --chart-2: #B8860B;
-    --chart-3: #1F3A5F;
-    --chart-4: #5C6B4D;
-    --chart-5: #3B342A;
+    --chart-1: #004884;
+    --chart-2: #FFAB00;
+    --chart-3: #068460;
+    --chart-4: #F3561F;
+    --chart-5: #7A1FA2;
   }
 }
 
 /* Escalas tipográficas (BRAND.md §4.2) */
 :root {
-  --type-display-xl: clamp(2.75rem, 5.5vw, 4.5rem);
-  --type-h1: clamp(2.25rem, 4vw, 3.25rem);
-  --type-h2: clamp(1.75rem, 3vw, 2.5rem);
-  --type-h3: clamp(1.375rem, 2vw, 1.625rem);
+  --type-display-xl: clamp(2.5rem, 5vw, 4rem);
+  --type-h1: clamp(2rem, 3.5vw, 3rem);
+  --type-h2: clamp(1.625rem, 2.8vw, 2.25rem);
+  --type-h3: clamp(1.3125rem, 2vw, 1.5rem);
   --type-h4: 1.125rem;
   --type-body-lg: 1.125rem;
   --type-body: 1rem;
@@ -227,10 +252,13 @@
   --measure-narrow: 60ch;
 }
 
-/* Forma (BRAND.md §5.1, 5.2) */
+/* Forma (BRAND.md §5.1, 5.2) — lenguaje moderno gov.co: esquinas suaves
+ * en tarjetas/botones/inputs (radius-2/3); radius-0/1 para detalles. */
 :root {
   --radius-0: 0;
-  --radius-1: 2px;
+  --radius-1: 4px;
+  --radius-2: 8px;
+  --radius-3: 12px;
 }
 
 /* Transiciones (BRAND.md §5.5) */

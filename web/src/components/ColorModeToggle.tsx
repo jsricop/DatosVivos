@@ -66,7 +66,7 @@ export function ColorModeToggle() {
         {OPTIONS.map((opt) => {
           const isActive = currentValue === opt.value;
           const stateClass = isActive
-            ? "bg-ink text-bg"
+            ? "bg-accent text-bg"
             : "bg-transparent text-ink-2 hover:text-ink";
           return (
             <button

@@ -103,7 +103,7 @@ export function QueryBuilderBar({
                   type="button"
                   onClick={() => onClearSubtag?.(item.value)}
                   aria-label={`Quitar ${item.value} de Sub-tema`}
-                  className="inline-flex items-center gap-1.5 border border-accent bg-bg px-2.5 py-1 font-sans text-caption text-ink hover:bg-bg-elev focus-ring"
+                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-3)] border border-accent bg-bg px-3 py-1 font-sans text-caption text-ink hover:bg-bg-overlay focus-ring"
                 >
                   <span className="font-mono text-[length:var(--type-kicker)] text-accent uppercase tracking-[0.08em]">
                     {SUBTAG_AXIS_LABEL}
@@ -120,7 +120,7 @@ export function QueryBuilderBar({
                 type="button"
                 onClick={() => onClear(item.axis, item.value)}
                 aria-label={`Quitar ${item.label} de ${AXIS_LABEL[item.axis]}`}
-                className="inline-flex items-center gap-1.5 border border-hairline-strong bg-bg px-2.5 py-1 font-sans text-caption text-ink hover:bg-bg-elev focus-ring"
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-3)] border border-hairline bg-bg px-3 py-1 font-sans text-caption text-ink hover:border-accent focus-ring"
               >
                 <span className="font-mono text-[length:var(--type-kicker)] text-ink-muted uppercase tracking-[0.08em]">
                   {AXIS_LABEL[item.axis]}
@@ -135,7 +135,7 @@ export function QueryBuilderBar({
       <button
         type="button"
         onClick={submit}
-        className="inline-flex items-center gap-2 bg-ink text-bg px-4 py-2 font-sans text-body font-semibold focus-ring"
+        className="inline-flex items-center gap-2 rounded-[var(--radius-1)] bg-accent text-bg px-5 py-2 font-sans text-body font-bold hover:bg-accent-2 transition-colors focus-ring"
       >
         <span>Buscar</span>
         <Icon name="arrow-right" size={16} aria-hidden />

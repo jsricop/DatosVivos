@@ -22,13 +22,21 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
 
-  --font-serif: "IBM Plex Serif", "Georgia", "Times New Roman", serif;
-  --font-sans: "IBM Plex Sans", "Helvetica Neue", "Arial", sans-serif;
+  /* Tipografía oficial gov.co: Nunito Sans (títulos + cuerpo), self-hosted.
+   * --font-serif queda como alias deprecado → Nunito Sans, hasta retirar los
+   * className `font-serif` residuales. IBM Plex Mono se conserva para datos. */
+  --font-sans: "Nunito Sans", "Helvetica Neue", "Arial", sans-serif;
+  --font-serif: "Nunito Sans", "Helvetica Neue", "Arial", sans-serif;
   --font-mono: "IBM Plex Mono", "Menlo", "Consolas", monospace;
 
   --radius-0: 0;
-  --radius-1: 2px;
+  --radius-1: 4px;
+  --radius-2: 8px;
+  --radius-3: 12px;
 
   /* Spacing base 4px (BRAND.md §5.3). Tailwind v4 multiplica linealmente:
    * p-1=4 · p-2=8 · p-3=12 · p-4=16 · p-6=24 · p-8=32 · p-12=48 · p-16=64 · p-24=96
@@ -41,69 +49,54 @@
   --breakpoint-xl: 1280px;
 }
 
-/* IBM Plex self-hosted. Si los .woff2 no están en /fonts/, el browser
- * cae a local() si está instalada, y si tampoco, al fallback chain.
- * BRAND.md §4.1 prohíbe Google Fonts CDN.
+/* Tipografía self-hosted. Nunito Sans (oficial gov.co) + IBM Plex Mono (datos).
+ * BRAND.md §4.1 prohíbe Google Fonts CDN — los .woff2 viven en /fonts/.
  */
 @font-face {
-  font-family: "IBM Plex Serif";
+  font-family: "Nunito Sans";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
   src:
-    local("IBM Plex Serif"),
-    local("IBMPlexSerif"),
-    url("/fonts/IBMPlexSerif-Regular.woff2") format("woff2");
+    local("Nunito Sans"),
+    local("NunitoSans"),
+    url("/fonts/NunitoSans-400.woff2") format("woff2");
 }
 @font-face {
-  font-family: "IBM Plex Serif";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src:
-    local("IBM Plex Serif SemiBold"),
-    local("IBMPlexSerif-SemiBold"),
-    url("/fonts/IBMPlexSerif-SemiBold.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Serif";
+  font-family: "Nunito Sans";
   font-style: italic;
   font-weight: 400;
   font-display: swap;
   src:
-    local("IBM Plex Serif Italic"),
-    local("IBMPlexSerif-Italic"),
-    url("/fonts/IBMPlexSerif-Italic.woff2") format("woff2");
+    local("Nunito Sans Italic"),
+    url("/fonts/NunitoSans-400-italic.woff2") format("woff2");
 }
 @font-face {
-  font-family: "IBM Plex Sans";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src:
-    local("IBM Plex Sans"),
-    local("IBMPlexSans"),
-    url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src:
-    local("IBM Plex Sans Medium"),
-    local("IBMPlexSans-Medium"),
-    url("/fonts/IBMPlexSans-Medium.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans";
+  font-family: "Nunito Sans";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
   src:
-    local("IBM Plex Sans SemiBold"),
-    local("IBMPlexSans-SemiBold"),
-    url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+    local("Nunito Sans SemiBold"),
+    url("/fonts/NunitoSans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src:
+    local("Nunito Sans Bold"),
+    url("/fonts/NunitoSans-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito Sans";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src:
+    local("Nunito Sans ExtraBold"),
+    url("/fonts/NunitoSans-800.woff2") format("woff2");
 }
 @font-face {
   font-family: "IBM Plex Mono";
@@ -158,6 +151,11 @@ body {
   color: var(--selection-fg);
 }
 
+/* Resets de elementos interactivos en @layer base: así las utilidades de
+ * Tailwind (bg-accent, text-bg, border-accent…) ganan a estos resets. Sin la
+ * capa, estas reglas sin-layer vencerían a las utilidades y los botones
+ * sólidos no se llenarían de color. */
+@layer base {
 a {
   color: var(--accent);
   text-decoration: none;
@@ -209,6 +207,8 @@ select {
   border-width: 0;
   border-color: var(--hairline);
 }
+}
+/* fin @layer base de resets interactivos */
 
 ul,
 ol {
@@ -224,8 +224,8 @@ h4,
 h5,
 h6 {
   margin: 0;
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--ink);
@@ -239,11 +239,11 @@ h2 {
 }
 h3 {
   font-size: var(--type-h3);
-  font-family: var(--font-sans);
+  font-weight: 700;
 }
 h4 {
   font-size: var(--type-h4);
-  font-family: var(--font-sans);
+  font-weight: 700;
 }
 
 p {
@@ -319,11 +319,18 @@ pre,
   inline-size: 100%;
   background: var(--hairline);
 }
-/* Card-like container con borde hairline + fondo elev. Usado en
- * paneles, charts, KPIs, blocks de auditabilidad. Centraliza el patrón. */
+/* Card-like container — lenguaje moderno gov.co: esquina suave + borde hairline +
+ * elevación sutil. Usado en paneles, charts, KPIs, tarjetas de resultado. */
 .surface-elev {
   background: var(--bg-elev);
   border: 1px solid var(--hairline);
+  border-radius: var(--radius-2);
+}
+.surface-card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-2);
+  box-shadow: 0 1px 2px var(--bg-overlay);
 }
 
 /* Tipografía utility — tamaños alineados a tokens (BRAND.md §4.2) */
@@ -345,12 +352,10 @@ pre,
   outline-offset: 2px;
 }
 
-/* HeroSearch — excepción documentada en BRAND.md §4.3:
- * el valor va en Plex Sans (control UI), el placeholder en Plex Serif italic
- * (invita a la pregunta editorial). Es el único control con tipografía heterogénea. */
+/* HeroSearch — placeholder en Nunito Sans, registro de servicio (BRAND.md §4.3). */
 .datosvivos-search-input::placeholder {
-  font-family: var(--font-serif);
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-style: normal;
   color: var(--ink-muted);
   opacity: 1;
 }

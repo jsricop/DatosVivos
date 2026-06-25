@@ -36,14 +36,16 @@ export function Chip({
   href,
 }: ChipProps) {
   const base =
-    "inline-flex items-center gap-2 font-sans text-body-sm font-medium transition-colors focus-ring rounded-[var(--radius-1)]";
-  const padding = active ? "py-[7px] px-[13px]" : "py-2 px-[14px]";
+    "inline-flex items-center gap-2 font-sans text-body-sm font-semibold transition-colors focus-ring rounded-[var(--radius-3)]";
+  const padding = active ? "py-[7px] px-[15px]" : "py-2 px-4";
   const borderState = active
-    ? "border-2 border-accent bg-bg-elev"
-    : "border border-hairline bg-bg";
+    ? "border-2 border-accent bg-[color:var(--selection-bg)]"
+    : "border border-hairline bg-bg hover:border-accent";
   const colorState = disabled
     ? "text-ink-muted cursor-not-allowed"
-    : "text-ink cursor-pointer";
+    : active
+      ? "text-accent cursor-pointer"
+      : "text-ink cursor-pointer";
 
   const className = `${base} ${padding} ${borderState} ${colorState}`;
 

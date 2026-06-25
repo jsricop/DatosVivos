@@ -24,7 +24,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   return (
     <div className="container-narrow py-12 max-w-[60ch] flex flex-col gap-4">
       <span className="text-kicker">Error inesperado</span>
-      <h1 className="m-0 font-serif text-h1">
+      <h1 className="m-0 font-sans text-h1">
         Algo salió mal procesando tu consulta.
       </h1>
       <p className="font-sans text-body-lg text-ink-2 leading-relaxed">
@@ -40,13 +40,13 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
         <button
           type="button"
           onClick={reset}
-          className="inline-flex items-center gap-2 border-2 border-accent bg-accent text-bg px-5 py-3 font-sans text-body-lg font-semibold focus-ring"
+          className="inline-flex items-center gap-2 rounded-[var(--radius-1)] border border-accent bg-accent text-bg px-6 py-3 font-sans text-body-lg font-bold hover:bg-accent-2 transition-colors focus-ring"
         >
           Reintentar
         </button>
         <a
           href="/"
-          className="inline-flex items-center gap-2 border border-hairline-strong px-5 py-3 font-sans text-body-lg text-ink focus-ring"
+          className="inline-flex items-center gap-2 rounded-[var(--radius-1)] border border-accent px-6 py-3 font-sans text-body-lg text-accent no-underline hover:bg-bg-overlay focus-ring"
         >
           Volver al inicio
         </a>

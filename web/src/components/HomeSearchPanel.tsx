@@ -1,144 +1,51 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import { ChipGroup, type Axis } from "@/components/ChipGroup";
 import { HeroSearch } from "@/components/HeroSearch";
-import { QueryBuilderBar } from "@/components/QueryBuilderBar";
 import { SpeechInput } from "@/components/SpeechInput";
-import { SubtagsBar } from "@/components/SubtagsBar";
-import type { SuggestOption } from "@/lib/types";
 
-type ChipsByAxis = Record<Axis, SuggestOption[]>;
+/** Ejemplos clicables: al pulsarlos siembran la caja (no navegan directo), de
+ *  modo que pasan por el mapper NL→chips al motor determinista como cualquier
+ *  pregunta escrita. */
+const EXAMPLES = [
+  "¿Cuántos colegios públicos hay en Boyacá?",
+  "Matrícula en Cundinamarca 2018-2024",
+  "Cobertura de vacunación contra fiebre amarilla",
+  "Contratos firmados por la ANI en 2024",
+];
 
-type HomeSearchPanelProps = {
-  chips: ChipsByAxis;
-};
-
-const MULTI_SELECT: Record<Axis, boolean> = {
-  tema: true,
-  tipo: false,
-  territorio: true,
-  entidad: true,
-};
-
-const AXIS_HINT: Record<Axis, string> = {
-  tema: "selecciona uno o varios sectores",
-  tipo: "una sola forma de pregunta",
-  territorio: "ámbito nacional o territorios específicos",
-  entidad: "filtra por entidad publicadora",
-};
-
-export function HomeSearchPanel({ chips }: HomeSearchPanelProps) {
-  const [selected, setSelected] = useState<Record<Axis, string[]>>({
-    tema: [],
-    tipo: [],
-    territorio: [],
-    entidad: [],
-  });
-  const [subtags, setSubtags] = useState<string[]>([]);
-  const [voiceQuery, setVoiceQuery] = useState("");
-
-  const extraQuery = useMemo(() => {
-    const q: Record<string, string[]> = {};
-    for (const axis of Object.keys(selected) as Axis[]) {
-      if (selected[axis].length > 0) q[axis] = selected[axis];
-    }
-    if (subtags.length > 0) q.subtags = subtags;
-    return q;
-  }, [selected, subtags]);
-
-  function update(axis: Axis, values: string[]) {
-    setSelected((s) => ({ ...s, [axis]: values }));
-  }
-
-  function clearOne(axis: Axis, value: string) {
-    setSelected((s) => ({
-      ...s,
-      [axis]: s[axis].filter((v) => v !== value),
-    }));
-  }
-
-  function removeSubtag(value: string) {
-    setSubtags((s) => s.filter((v) => v !== value));
-  }
+/**
+ * Entrada PRIMARIA de la home (versión final): búsqueda en lenguaje natural.
+ *
+ * La caja de texto es lo primero y más prominente (cumple el tagline). El
+ * submit prioriza el mapper NL→chips → motor determinista (ver `HeroSearch`).
+ * La voz es de primera clase (visible, no escondida). El constructor de chips
+ * es secundario y vive colapsado al pie (`AdvancedQueryBuilder`).
+ */
+export function HomeSearchPanel() {
+  const [seed, setSeed] = useState("");
 
   return (
-    <section aria-label="Buscador principal" className="flex flex-col gap-8">
-      {/* PRIMARY: chips estructurados (Fase 1 audit top-down).
-          La consulta se construye marcando chips de Tema/Tipo/Territorio/Entidad. */}
-      <div className="flex flex-col gap-3">
-        <div className="flex justify-between items-baseline flex-wrap gap-2">
-          <h2 className="font-serif text-h3 m-0">Construye tu consulta</h2>
-          <span className="font-mono text-caption text-ink-muted">
-            marca uno o varios filtros
-          </span>
-        </div>
-        <p className="font-sans text-caption text-ink-muted max-w-prose">
-          Elige tema, tipo de pregunta, territorio y entidad. Al marcar al
-          menos un filtro, se habilita la búsqueda.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-          {(Object.keys(chips) as Axis[]).map((axis) => (
-            <ChipGroup
-              key={axis}
-              axis={axis}
-              options={chips[axis] ?? []}
-              multi={MULTI_SELECT[axis]}
-              selected={selected[axis]}
-              onChange={(v) => update(axis, v)}
-              description={AXIS_HINT[axis]}
-            />
+    <section aria-label="Buscador principal" className="flex flex-col gap-4">
+      <HeroSearch size="display" initialValue={seed} />
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <SpeechInput onTranscript={setSeed} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-caption text-ink-muted">Ejemplos:</span>
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              onClick={() => setSeed(ex)}
+              className="rounded-[var(--radius-3)] border border-hairline bg-bg px-3 py-1.5 font-sans text-body-sm text-ink-2 hover:border-accent hover:text-ink transition-colors focus-ring"
+            >
+              {ex}
+            </button>
           ))}
         </div>
-
-        {/* Capa 2 — sub-tags refinadores del subset filtrado. Solo aparece
-            si hay ≥1 chip capa 1 marcado. */}
-        <SubtagsBar
-          tema={selected.tema[0] ?? null}
-          territorio={selected.territorio[0] ?? null}
-          entidad={selected.entidad[0] ?? null}
-          selected={subtags}
-          onChange={setSubtags}
-        />
       </div>
-
-      <QueryBuilderBar
-        selected={selected}
-        chips={chips}
-        subtags={subtags}
-        onClear={clearOne}
-        onClearSubtag={removeSubtag}
-      />
-
-      {/* SECONDARY: modo libre detrás de toggle. Durante el período de
-          validación del paradigma chips, mantenemos la barra disponible para
-          power users y comparación A/B. En Fase 2 vuelve como entrada con
-          mapper NL→chips. */}
-      <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
-        <details>
-          <summary className="cursor-pointer font-mono text-caption text-ink-2 hover:text-ink focus-ring">
-            Modo libre (avanzado) — preguntar con texto libre
-          </summary>
-          <div className="mt-4 flex flex-col gap-3">
-            <HeroSearch
-              initialValue={voiceQuery}
-              extraQuery={extraQuery}
-              size="compact"
-            />
-            <div className="flex justify-between items-center flex-wrap gap-3">
-              <span className="font-mono text-caption text-ink-muted">
-                Pulsa{" "}
-                <kbd className="inline-block border border-hairline-strong px-1.5 py-px font-mono text-[length:var(--type-kicker)] bg-bg-elev text-ink-2">
-                  /
-                </kbd>{" "}
-                para enfocar el buscador
-              </span>
-              <SpeechInput onTranscript={setVoiceQuery} />
-            </div>
-          </div>
-        </details>
-      </section>
     </section>
   );
 }

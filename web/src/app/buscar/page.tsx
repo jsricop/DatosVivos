@@ -23,8 +23,6 @@ export async function generateMetadata({
 }: SearchPageProps): Promise<Metadata> {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
-  // No indexar resultados dinámicos: cada combinación de query parameters
-  // generaría una URL distinta que no aporta valor SEO único.
   return {
     title: q ? `${q.slice(0, 60)} · Consulta` : "Buscar",
     description: q
@@ -52,42 +50,26 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const hasChips =
     Object.values(filters).some((v) => v.length > 0) || subtags.length > 0;
 
-  // Modo chips: chips marcados sin texto libre — flujo determinista
-  // (Fase 1.1 del audit top-down).
+  // Modo chips: filtros marcados sin texto libre — flujo determinista.
   if (!q && hasChips) {
     return (
-      <div className="container-narrow flex flex-col gap-5 py-6">
-        <header className="flex flex-col gap-2 pb-3 hairline-bottom">
-          <div className="flex justify-between gap-4 items-baseline">
-            <span className="text-kicker">Búsqueda por filtros</span>
-            <Link
-              href="/"
-              className="font-mono text-caption text-ink-2 focus-ring"
-            >
-              ← volver al inicio
-            </Link>
-          </div>
+      <div className="container-narrow flex flex-col gap-6 py-8">
+        <header className="flex flex-col gap-4 pb-2">
+          <Link href="/" className="font-mono text-caption text-ink-2 focus-ring">
+            ← Volver al inicio
+          </Link>
+          {/* Buscador abierto arriba: refinar o preguntar otra cosa. */}
+          <HeroSearch size="compact" />
           <ActiveFilters filters={filters} />
         </header>
 
-        <Suspense fallback={<p>Procesando…</p>}>
+        <Suspense fallback={<LoadingNote />}>
           <ChipsResultView
             filters={filters}
             subtags={subtags}
             refinador={refinador || undefined}
           />
         </Suspense>
-
-        <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
-          <details>
-            <summary className="cursor-pointer font-mono text-caption text-ink-2 hover:text-ink focus-ring">
-              Modo libre (avanzado) — preguntar con texto libre
-            </summary>
-            <div className="mt-4">
-              <HeroSearch size="compact" />
-            </div>
-          </details>
-        </section>
       </div>
     );
   }
@@ -98,32 +80,25 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const intentLabel = intent ? INTENT_LABEL[intent] : null;
 
   return (
-    <div className="container-narrow flex flex-col gap-8 py-8">
-      <header className="flex flex-col gap-3 pb-4 hairline-bottom">
-        <div className="flex justify-between gap-4">
+    <div className="container-narrow flex flex-col gap-6 py-8">
+      <header className="flex flex-col gap-4 pb-2">
+        <div className="flex justify-between gap-4 items-baseline">
           <span className="text-kicker">
-            Pregunta
-            {intentLabel ? ` · ${intentLabel}` : null}
+            Pregunta{intentLabel ? ` · ${intentLabel}` : null}
           </span>
-          <Link
-            href="/"
-            className="font-mono text-caption text-ink-2 focus-ring"
-          >
-            ← volver al inicio
+          <Link href="/" className="font-mono text-caption text-ink-2 focus-ring">
+            ← Volver al inicio
           </Link>
         </div>
-        <h1 className="font-serif text-h1 m-0 text-ink">{q}</h1>
+        <h1 className="text-h2 m-0 text-ink">{q}</h1>
+        {/* Buscador abierto arriba: editar o preguntar otra cosa. */}
+        <HeroSearch initialValue={q} size="compact" />
         <ActiveFilters filters={filters} />
       </header>
 
-      <Suspense fallback={<p>Procesando…</p>}>
+      <Suspense fallback={<LoadingNote />}>
         <ResultStream question={q} filters={filters} />
       </Suspense>
-
-      <section aria-label="Editar consulta" className="pt-6 hairline-top">
-        <span className="text-kicker block mb-3">Editar consulta</span>
-        <HeroSearch initialValue={q} size="compact" />
-      </section>
     </div>
   );
 }
@@ -132,15 +107,22 @@ function EmptyState() {
   return (
     <div className="container-narrow py-16 flex flex-col gap-4 max-w-[60ch]">
       <span className="text-kicker">Sin consulta</span>
-      <h1 className="font-serif text-h2 m-0">Empieza por una pregunta</h1>
+      <h1 className="text-h2 m-0">Empieza por una pregunta</h1>
       <p className="font-sans text-body-lg text-ink-2 leading-relaxed">
-        Pasa una pregunta en lenguaje natural sobre los datos públicos de
+        Escribe una pregunta en lenguaje natural sobre los datos públicos de
         Colombia. Por ejemplo: ¿Cuántos colegios públicos hay en Boyacá?
       </p>
       <HeroSearch size="display" />
     </div>
   );
 }
+
+const AXIS_LABEL: Record<string, string> = {
+  tema: "Tema",
+  tipo: "Tipo",
+  territorio: "Territorio",
+  entidad: "Entidad",
+};
 
 function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
   const chips = Object.entries(filters).flatMap(([axis, values]) =>
@@ -152,12 +134,27 @@ function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
       {chips.map(({ axis, value }) => (
         <li
           key={`${axis}-${value}`}
-          className="border border-hairline px-2.5 py-1 rounded-[var(--radius-1)] font-mono text-caption text-ink-2"
+          className="inline-flex items-center gap-1 rounded-[var(--radius-3)] border border-hairline bg-bg-elev px-3 py-1 font-mono text-caption text-ink-2"
         >
-          <span className="text-ink-muted">{axis} ·</span> {value}
+          <span className="uppercase tracking-wide text-ink-muted">
+            {AXIS_LABEL[axis] ?? axis}
+          </span>
+          <span className="text-hairline">·</span> {value}
         </li>
       ))}
     </ul>
+  );
+}
+
+function LoadingNote() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="surface-card animate-pulse p-4 font-mono text-caption text-ink-2"
+    >
+      Procesando…
+    </div>
   );
 }
 

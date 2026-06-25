@@ -37,7 +37,7 @@ export default async function LoginPage({
       <article className="measure-narrow flex flex-col gap-6">
         <header className="pb-4 hairline-bottom">
           <span className="text-kicker">Acceso institucional</span>
-          <h1 className="m-0 mt-2 font-serif text-h1">
+          <h1 className="m-0 mt-2 font-sans text-h1">
             Tablero ejecutivo por entidad
           </h1>
           <p className="m-0 mt-4 font-sans text-body-lg text-ink-2 leading-relaxed">
@@ -88,12 +88,12 @@ export default async function LoginPage({
               required
               placeholder="tu.nombre@minsalud.gov.co"
               autoComplete="email"
-              className="datosvivos-search-input border border-hairline bg-bg-elev px-4 py-3 font-sans text-body-lg text-ink focus-ring"
+              className="datosvivos-search-input rounded-[var(--radius-2)] border border-hairline bg-bg-elev px-4 py-3 font-sans text-body-lg text-ink focus-ring"
             />
           </label>
           <button
             type="submit"
-            className="self-start inline-flex items-center gap-2 border-2 border-accent bg-accent text-bg px-5 py-3 font-sans text-body-lg font-semibold focus-ring"
+            className="self-start inline-flex items-center gap-2 rounded-[var(--radius-1)] border border-accent bg-accent text-bg px-6 py-3 font-sans text-body-lg font-bold hover:bg-accent-2 transition-colors focus-ring"
           >
             <Icon name="enter" size={18} aria-hidden />
             Enviarme el enlace

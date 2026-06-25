@@ -52,6 +52,16 @@ export function HeroSearch({
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Permite que el padre "siembre" la caja (ej. chips de ejemplo o dictado de
+  // voz): cuando initialValue cambia, sincronizamos el valor y enfocamos para
+  // que el ciudadano vea el texto listo y solo pulse Buscar.
+  useEffect(() => {
+    if (initialValue) {
+      setQ(initialValue);
+      inputRef.current?.focus();
+    }
+  }, [initialValue]);
+
   useEffect(() => {
     if (reducedMotion) return; // respeta prefers-reduced-motion (BRAND.md §5.5)
     if (placeholders.length <= 1) return;
@@ -147,7 +157,7 @@ export function HeroSearch({
       onSubmit={onSubmit}
       role="search"
       aria-label="Buscar en datos.gov.co"
-      className="flex items-stretch w-full border border-hairline bg-bg-elev focus-within:border-accent transition-colors"
+      className="flex items-stretch w-full overflow-hidden rounded-[var(--radius-2)] border border-hairline bg-bg-elev focus-within:border-accent transition-colors"
     >
       <label htmlFor="hero-search-input" className="sr-only">
         Escribe tu pregunta
@@ -177,7 +187,7 @@ export function HeroSearch({
         type="submit"
         disabled={isMapping}
         aria-label="Ejecutar búsqueda"
-        className="inline-flex items-center gap-2.5 px-6 bg-ink text-bg font-sans text-body font-semibold tracking-[0.2px] focus-ring disabled:opacity-60"
+        className="inline-flex items-center gap-2.5 px-6 bg-accent hover:bg-accent-2 text-bg font-sans text-body font-bold tracking-[0.2px] transition-colors focus-ring disabled:opacity-60"
       >
         <span>{isMapping ? "Interpretando…" : "Buscar"}</span>
         <Icon name="enter" size={18} aria-hidden />

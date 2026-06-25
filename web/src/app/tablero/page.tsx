@@ -34,7 +34,7 @@ export default async function TableroPage() {
       <header className="flex flex-wrap items-baseline justify-between gap-4 pb-4 hairline-bottom">
         <div className="flex flex-col gap-1">
           <span className="text-kicker">Tablero ejecutivo</span>
-          <h1 className="m-0 font-serif text-h1">{entityName}</h1>
+          <h1 className="m-0 font-sans text-h1">{entityName}</h1>
           {!entityAbbrev ? (
             <p className="m-0 font-sans text-body-sm text-ink-muted">
               No reconocemos tu entidad en el directorio. Estás viendo el

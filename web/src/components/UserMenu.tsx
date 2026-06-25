@@ -27,7 +27,7 @@ export async function UserMenu() {
   return (
     <Link
       href="/tablero"
-      className="font-mono text-caption uppercase tracking-[0.08em] text-ink border border-hairline-strong px-3 py-1.5 focus-ring"
+      className="inline-flex items-center rounded-[var(--radius-1)] border border-accent px-3 py-1.5 font-mono text-caption uppercase tracking-[0.08em] text-accent no-underline hover:bg-bg-overlay focus-ring"
       title={`Sesión: ${session.user.email}`}
     >
       {label}

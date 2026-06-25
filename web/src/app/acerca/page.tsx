@@ -21,7 +21,7 @@ export default function AcercaPage() {
       <article className="measure-narrow flex flex-col gap-6">
         <header className="pb-4 hairline-bottom">
           <span className="text-kicker">Manifiesto</span>
-          <h1 className="m-0 mt-2 font-serif text-h1">
+          <h1 className="m-0 mt-2 font-sans text-h1">
             Datos del Estado, en tus palabras.
           </h1>
         </header>
@@ -69,7 +69,7 @@ export default function AcercaPage() {
 
         <section className="mt-6 pt-6 hairline-top">
           <span className="text-kicker">Equipo</span>
-          <h2 className="m-0 mt-2 mb-3 font-serif text-h3 font-semibold">
+          <h2 className="m-0 mt-2 mb-3 font-sans text-h3 font-semibold">
             Oficina de Tecnología — Agencia Nacional de Infraestructura (ANI)
           </h2>
           <P>
@@ -124,7 +124,7 @@ function Pilar({ number, title, body }: { number: string; title: string; body: s
   return (
     <article className="py-4 hairline-bottom">
       <span className="text-kicker">{number} · Pilar</span>
-      <h3 className="m-0 mt-2 mb-2 font-serif text-h3">{title}</h3>
+      <h3 className="m-0 mt-2 mb-2 font-sans text-h3">{title}</h3>
       <p className="m-0 font-sans text-body text-ink leading-relaxed">{body}</p>
     </article>
   );

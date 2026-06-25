@@ -45,9 +45,15 @@ export function NarrativeBlock({
   const showExtendedLoader = summaryComplete && !extendedComplete && !extended;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 rounded-[var(--radius-2)] border border-hairline border-l-4 border-l-accent-2 bg-bg-elev p-4">
+      {/* Etiqueta persistente: esto lo redactó un modelo, no es un hecho del
+          dataset. La cifra verificada vive aparte y por encima. */}
+      <span className="inline-flex items-center gap-2 text-kicker text-ink-2">
+        <span aria-hidden>✦</span> Interpretado por IA — la cifra exacta sale de la fuente
+      </span>
+
       {/* Summary: siempre visible. */}
-      <p className="font-serif text-body-lg leading-[1.7] text-ink">
+      <p className="font-sans text-body-lg leading-[1.7] text-ink m-0">
         {renderWithCitations(summary, citationCount)}
       </p>
 
@@ -67,7 +73,7 @@ export function NarrativeBlock({
             </span>
             <span>Ver respuesta completa con datos verificados</span>
           </summary>
-          <div className="mt-4 font-serif text-body-lg leading-[1.7] text-ink whitespace-pre-line">
+          <div className="mt-4 font-sans text-body-lg leading-[1.7] text-ink whitespace-pre-line">
             {renderWithCitations(extended, citationCount)}
           </div>
         </details>

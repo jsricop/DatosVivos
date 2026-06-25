@@ -92,7 +92,7 @@ export default async function DatasetPage({
         <span className="text-kicker">
           {data.entity ?? "Entidad no declarada"}
         </span>
-        <h1 className="m-0 font-serif text-h1">{data.name}</h1>
+        <h1 className="m-0 font-sans text-h1">{data.name}</h1>
         {data.description ? (
           <p className="measure m-0 mt-3 font-sans text-body-lg text-ink-2 leading-relaxed">
             {data.description}
