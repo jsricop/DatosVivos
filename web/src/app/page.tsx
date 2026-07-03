@@ -1,17 +1,19 @@
 import Link from "next/link";
 
 import { AdvancedQueryBuilder } from "@/components/AdvancedQueryBuilder";
+import { CatalogStatsBlock } from "@/components/CatalogStatsBlock";
 import { HomeSearchPanel } from "@/components/HomeSearchPanel";
-import { fetchChipsLists, fetchPopular } from "@/lib/api";
+import { fetchCatalogStats, fetchChipsLists, fetchPopular } from "@/lib/api";
 import type { Axis } from "@/components/ChipGroup";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [chipsLists, popular] = await Promise.all([
+  const [chipsLists, popular, catalogStats] = await Promise.all([
     fetchChipsLists(),
     fetchPopular(7),
+    fetchCatalogStats(),
   ]);
 
   const chips: Record<Axis, typeof chipsLists.tema> = {
@@ -62,6 +64,9 @@ export default async function HomePage() {
           </ul>
         </section>
       ) : null}
+
+      {/* El catálogo en números — conteos en vivo desde la vista del tablero. */}
+      <CatalogStatsBlock stats={catalogStats} />
 
       <section className="hairline-top pt-8">
         <h2 className="text-kicker mb-4">Lo más consultado esta semana</h2>

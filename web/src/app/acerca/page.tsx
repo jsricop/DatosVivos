@@ -57,15 +57,14 @@ export default async function AcercaPage() {
           el del periódico — y el agente responde ejecutando consultas reales
           contra el catálogo. Cada cifra está calculada con{" "}
           <code className="font-mono">pandas</code> sobre las filas devueltas
-          por el dataset citado. El modelo de lenguaje corre localmente en una
-          máquina del Estado — no se exportan consultas a servicios externos.
+          por el dataset citado.
         </P>
 
         <section className="mt-6">
           <Pilar
             number="01"
             title="Soberanía"
-            body="El modelo corre localmente. Ni Anthropic ni OpenAI ni nadie más leen las consultas ciudadanas. La VM productiva está bajo VPN del Estado."
+            body="El servicio corre sobre infraestructura del Estado: la VM productiva está bajo la VPN estatal y la telemetría ciudadana es anónima. Los datos son públicos y del Estado colombiano."
           />
           <Pilar
             number="02"
