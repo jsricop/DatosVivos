@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { fetchCatalogStats } from "@/lib/api";
+
 export const metadata: Metadata = {
   title: "Acerca",
   description:
@@ -15,7 +17,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AcercaPage() {
+export default async function AcercaPage() {
+  // Conteo en vivo desde la misma vista que el tablero (nunca quemado). Se
+  // redondea hacia abajo al millar para que el "más de N" siga siendo cierto
+  // conforme el catálogo crece. Si el backend no responde, degrada a "miles de".
+  const stats = await fetchCatalogStats();
+  const totalDatasets =
+    stats && stats.total > 0
+      ? `más de ${(Math.floor(stats.total / 1000) * 1000).toLocaleString("es-CO")}`
+      : "miles de";
+
   return (
     <div className="container-narrow py-12">
       <article className="measure-narrow flex flex-col gap-6">
@@ -37,8 +48,9 @@ export default function AcercaPage() {
           >
             datos.gov.co
           </a>
-          {" "}— el portal de datos abiertos operado por MinTIC con más de
-          8.000 datasets publicados por entidades nacionales y territoriales.
+          {" "}— el portal de datos abiertos operado por MinTIC con{" "}
+          {totalDatasets} datasets publicados por entidades nacionales y
+          territoriales.
         </P>
         <P>
           Una persona pregunta en su idioma — el del barrio, el del trabajo,

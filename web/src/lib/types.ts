@@ -115,3 +115,16 @@ export type ChipsExplainResponse = {
   model: string;
   error?: string | null;
 };
+
+/** GET /api/v1/stats/catalog — conteos en vivo desde la vista del tablero. */
+export type CatalogStats = {
+  total: number;
+  nativos: number;
+  federados: number;
+  directo: number;
+  requiere_herramienta: number;
+  solo_metadatos: number;
+  consultable_tabla: number;
+  util: number;
+  admin: number;
+};

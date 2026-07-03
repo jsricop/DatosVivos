@@ -274,3 +274,19 @@ class ChipsExplainResponse(BaseModel):
     hallucinated_numbers: list[str] = []
     model: str                      # ej. "qwen2.5:3b-instruct"
     error: str | None = None
+
+
+class CatalogStats(BaseModel):
+    """GET /api/v1/stats/catalog — conteos del catálogo agregados desde la
+    misma vista que alimenta el tablero Power BI (`v_dataset_status_decisor`),
+    para que frontend y tablero nunca se desfasen. Todo es COUNT en vivo."""
+
+    total: int                      # total de datasets en el catálogo
+    nativos: int                    # es_federado='no' (Socrata datos.gov.co)
+    federados: int                  # es_federado='sí' (CKAN/DCAT/IGAC)
+    directo: int                    # acceso_datos='directo'
+    requiere_herramienta: int       # acceso_datos='requiere_herramienta'
+    solo_metadatos: int             # acceso_datos='solo_metadatos'
+    consultable_tabla: int          # directo + requiere_herramienta
+    util: int                       # quality_flag NULL/'ok' (no administrativo)
+    admin: int                      # quality_flag='admin_only' (Ley 1712)

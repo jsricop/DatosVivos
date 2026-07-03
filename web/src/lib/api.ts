@@ -11,6 +11,7 @@
  */
 
 import type {
+  CatalogStats,
   DatasetMetadata,
   PopularQuery,
   SuggestOption,
@@ -73,6 +74,19 @@ export async function fetchPopular(limit = 5): Promise<PopularQuery[]> {
     return data.popular ?? [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Conteos del catálogo en vivo (total, origen, acceso, calidad) desde
+ * GET /api/v1/stats/catalog, que agrega la misma vista que el tablero. Si el
+ * backend no responde, devuelve null y la UI degrada a una frase sin cifra dura.
+ */
+export async function fetchCatalogStats(): Promise<CatalogStats | null> {
+  try {
+    return await getJson<CatalogStats>("/stats/catalog");
+  } catch {
+    return null;
   }
 }
 

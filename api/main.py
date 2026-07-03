@@ -21,7 +21,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chips, dashboard, datasets, divipola, health, popular, query, suggest
+from api.routes import chips, dashboard, datasets, divipola, health, popular, query, stats, suggest
 
 
 def _build_app() -> FastAPI:
@@ -63,6 +63,7 @@ def _build_app() -> FastAPI:
     app.include_router(query.router, prefix="/api/v1", tags=["query"])
     app.include_router(chips.router, prefix="/api/v1", tags=["chips"])
     app.include_router(dashboard.router, prefix="/api/v1", tags=["dashboard"])
+    app.include_router(stats.router, prefix="/api/v1", tags=["stats"])
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict[str, str]:
