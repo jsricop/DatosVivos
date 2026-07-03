@@ -5,22 +5,27 @@ Marcado actual:
 - `admin_only`: nombres que matchean patrones de obligaciones Ley 1712
   (esquema de publicación, índice de información clasificada, registro de
   activos de información, ITA).
-- `no_rows`: row_count = 0 o NULL.
+- `no_rows`: row_count = 0 o NULL. DESACTIVADO por defecto (--include-no-rows):
+  en este catálogo los sin-conteo son federados no-tabulares (solo_metadatos /
+  requiere_herramienta), no vacíos genuinos; marcarlos escondería federados útiles.
 
 NO marca `stale` automáticamente — el score A.2 ya lo maneja vía decay de
 freshness. Si decidimos ocultarlos por default, agregar acá.
 
 Idempotente: re-corrigible. UPDATE explícito por flag, no NULL → flag
 (es decir, los `ok` quedan NULL para minimizar ruido en la tabla).
+`mark_admin_only` se reusa desde el ETL (etl_refresh_catalog) en cada refresh.
 
 Uso:
-    DATABASE_URL=... python scripts/classify_quality_flag.py
+    DATABASE_URL=... python scripts/classify_quality_flag.py                 # solo admin_only
+    DATABASE_URL=... python scripts/classify_quality_flag.py --include-no-rows
     # o dentro del container:
     docker compose exec -T api python scripts/classify_quality_flag.py
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
@@ -100,6 +105,18 @@ def show_distribution(conn) -> None:
 
 
 def main() -> int:
+    p = argparse.ArgumentParser(description="Clasifica quality_flag en datasets (D.5).")
+    p.add_argument(
+        "--include-no-rows",
+        action="store_true",
+        help=(
+            "Además de admin_only, marca no_rows (row_count 0/NULL). DESACTIVADO por "
+            "defecto: en este catálogo los sin-conteo son federados no-tabulares, no "
+            "vacíos genuinos; marcarlos escondería federados útiles. Ver plan/ADR."
+        ),
+    )
+    args = p.parse_args()
+
     url = os.environ.get("DATABASE_URL")
     if not url:
         print("ERROR: DATABASE_URL no definida", file=sys.stderr)
@@ -108,8 +125,11 @@ def main() -> int:
     with psycopg.connect(url) as conn:
         n_admin = mark_admin_only(conn)
         print(f"Marcados admin_only: {n_admin:,}")
-        n_no_rows = mark_no_rows(conn)
-        print(f"Marcados no_rows:    {n_no_rows:,}")
+        if args.include_no_rows:
+            n_no_rows = mark_no_rows(conn)
+            print(f"Marcados no_rows:    {n_no_rows:,}")
+        else:
+            print("no_rows: omitido (usar --include-no-rows para activarlo)")
         conn.commit()
         show_distribution(conn)
     return 0

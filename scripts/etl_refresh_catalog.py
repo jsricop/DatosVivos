@@ -46,6 +46,7 @@ from psycopg.types.json import Jsonb
 from mcp_server.socrata.discovery_client import DiscoveryClient
 from mcp_server.socrata.metadata_client import MetadataClient
 from mcp_server.socrata.soda_client import SodaClient
+from scripts.classify_quality_flag import mark_admin_only
 
 log = logging.getLogger("etl_refresh_catalog")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -640,6 +641,13 @@ async def main(args: argparse.Namespace) -> int:
             await _run_enrich(
                 conn, to_enrich, want_count=not args.no_rowcount, want_comments=not args.no_comments
             )
+
+        # Clasificación de calidad: re-aplica admin_only (Ley 1712) sobre los nombres ya
+        # ingestados. Idempotente. Antes era un script manual desacoplado → se desfasaba con
+        # cada ingesta. Solo admin_only (NO no_rows: los sin-conteo son federados no-tabulares).
+        n_admin = mark_admin_only(conn)
+        conn.commit()
+        log.info("Clasificación calidad: admin_only marcados/actualizados=%d", n_admin)
 
         with conn.cursor() as cur:
             cur.execute(
