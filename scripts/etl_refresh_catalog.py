@@ -149,6 +149,18 @@ def _find_by_token(dm: dict[str, str], token: str) -> str | None:
     return None
 
 
+# Plantilla Mustache sin diligenciar: el título llegó como "{{name}}" (o
+# cualquier "{{...}}"). Ocurre cuando un portal federa a datos.gov.co con la
+# metadata de plantilla vacía; el resultado es un dataset sin título ni
+# descripción reales (y suele 404 en origen poco después). Se descarta.
+_PLACEHOLDER_RE = re.compile(r"^\{\{.*\}\}$")
+
+
+def _is_placeholder(value: str) -> bool:
+    """True si el string es una plantilla Mustache sin diligenciar ({{...}})."""
+    return bool(_PLACEHOLDER_RE.match(value.strip()))
+
+
 def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
     """Mapea un `result` de la Discovery API a las columnas de `datasets`."""
     resource = result.get("resource") or {}
@@ -157,6 +169,12 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
 
     dataset_id = resource.get("id")
     if not dataset_id:
+        return None
+
+    # Guarda anti-placeholder: no ingerir filas cuyo título es un {{...}} sin
+    # diligenciar — son metadata muerta que contamina el catálogo y el tablero.
+    if _is_placeholder(resource.get("name") or ""):
+        log.debug("Descartado %s: nombre placeholder %r", dataset_id, resource.get("name"))
         return None
 
     pv = resource.get("page_views") or {}
