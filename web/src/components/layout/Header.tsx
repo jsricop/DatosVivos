@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { ColorModeToggle } from "@/components/ColorModeToggle";
-import { UserMenu } from "@/components/UserMenu";
 import { Wordmark } from "@/components/Wordmark";
 
 export function Header() {
@@ -33,6 +31,12 @@ export function Header() {
             Buscar
           </Link>
           <Link
+            href="/tablero"
+            className="font-sans text-body-sm text-ink-2 focus-ring"
+          >
+            Tablero
+          </Link>
+          <Link
             href="/acerca"
             className="font-sans text-body-sm text-ink-2 focus-ring"
           >
@@ -44,9 +48,6 @@ export function Header() {
           >
             Accesibilidad
           </Link>
-          <Suspense fallback={null}>
-            <UserMenu />
-          </Suspense>
           <ColorModeToggle />
         </nav>
       </div>

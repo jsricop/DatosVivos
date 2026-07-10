@@ -1,31 +1,30 @@
 /**
- * Helper para construir la URL del iframe Power BI publish-to-web.
+ * Config del iframe del tablero Power BI (público, sin login).
  *
- * Filtra el reporte por el campo `Datasets/entity_abbrev` correspondiente al
- * usuario logueado. **Limitación documentada (ADR-014):** publish-to-web no
- * tiene RLS real — un usuario malicioso puede manipular la URL. Aceptable
- * porque los datos son agregados públicos de `datos.gov.co`.
+ * La URL viene de `PBI_EMBED_URL` en RUNTIME (no `NEXT_PUBLIC_`): el tablero
+ * se renderiza server-side en `/tablero` (server component `force-dynamic`),
+ * así que la URL aparece en el HTML renderizado en el servidor — no es
+ * secreto — y basta REINICIAR el contenedor web para cambiarla, sin rebuild.
+ *
+ * IMPORTANTE: debe ser una URL de «Publicar en la web»
+ * (`https://app.powerbi.com/view?r=…`), que es anónima. Un embed seguro
+ * (`reportEmbed?…autoAuth=true&ctid=…`) NO renderiza para visitantes sin
+ * sesión del tenant Microsoft y por tanto no sirve en una página pública.
  */
 
-const BASE = process.env.NEXT_PUBLIC_PBI_EMBED_URL ?? "";
+const DEFAULT_HEIGHT = 541;
 
-/**
- * Devuelve la URL completa del iframe.
- *
- * - Si no hay `NEXT_PUBLIC_PBI_EMBED_URL`, devuelve string vacío para que
- *   el caller muestre un placeholder ("ANI aún no ha publicado el dashboard").
- * - Si `entityAbbrev` es null, devuelve la URL base sin filtro (el usuario
- *   ve el dashboard global sin scope a su entidad).
- */
-export function buildEmbedUrl(entityAbbrev: string | null): string {
-  if (!BASE) return "";
-  if (!entityAbbrev) return BASE;
-  // OData filter syntax soportada por Power BI Service.
-  const filter = `Datasets/entity_abbrev eq '${entityAbbrev.replace(/'/g, "''")}'`;
-  const separator = BASE.includes("?") ? "&" : "?";
-  return `${BASE}${separator}filter=${encodeURIComponent(filter)}`;
+/** URL del iframe, o "" si no está configurada (el caller muestra placeholder). */
+export function getEmbedUrl(): string {
+  return (process.env.PBI_EMBED_URL ?? "").trim();
+}
+
+/** Alto del iframe en px (`PBI_EMBED_HEIGHT`), con fallback razonable. */
+export function getEmbedHeight(): number {
+  const raw = Number(process.env.PBI_EMBED_HEIGHT);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HEIGHT;
 }
 
 export function isEmbedConfigured(): boolean {
-  return Boolean(BASE);
+  return getEmbedUrl().length > 0;
 }
