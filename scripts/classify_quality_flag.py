@@ -32,28 +32,26 @@ import sys
 import psycopg
 
 
-# Patrones administrativos. Cualquier match en `name` (ILIKE) marca el dataset.
-# Sincronizado con `audit_catalog_quality._ADMIN_PATTERNS`.
+# Patrones administrativos, en minúscula y SIN tildes: el match normaliza el
+# nombre con translate(lower(name), ...) para que "ÍNDICE", "Indice" e
+# "INFORMACIÓN"/"informacion" (cualquier combinación de mayúsculas y tildes)
+# caigan igual. Antes se enumeraban variantes acentuadas a mano y los nombres
+# MIXTOS ("INDICE DE INFORMACIÓN...") se escapaban (caso real FODESEP,
+# 2026-07-11). Sincronizado con `audit_catalog_quality._ADMIN_PATTERNS`.
 _ADMIN_PATTERNS = [
-    "esquema de publicación",
     "esquema de publicacion",
-    "índice de información clasificada",
     "indice de informacion clasificada",
-    # Variantes sin "de": "Índice Información Clasificada y Reservada" (caso
-    # real q59t-e9gs que se coló como candidato de chips el 2026-07-11).
-    "índice información clasificada",
+    # Variante sin "de": "Índice Información Clasificada y Reservada" (q59t-e9gs).
     "indice informacion clasificada",
-    "registro de activos de información",
     "registro de activos de informacion",
-    "activos de información",
     "activos de informacion",
-    "informe de gestión",
     "informe de gestion",
-    "tabla de retención documental",
     "tabla de retencion documental",
-    "instrumentos archivísticos",
     "instrumentos archivisticos",
 ]
+
+# Normalización en SQL puro (sin extensión unaccent): minúsculas + tildes fuera.
+_NORM = "translate(lower(name), 'áéíóúüñ', 'aeiouun')"
 
 
 def mark_admin_only(conn) -> int:
@@ -61,8 +59,7 @@ def mark_admin_only(conn) -> int:
 
     Returns el número de filas afectadas.
     """
-    # ILIKE OR chain — funciona en Postgres sin extensión.
-    or_clause = " OR ".join(["name ILIKE %s"] * len(_ADMIN_PATTERNS))
+    or_clause = " OR ".join([f"{_NORM} LIKE %s"] * len(_ADMIN_PATTERNS))
     params = tuple(f"%{p}%" for p in _ADMIN_PATTERNS)
     sql = f"""
         UPDATE datasets
