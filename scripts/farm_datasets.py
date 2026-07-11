@@ -72,6 +72,7 @@ _CANDIDATES_SQL = """
              + 0.5 * GREATEST(0, 1 - LEAST(1,
                  EXTRACT(EPOCH FROM (NOW() - d.rows_updated_at)) / (730.0 * 86400)))
            ) AS valor,
+           COALESCE(c.n_cols, 12) AS n_cols,
            CASE WHEN d.source_type = 'socrata'
                 THEN GREATEST(d.row_count, 1) * COALESCE(c.n_cols, 12) * 15
                 ELSE 5 * 1024 * 1024
@@ -195,6 +196,20 @@ def _csv_to_parquet(csv_path: Path, parquet_path: Path) -> int:
     raise last_err  # type: ignore[misc]
 
 
+def _live_row_count(dataset_id: str) -> int | None:
+    """count(*) real vía SODA (2 s). None si no se puede saber."""
+    url = (f"https://www.datos.gov.co/resource/{dataset_id}.json"
+           f"?%24select=count(1)")
+    req = urllib.request.Request(url, headers={"User-Agent": "DatosVivos-farm/1.0"})
+    try:
+        import json
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            rows = json.load(resp)
+        return int(list(rows[0].values())[0]) if rows else None
+    except Exception:  # noqa: BLE001 — sin conteo, la descarga acotada decide
+        return None
+
+
 def _farm_one(conn, cand: dict) -> bool:
     """Descarga un candidato. → True si quedó downloaded."""
     ds = cand["dataset_id"]
@@ -203,6 +218,18 @@ def _farm_one(conn, cand: dict) -> bool:
     parquet = LAKE_DIR / f"{ds}.parquet"
     try:
         if cand["source_type"] == "socrata":
+            # Pre-chequeo: el row_count del catálogo puede estar viejo (caso
+            # SECOP II: parecía diminuto y era gigante). El conteo VIVO cuesta
+            # ~2 s y evita gastar 10 min de stream en algo que no cabe.
+            live = _live_row_count(ds)
+            if live is not None:
+                est = live * int(cand.get("n_cols") or 12) * 15
+                if est > PER_DATASET_CAP:
+                    _upsert(conn, ds, status="too_big",
+                            error=f"conteo vivo {live:,} filas ≈ {est/1024**3:.1f} GB "
+                                  f"> cap; saltado sin descargar",
+                            priority_score=cand["score"])
+                    return False
             url = SOCRATA_CSV.format(id=ds)
         else:
             url = resolve_data_url(cand["data_url"])
