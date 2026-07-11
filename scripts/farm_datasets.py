@@ -196,16 +196,38 @@ def _csv_to_parquet(csv_path: Path, parquet_path: Path) -> int:
     raise last_err  # type: ignore[misc]
 
 
-def _live_row_count(dataset_id: str) -> int | None:
-    """count(*) real vía SODA (2 s). None si no se puede saber."""
-    url = (f"https://www.datos.gov.co/resource/{dataset_id}.json"
-           f"?%24select=count(1)")
+def _json_get(url: str, timeout: int = 10):
+    import json
     req = urllib.request.Request(url, headers={"User-Agent": "DatosVivos-farm/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.load(resp)
+
+
+def _live_size_estimate(dataset_id: str, n_cols_catalog: int) -> int | None:
+    """Estimación de bytes con datos VIVOS de Socrata. None si no se puede.
+
+    1 llamada (count). Si el dataset es grande (>500k filas) y el ancho del
+    catálogo puede estar corto (SECOP no está curado → default 12 cols cuando
+    tiene ~70), una 2ª llamada trae las columnas reales de la metadata.
+    """
     try:
-        import json
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            rows = json.load(resp)
-        return int(list(rows[0].values())[0]) if rows else None
+        rows = _json_get(
+            f"https://www.datos.gov.co/resource/{dataset_id}.json"
+            f"?%24select=count(1)"
+        )
+        n = int(list(rows[0].values())[0]) if rows else None
+        if n is None:
+            return None
+        cols = n_cols_catalog
+        if n > 500_000:
+            try:
+                meta = _json_get(
+                    f"https://www.datos.gov.co/api/views/{dataset_id}.json"
+                )
+                cols = max(cols, len(meta.get("columns") or []))
+            except Exception:  # noqa: BLE001 — sin metadata, ancho del catálogo
+                pass
+        return n * max(cols, 1) * 15
     except Exception:  # noqa: BLE001 — sin conteo, la descarga acotada decide
         return None
 
@@ -219,17 +241,16 @@ def _farm_one(conn, cand: dict) -> bool:
     try:
         if cand["source_type"] == "socrata":
             # Pre-chequeo: el row_count del catálogo puede estar viejo (caso
-            # SECOP II: parecía diminuto y era gigante). El conteo VIVO cuesta
-            # ~2 s y evita gastar 10 min de stream en algo que no cabe.
-            live = _live_row_count(ds)
-            if live is not None:
-                est = live * int(cand.get("n_cols") or 12) * 15
-                if est > PER_DATASET_CAP:
-                    _upsert(conn, ds, status="too_big",
-                            error=f"conteo vivo {live:,} filas ≈ {est/1024**3:.1f} GB "
-                                  f"> cap; saltado sin descargar",
-                            priority_score=cand["score"])
-                    return False
+            # SECOP II: parecía diminuto y era gigante). El tamaño VIVO cuesta
+            # 1-2 llamadas (~2-4 s) y evita gastar 10 min de stream en algo
+            # que no cabe.
+            est = _live_size_estimate(ds, int(cand.get("n_cols") or 12))
+            if est is not None and est > PER_DATASET_CAP:
+                _upsert(conn, ds, status="too_big",
+                        error=f"tamaño vivo ≈ {est/1024**3:.1f} GB > cap; "
+                              f"saltado sin descargar",
+                        priority_score=cand["score"])
+                return False
             url = SOCRATA_CSV.format(id=ds)
         else:
             url = resolve_data_url(cand["data_url"])
