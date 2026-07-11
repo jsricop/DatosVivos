@@ -125,13 +125,44 @@ _PANORAMA_SIN_GEO_SQL = """
     WHERE jurisdiccion_geo_codes IS NULL
 """
 
-# Portales de origen del catálogo integrado. NULL = filas ingestadas vía la
-# Discovery API de datos.gov.co antes de que existiera la columna → se
-# atribuyen a datos.gov.co (los harvesters CKAN/DCAT siempre la setean).
+# Portales de ORIGEN del catálogo integrado. Criterio único (decisión
+# 2026-07-10): cada dataset se atribuye al portal donde su entidad lo publica
+# originalmente, sin importar la ruta de cosecha. En orden:
+#   1. Cosechado directo de un portal regional → ese portal (source_portal).
+#   2. Federado vía datos.gov.co pero con data_url en un portal regional
+#      conocido → ese portal (son las copias del solapamiento cross-portal).
+#   3. Federado vía datos.gov.co publicado por el IGAC → Colombia en Mapas
+#      (su geoportal; "agust_n" con comodín esquiva la tilde en ILIKE).
+#   4. Resto → datos.gov.co (nativos + demás federados sin portal propio
+#      identificable en los datos; no se inventa atribución sin evidencia).
+# Los hosts se canonizan sin "www." para no partir un portal en dos claves.
 _PANORAMA_PORTAL_SQL = """
-    SELECT COALESCE(source_portal, 'datos.gov.co') AS portal,
+    WITH base AS (
+        SELECT
+            d.source_type,
+            regexp_replace(COALESCE(d.source_portal, ''), '^www\\.', '') AS sp,
+            regexp_replace(
+                COALESCE(substring(d.data_url FROM 'https?://([^/]+)'), ''),
+                '^www\\.', ''
+            ) AS durl_host,
+            (e.name ILIKE '%agust_n codazzi%' OR e.name ILIKE '%IGAC%'
+             OR d.entity_raw ILIKE '%agust_n codazzi%'
+             OR d.entity_raw ILIKE '%IGAC%') AS es_igac
+        FROM datasets d
+        LEFT JOIN entities e ON e.entity_id = d.entity_id
+    )
+    SELECT CASE
+             WHEN sp != '' AND sp != 'datos.gov.co' THEN sp
+             WHEN source_type = 'federated'
+              AND durl_host IN ('datosabiertos.bogota.gov.co', 'datos.cali.gov.co',
+                                'medata.gov.co', 'datosabiertos.valledelcauca.gov.co')
+               THEN durl_host
+             WHEN source_type = 'federated' AND es_igac
+               THEN 'colombiaenmapas.igac.gov.co'
+             ELSE 'datos.gov.co'
+           END AS portal,
            count(*) AS n_datasets
-    FROM datasets
+    FROM base
     GROUP BY 1
     ORDER BY n_datasets DESC
 """

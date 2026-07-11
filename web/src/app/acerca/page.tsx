@@ -48,10 +48,10 @@ export default async function AcercaPage() {
           >
             datos.gov.co
           </a>
-          {" "}(operado por MinTIC) y los portales territoriales de Bogotá,
-          Cali, Medellín y Valle del Cauca — {totalDatasets} datasets de
-          entidades nacionales y territoriales — y lo presenta en tres
-          niveles: el{" "}
+          {" "}(operado por MinTIC), el geoportal del IGAC y los portales
+          territoriales de Bogotá, Cali, Medellín y Valle del Cauca —{" "}
+          {totalDatasets} datasets de entidades nacionales y territoriales —
+          y lo presenta en tres niveles: el{" "}
           <Link href="/" className="focus-ring">
             panorama nacional
           </Link>{" "}

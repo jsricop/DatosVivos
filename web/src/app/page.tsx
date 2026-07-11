@@ -37,8 +37,9 @@ export default async function HomePage() {
         <p className="m-0 max-w-[58ch] font-sans text-body-lg text-ink-2 leading-[1.5]">
           Cuántos datos públicos existen, qué entidades los publican, qué tan
           actualizados están y cómo consultarlos. Un solo catálogo, en vivo,
-          que integra el portal nacional datos.gov.co con los portales
-          territoriales de Bogotá, Cali, Medellín y Valle del Cauca.
+          que integra el portal nacional datos.gov.co, el geoportal del IGAC
+          y los portales territoriales de Bogotá, Cali, Medellín y Valle del
+          Cauca.
         </p>
       </section>
 
@@ -69,7 +70,7 @@ export default async function HomePage() {
               />
             </PanelCard>
 
-            <PanelCard title="Frescura del catálogo" note={frescuraNote(stats)}>
+            <PanelCard title="Frescura del catálogo">
               <StackedBar
                 ariaLabel="Frescura del catálogo"
                 segments={[
@@ -79,12 +80,22 @@ export default async function HomePage() {
                   { label: "Sin fecha", value: stats.semaforo.desconocido, color: "var(--ink-muted)" },
                 ]}
               />
+              <DefList
+                items={[
+                  {
+                    term: "Al día",
+                    def: "la última actualización cumple la frecuencia que la propia entidad declaró (por ejemplo, mensual).",
+                  },
+                ]}
+              />
+              {frescuraResumen(stats) ? (
+                <p className="m-0 font-sans text-body-sm font-semibold text-ink">
+                  {frescuraResumen(stats)}
+                </p>
+              ) : null}
             </PanelCard>
 
-            <PanelCard
-              title="Cómo se accede a los datos"
-              note="Consulta en línea: los datos se consultan aquí mismo, al instante. Archivo descargable: la entidad publica un archivo (por ejemplo CSV o Excel) que se descarga para ver su contenido. Solo metadatos: el catálogo registra qué es el recurso y quién lo publica, pero su contenido no es una tabla — son mapas, servicios geográficos o documentos."
-            >
+            <PanelCard title="Cómo se accede a los datos">
               <StackedBar
                 ariaLabel="Cómo se accede a los datos"
                 segments={[
@@ -93,12 +104,25 @@ export default async function HomePage() {
                   { label: "Solo metadatos", value: stats.acceso.solo_metadatos, color: "var(--ink-muted)" },
                 ]}
               />
+              <DefList
+                items={[
+                  {
+                    term: "Consulta en línea",
+                    def: "los datos se consultan aquí mismo, al instante.",
+                  },
+                  {
+                    term: "Archivo descargable",
+                    def: "la entidad publica un archivo (por ejemplo CSV o Excel) que se descarga para ver su contenido.",
+                  },
+                  {
+                    term: "Solo metadatos",
+                    def: "el catálogo registra qué es el recurso y quién lo publica, pero su contenido no es una tabla: mapas, servicios geográficos o documentos.",
+                  },
+                ]}
+              />
             </PanelCard>
 
-            <PanelCard
-              title="Qué contiene el catálogo"
-              note="Los reportes administrativos son las publicaciones que la Ley de Transparencia (Ley 1712 de 2014) exige a cada entidad: registros de activos de información, esquemas de publicación e índices. Los datos temáticos son todo lo demás: salud, contratación, educación, movilidad y más."
-            >
+            <PanelCard title="Qué contiene el catálogo">
               <StackedBar
                 ariaLabel="Qué contiene el catálogo"
                 segments={[
@@ -106,11 +130,23 @@ export default async function HomePage() {
                   { label: "Reportes administrativos", value: stats.composicion.administrativos, color: "var(--ink-muted)" },
                 ]}
               />
+              <DefList
+                items={[
+                  {
+                    term: "Datos temáticos",
+                    def: "salud, contratación, educación, movilidad y más.",
+                  },
+                  {
+                    term: "Reportes administrativos",
+                    def: "las publicaciones que la Ley de Transparencia (Ley 1712 de 2014) exige a cada entidad: registros de activos de información, esquemas de publicación e índices.",
+                  },
+                ]}
+              />
             </PanelCard>
 
             <PanelCard
               title="Portales integrados"
-              note="Estos portales publican cada uno por su lado; DatosVivos los consolida en un solo catálogo consultable, que de otra forma habría que revisar sitio por sitio."
+              note="Cada dataset se atribuye al portal donde su entidad lo publica originalmente. Publican cada uno por su lado; DatosVivos los consolida en un solo catálogo consultable."
             >
               <BarList
                 items={stats.por_portal.map((p) => ({
@@ -230,12 +266,13 @@ function CTACard({
   );
 }
 
-/** Nombre corto y reconocible de cada portal de origen. */
+/** Nombre corto y reconocible de cada portal de origen (claves sin www). */
 const PORTAL_LABELS: Record<string, string> = {
   "datos.gov.co": "datos.gov.co",
+  "colombiaenmapas.igac.gov.co": "IGAC (Colombia en Mapas)",
   "datosabiertos.bogota.gov.co": "Bogotá",
   "datos.cali.gov.co": "Cali",
-  "www.medata.gov.co": "Medellín (MEDATA)",
+  "medata.gov.co": "Medellín (MEDATA)",
   "datosabiertos.valledelcauca.gov.co": "Valle del Cauca",
 };
 
@@ -243,21 +280,41 @@ function portalLabel(portal: string): string {
   return PORTAL_LABELS[portal] ?? portal;
 }
 
-/** URL pública del portal. datos.gov.co redirige a www; el resto tal cual. */
+/** URL pública del portal (claves canónicas sin www; algunos sirven con www). */
+const PORTAL_URLS: Record<string, string> = {
+  "datos.gov.co": "https://www.datos.gov.co",
+  "colombiaenmapas.igac.gov.co": "https://www.colombiaenmapas.igac.gov.co",
+  "medata.gov.co": "https://www.medata.gov.co",
+};
+
 function portalUrl(portal: string): string {
-  return portal === "datos.gov.co"
-    ? "https://www.datos.gov.co"
-    : `https://${portal}`;
+  return PORTAL_URLS[portal] ?? `https://${portal}`;
 }
 
-function frescuraNote(stats: PanoramaStats): string {
+/**
+ * Lista de definiciones: cada término con su ancla en negrilla y la
+ * explicación al lado — un renglón por tema, sin párrafos corridos.
+ */
+function DefList({ items }: { items: Array<{ term: string; def: string }> }) {
+  return (
+    <dl className="m-0 flex flex-col gap-2">
+      {items.map((it) => (
+        <div key={it.term} className="font-sans text-caption leading-relaxed">
+          <dt className="inline font-semibold text-ink-2">{it.term}:</dt>{" "}
+          <dd className="inline m-0 p-0 text-ink-muted">{it.def}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Lectura en una frase del semáforo, destacada aparte de las definiciones. */
+function frescuraResumen(stats: PanoramaStats): string | null {
   const conFecha =
     stats.semaforo.verde + stats.semaforo.amarillo + stats.semaforo.rojo;
-  const base =
-    "Un dataset está al día si su última actualización cumple la frecuencia que su propia entidad declaró (por ejemplo, mensual).";
-  if (conFecha === 0) return base;
+  if (conFecha === 0) return null;
   const alDia = Math.round((10 * stats.semaforo.verde) / conFecha);
-  return `${base} Hoy, ${alDia} de cada 10 con fecha conocida lo están.`;
+  return `Hoy, ${alDia} de cada 10 datasets con fecha conocida están al día.`;
 }
 
 /** Tiempo relativo corto para "actualizado hace N min" (render server-side). */
