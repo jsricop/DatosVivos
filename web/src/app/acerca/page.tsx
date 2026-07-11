@@ -91,8 +91,22 @@ export default async function AcercaPage() {
         <section className="mt-6 pt-6 hairline-top">
           <span className="text-kicker">Equipo</span>
           <h2 className="m-0 mt-2 mb-3 font-sans text-h3 font-semibold">
-            Oficina de Tecnología — Agencia Nacional de Infraestructura (ANI)
+            GIT TIC — Agencia Nacional de Infraestructura (ANI)
           </h2>
+          <ul className="m-0 mb-4 flex flex-col gap-2 list-none p-0">
+            <Miembro
+              nombre="Hernán Darío Gutiérrez Casas"
+              rol="Líder estratégico"
+            />
+            <Miembro
+              nombre="Ileana Andrea Navarro Castrillón"
+              rol="Líder de equipo y comunicaciones"
+            />
+            <Miembro
+              nombre="Jhonatan Sneider Rico Pinto"
+              rol="Líder técnico y de datos"
+            />
+          </ul>
           <P>
             Proyecto presentado al concurso{" "}
             <em>Datos al Ecosistema 2026: IA para Colombia</em> del Ministerio
@@ -139,6 +153,15 @@ export default async function AcercaPage() {
 function P({ children }: { children: React.ReactNode }) {
   return (
     <p className="m-0 font-sans text-body-lg leading-relaxed text-ink">{children}</p>
+  );
+}
+
+function Miembro({ nombre, rol }: { nombre: string; rol: string }) {
+  return (
+    <li className="font-sans text-body text-ink">
+      <span className="font-semibold">{nombre}</span>
+      <span className="text-ink-muted"> — {rol}</span>
+    </li>
   );
 }
 
