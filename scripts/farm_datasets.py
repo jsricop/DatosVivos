@@ -49,6 +49,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 LAKE_DIR = Path(os.environ.get("LAKE_DIR", "/app/data/lake"))
 SOCRATA_CSV = "https://www.datos.gov.co/api/views/{id}/rows.csv?accessType=DOWNLOAD"
 PER_DATASET_CAP = int(float(os.environ.get("FARM_DATASET_CAP_GB", "1.5")) * 1024**3)
+# Tope de PARED por dataset: los gigantes con row_count desactualizado
+# (p. ej. SECOP II) estiran el stream por media hora antes de tocar el cap
+# de bytes. A ~0.8 MB/s medidos, 10 min ≈ 500 MB — suficiente para todo lo
+# que cabe razonablemente en el presupuesto.
+WALL_SECONDS = int(os.environ.get("FARM_WALL_SECONDS", "600"))
 DOWNLOAD_TIMEOUT = 120
 CHUNK = 1024 * 256
 ADVISORY_LOCK_KEY = 0x5FA127  # una sola instancia de farmeo a la vez
@@ -142,6 +147,7 @@ def _stream_download(url: str, dest: Path) -> int:
     req = urllib.request.Request(url, headers={"User-Agent": "DatosVivos-farm/1.0"})
     tmp = dest.with_suffix(".tmp")
     total = 0
+    t0 = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp, \
                 open(tmp, "wb") as fh:
@@ -152,6 +158,10 @@ def _stream_download(url: str, dest: Path) -> int:
                 total += len(chunk)
                 if total > PER_DATASET_CAP:
                     raise ValueError(f"supera el cap por dataset ({PER_DATASET_CAP} B)")
+                if time.monotonic() - t0 > WALL_SECONDS:
+                    raise ValueError(
+                        f"supera el tope de tiempo por dataset ({WALL_SECONDS}s)"
+                    )
                 fh.write(chunk)
         tmp.rename(dest)
         return total
