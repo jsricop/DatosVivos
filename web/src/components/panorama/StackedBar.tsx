@@ -17,13 +17,15 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
  * Crecimiento escalonado por segmento (transition-delay); fail-safe sin JS.
  */
 export function StackedBar({
-  segments,
+  segments: rawSegments,
   ariaLabel,
 }: {
   segments: StackedSegment[];
   ariaLabel: string;
 }) {
   const { ref, revealed } = useRevealOnce<HTMLDivElement>();
+  // Segmentos en cero no aportan (y "Sin fecha 0" en la leyenda es ruido).
+  const segments = rawSegments.filter((s) => s.value > 0);
   const total = segments.reduce((acc, s) => acc + s.value, 0);
   if (total <= 0) return null;
 
