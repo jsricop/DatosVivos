@@ -96,127 +96,73 @@ def test_from_nl_relleno_no_pisa_al_llm():
 
 
 # ----------------------------------------------------------------------
-# 2. Reintento sin refinador
+# 2. Refinador como BOOST de ranking (no filtra el subset)
 # ----------------------------------------------------------------------
 
 
-def _conn_secuencia(*respuestas):
-    """Cada elemento = (total, rows) para una llamada a _run (2 cursores)."""
-    cursors = []
-    it = iter(respuestas)
+def _fake_connect_capturando(capturas, total=43, rows=None):
+    """Mock de _connect que captura los SQL/params ejecutados."""
+    conn = MagicMock()
+    conn.__enter__ = MagicMock(return_value=conn)
+    conn.__exit__ = MagicMock(return_value=False)
+    state = {"first": True}
 
-    class FakeConn:
-        def __enter__(self):
-            return self
+    def cursor():
+        cur = MagicMock()
 
-        def __exit__(self, *a):
-            return False
+        def execute(sql, params=None):
+            capturas.append((sql, params))
 
-        def cursor(self):
-            cur = MagicMock()
-            # El primer cursor de cada _run hace COUNT; el segundo, el top-10.
-            if not cursors or cursors[-1][1] is not None:
-                total, _ = next(it)
-                cur.fetchone.return_value = {"c": total}
-                cursors.append([cur, None])
-            else:
-                # segundo cursor del par
-                idx = len([c for c in cursors if c[1] is None]) - 1
-                _, rows = respuestas[len(cursors) - 1]
-                cur.fetchall.return_value = rows
-                cursors[-1][1] = cur
-            cm = MagicMock()
-            cm.__enter__ = MagicMock(return_value=cur)
-            cm.__exit__ = MagicMock(return_value=False)
-            return cm
+        cur.execute = execute
+        if state["first"]:
+            cur.fetchone.return_value = {"c": total}
+            state["first"] = False
+        else:
+            cur.fetchall.return_value = rows or []
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=cur)
+        cm.__exit__ = MagicMock(return_value=False)
+        return cm
 
-    return FakeConn()
+    conn.cursor = cursor
+    return conn
 
 
-def test_query_chips_reintenta_sin_refinador():
-    """Subset vacío CON refinador → reintento sin él → resultados + aviso."""
+def test_query_chips_refinador_no_filtra_y_boostea():
+    """El refinador NO entra al WHERE (no vacía subsets) y SÍ entra al score
+    como boost ILIKE — el caso 'estudiantes' que contaba un dataset arbitrario."""
     client = _client()
     fila = {
-        "dataset_id": "ry5e-gwqx", "name": "Instituciones Educativas Sogamoso",
-        "entity_raw": "Alcaldía de Sogamoso", "category": "Educación",
-        "row_count": 108, "view_count": 500, "last_updated": "2026-01-01",
-        "url": None, "api_url": None, "jurisdiccion_nivel": "municipal",
-        "jurisdiccion_geo_codes": None, "score": 0.9,
+        "dataset_id": "mat-0001", "name": "Estudiantes matriculados Bogotá",
+        "entity_raw": "SED", "category": "Educación",
+        "row_count": 5000, "view_count": 900, "last_updated": "2026-01-01",
+        "url": None, "api_url": None, "jurisdiccion_nivel": "distrito_capital",
+        "jurisdiccion_geo_codes": None, "score": 1.2,
     }
+    capturas: list = []
 
-    # secuencia: _run 1 → (0, []); _run 2 (sin refinador) → (43, [fila])
-    respuestas = iter([(0, []), (43, [fila])])
-
-    def fake_connect():
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        state = {"pair": None}
-
-        def cursor():
-            cur = MagicMock()
-            if state["pair"] is None:
-                state["pair"] = next(respuestas)
-                cur.fetchone.return_value = {"c": state["pair"][0]}
-            else:
-                cur.fetchall.return_value = state["pair"][1]
-                state["pair"] = None
-            cm = MagicMock()
-            cm.__enter__ = MagicMock(return_value=cur)
-            cm.__exit__ = MagicMock(return_value=False)
-            return cm
-
-        conn.cursor = cursor
-        return conn
-
-    with patch("api.routes.chips._connect", side_effect=fake_connect):
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=9, rows=[fila]),
+    ):
         body = client.post(
             "/api/v1/query/chips",
-            json={"tema": "Educación", "territorio": "15", "refinador": "colegios"},
+            json={"tema": "Educación", "territorio": "11", "refinador": "estudiantes"},
         ).json()
 
-    assert body["total_in_subset"] == 43
-    assert body["candidates"][0]["dataset_id"] == "ry5e-gwqx"
-    assert "colegios" in (body["message"] or "")  # aviso del refinador ignorado
-    assert "no coincidió" in (body["message"] or "")
+    assert body["total_in_subset"] == 9
+    assert body["candidates"][0]["dataset_id"] == "mat-0001"
+    # sin aviso de refinador ignorado: ya no se descarta, ordena
+    assert "no coincidió" not in (body["message"] or "")
 
-
-def test_query_chips_vacio_sin_refinador_no_reintenta():
-    """Sin refinador y subset 0 → mensaje de vacío normal, un solo _run."""
-    client = _client()
-    llamadas = {"n": 0}
-
-    def fake_connect():
-        llamadas["n"] += 1
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        state = {"first": True}
-
-        def cursor():
-            cur = MagicMock()
-            if state["first"]:
-                cur.fetchone.return_value = {"c": 0}
-                state["first"] = False
-            else:
-                cur.fetchall.return_value = []
-            cm = MagicMock()
-            cm.__enter__ = MagicMock(return_value=cur)
-            cm.__exit__ = MagicMock(return_value=False)
-            return cm
-
-        conn.cursor = cursor
-        return conn
-
-    with patch("api.routes.chips._connect", side_effect=fake_connect):
-        body = client.post(
-            "/api/v1/query/chips",
-            json={"tema": "Educación", "territorio": "99"},
-        ).json()
-
-    assert body["total_in_subset"] == 0
-    assert llamadas["n"] == 1  # sin reintento
-    assert "Ningún dataset coincide" in body["message"]
+    count_sql, count_params = capturas[0]
+    score_sql, score_params = capturas[1]
+    # WHERE del conteo: el refinador NO filtra
+    assert "refinador" not in count_sql.lower()
+    assert "estudiantes" not in str(count_params)
+    # score: boost CASE con el refinador como ILIKE
+    assert "CASE WHEN" in score_sql and "ILIKE" in score_sql
+    assert "%estudiantes%" in score_params
 
 
 # ----------------------------------------------------------------------

@@ -400,15 +400,24 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
             detail="Marca al menos un chip antes de buscar.",
         )
 
+    # El refinador NO filtra el subset (2026-07-11): a menudo es la palabra
+    # clave de la pregunta ("estudiantes") inventada o extraída por el mapper,
+    # y como filtro ILIKE literal vaciaba subsets válidos o —peor— al
+    # descartarlo se perdía la semántica y se contaba un dataset arbitrario.
+    # Ahora es un BOOST de ranking en el score: los datasets que lo mencionan
+    # quedan de primeros, y si nada lo menciona el orden normal se mantiene.
     where_sql, params = _build_chips_where(
         tema=req.tema,
         entidad=req.entidad,
         territorio=req.territorio,
         subtags=req.subtags,
-        refinador=req.refinador,
+        refinador=None,
     )
 
     # Conteo + top-10
+    # Texto del boost de ranking (None → el CASE del SQL rinde 0 para todos).
+    refinador_boost = (req.refinador or "").strip() or None
+
     def _run(where_sql: str, params: list) -> tuple[int, list]:
         """Conteo + top-10 con score compuesto para un WHERE dado."""
         with _connect() as conn:
@@ -457,6 +466,10 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                                 EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
                                 (%s * 2 * 86400)
                              ))
+                             +
+                             CASE WHEN %s::text IS NOT NULL
+                                   AND (s.name ILIKE %s OR s.description ILIKE %s)
+                                  THEN 0.5 ELSE 0 END
                            ) AS score
                     FROM subset s
                     ORDER BY score DESC NULLS LAST,
@@ -464,29 +477,17 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                              s.rows_updated_at DESC NULLS LAST
                     LIMIT 10
                     """,
-                    params + [_SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS],
+                    params + [
+                        _SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS,
+                        refinador_boost,
+                        f"%{refinador_boost}%" if refinador_boost else None,
+                        f"%{refinador_boost}%" if refinador_boost else None,
+                    ],
                 )
                 rows = cur.fetchall()
         return total, rows
 
     total, rows = _run(where_sql, params)
-
-    # Reintento sin refinador: el refinador (a menudo inventado por el mapper
-    # NL→chips) filtra por ILIKE literal y puede vaciar un subset perfectamente
-    # válido ("colegios" no aparece en datasets que dicen "Instituciones
-    # Educativas"). Antes esto era un callejón sin salida; ahora degradamos a
-    # los demás chips y se lo decimos al usuario.
-    refinador_ignorado = False
-    if total == 0 and req.refinador:
-        where_sql2, params2 = _build_chips_where(
-            tema=req.tema,
-            entidad=req.entidad,
-            territorio=req.territorio,
-            subtags=req.subtags,
-            refinador=None,
-        )
-        total, rows = _run(where_sql2, params2)
-        refinador_ignorado = total > 0
 
     candidates = [
         ChipsCandidateDataset(
@@ -522,13 +523,6 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
         # Subset grande sin TIPO marcado → sugerir refinar
         msg = f"Hay {total} datasets que coinciden. Marca otro chip para verlos más específicos."
         suggested = _suggest_chips(req)
-
-    if refinador_ignorado:
-        aviso = (
-            f'El texto "{req.refinador}" no coincidió con ningún dataset; '
-            "estos son los resultados sin ese filtro."
-        )
-        msg = f"{aviso} {msg}" if msg else aviso
 
     return ChipsQueryResponse(
         total_in_subset=total,

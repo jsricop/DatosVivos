@@ -39,6 +39,10 @@ _ADMIN_PATTERNS = [
     "esquema de publicacion",
     "índice de información clasificada",
     "indice de informacion clasificada",
+    # Variantes sin "de": "Índice Información Clasificada y Reservada" (caso
+    # real q59t-e9gs que se coló como candidato de chips el 2026-07-11).
+    "índice información clasificada",
+    "indice informacion clasificada",
     "registro de activos de información",
     "registro de activos de informacion",
     "activos de información",
