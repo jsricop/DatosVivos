@@ -116,8 +116,25 @@ export default async function HomePage() {
                 items={stats.por_portal.map((p) => ({
                   label: portalLabel(p.portal),
                   value: p.n_datasets,
+                  href: portalUrl(p.portal),
                 }))}
               />
+              <p className="m-0 font-sans text-caption text-ink-2 leading-relaxed">
+                Consúltalos directamente:{" "}
+                {stats.por_portal.map((p, i) => (
+                  <span key={p.portal}>
+                    {i > 0 ? " · " : null}
+                    <a
+                      href={portalUrl(p.portal)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="focus-ring font-mono"
+                    >
+                      {p.portal.replace(/^www\./, "")}
+                    </a>
+                  </span>
+                ))}
+              </p>
             </PanelCard>
           </div>
 
@@ -224,6 +241,13 @@ const PORTAL_LABELS: Record<string, string> = {
 
 function portalLabel(portal: string): string {
   return PORTAL_LABELS[portal] ?? portal;
+}
+
+/** URL pública del portal. datos.gov.co redirige a www; el resto tal cual. */
+function portalUrl(portal: string): string {
+  return portal === "datos.gov.co"
+    ? "https://www.datos.gov.co"
+    : `https://${portal}`;
 }
 
 function frescuraNote(stats: PanoramaStats): string {

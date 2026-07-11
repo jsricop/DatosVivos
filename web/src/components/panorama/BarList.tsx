@@ -7,6 +7,8 @@ export type BarItem = {
   value: number;
   /** Texto adicional junto a la cifra, p.ej. "325 entidades". */
   detail?: string;
+  /** Si está presente, el label es un enlace externo (p.ej. al portal de origen). */
+  href?: string;
 };
 
 const fmt = (n: number) => n.toLocaleString("es-CO");
@@ -29,12 +31,24 @@ export function BarList({ items }: { items: BarItem[] }) {
           key={s.label}
           className="grid grid-cols-[minmax(9ch,14ch)_1fr_auto] items-center gap-3"
         >
-          <span
-            className="font-sans text-body-sm text-ink-2 truncate"
-            title={s.label}
-          >
-            {s.label}
-          </span>
+          {s.href ? (
+            <a
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-sans text-body-sm text-ink-2 truncate focus-ring"
+              title={s.href}
+            >
+              {s.label}
+            </a>
+          ) : (
+            <span
+              className="font-sans text-body-sm text-ink-2 truncate"
+              title={s.label}
+            >
+              {s.label}
+            </span>
+          )}
           <span className="block h-4 bg-bg-overlay rounded-[var(--radius-0)] overflow-hidden">
             <span
               className={`block h-full bg-accent reveal-bar${revealed ? "" : " is-pending"}`}
