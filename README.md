@@ -89,7 +89,7 @@ Organizado por nivel del producto (nivel avanzado del TDR):
   antes de ejecutar; repara o rehúsa): embeddings `multilingual-e5` + ChromaDB para
   retrieval semántico, clasificador de intención, narrativa anti-alucinación (cero
   cifras inventadas) y **MCP server** que expone las herramientas a cualquier agente de IA.
-- Backend LLM intercambiable (`LLM_BACKEND = ollama | anthropic`).
+- Backend LLM conectable: **producción con la API de Claude (Haiku)** desde 2026-07-11 — interpretación NL en ~1.5 s (antes 31-45 s con modelo local); `LLM_BACKEND=ollama` queda para réplicas sin API key.
 → Metodología CRISP-ML adaptada: [docs/marco_metodologico.md](docs/marco_metodologico.md)
 
 ## Por qué Nivel Avanzado (con la letra del TDR)
@@ -172,9 +172,7 @@ Presentación del proyecto:
 
 ## Roadmap (trabajo futuro)
 
-1. **Migración del LLM a la API de Claude** — el backend ya es intercambiable; mejora
-   la calidad de generación NL2SQL.
-2. **Cosecha y catalogación previa de datasets** — perfilado y casos de consulta
+1. **Cosecha y catalogación previa de datasets** — perfilado y casos de consulta
    verificados para una búsqueda aún más precisa.
 
 ## Equipo

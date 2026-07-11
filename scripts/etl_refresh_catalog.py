@@ -678,6 +678,13 @@ async def main(args: argparse.Namespace) -> int:
         conn.commit()
 
     log.info("ETL terminado. total=%d", len(ids))
+
+    # Farmeo: regla diaria de la bodega Parquet (entra-uno-sale-uno, migración
+    # 027). Corre DESPUÉS de cerrar etl_runs: acotado en tiempo, con advisory
+    # lock, y un fallo suyo jamás afecta al ETL (run_daily nunca lanza).
+    if not args.no_farm:
+        from scripts.farm_datasets import run_daily
+        run_daily()
     return 0
 
 
@@ -690,6 +697,8 @@ def _parse_args() -> argparse.Namespace:
                    help="recontar solo nuevos/cambiados (compara data_updated_at); para refresco recurrente")
     p.add_argument("--no-rowcount", action="store_true", help="omitir count(*) SODA")
     p.add_argument("--no-comments", action="store_true", help="omitir comments/rating Metadata")
+    p.add_argument("--no-farm", action="store_true",
+                   help="omitir la regla diaria de la bodega Parquet (farmeo)")
     return p.parse_args()
 
 

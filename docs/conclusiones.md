@@ -63,13 +63,14 @@ CKAN/DCAT; y el MCP server permite que terceros construyan encima sin tocar el s
 - El motor NL2SQL prioriza **no equivocarse** sobre responder siempre: hay preguntas
   que rehúsa cuando la verificación no alcanza el umbral. Es una decisión de diseño.
 
-## Trabajo futuro (los dos pendientes)
+## Trabajo futuro (el pendiente)
 
-1. **Migración del LLM a la API de Claude**: el backend ya es intercambiable
-   (`ollama | anthropic`); la migración mejora calidad de generación NL2SQL y libera
-   recursos de la infraestructura. Riesgos gestionados: costo por consulta y salida de
-   red institucional.
-2. **Cosecha y catalogación previa de datasets** para búsqueda más eficiente: descargar
+> La migración del LLM a la API de Claude se **ejecutó el 2026-07-11** (backend
+> intercambiable `LLM_BACKEND=anthropic`, modelo Haiku): la interpretación de lenguaje
+> natural pasó de 31-45 s a **1.5-1.8 s** con mapeos correctos, y la baja del modelo
+> local liberó 6.2 GB de disco en la infraestructura para la bodega de datasets.
+
+1. **Cosecha y catalogación previa de datasets** para búsqueda más eficiente: descargar
    y perfilar los datasets tabulares (describe + casos de consulta comunes generados y
    **verificados por el motor** — solo sobreviven los que producen cifra verificada),
    construyendo un set etiquetado para retrieval de mayor precisión.

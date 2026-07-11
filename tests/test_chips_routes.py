@@ -135,7 +135,9 @@ def test_query_chips_con_tipo_marca_chosen():
          "entity_raw": "MinSalud", "category": "Salud y Protección Social",
          "row_count": 1000, "view_count": 50000, "last_updated": None,
          "url": None, "api_url": None,
-         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": []}
+         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": [],
+         # el chosen exige candidato ejecutable (2026-07-11)
+         "source_type": "socrata", "federated_status": None}
     ]
     conn, _ = _mock_conn_with_responses(count_row, candidates)
     with patch("api.routes.chips._connect", return_value=conn):

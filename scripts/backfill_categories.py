@@ -60,6 +60,9 @@ def _doc(r: dict) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="escribir (default: dry-run)")
+    # Política 2026-07-11: la API de Anthropic se reserva para las consultas
+    # del producto. Los trabajos de proceso (este backfill) usan métodos sin
+    # costo (embeddings locales) o Claude Code bajo orden explícita.
     ap.add_argument("--min-class", type=int, default=150)
     ap.add_argument("--cap", type=int, default=400, help="ejemplos máx por categoría")
     ap.add_argument("--min-score", type=float, default=0.82)

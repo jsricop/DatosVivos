@@ -455,6 +455,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                            s.rows_updated_at::text AS last_updated,
                            s.socrata_url AS url, s.api_url,
                            s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
+                           s.source_type, s.federated_status,
                            (
                              COALESCE(
                                %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
@@ -517,8 +518,22 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     elif total == 0:
         msg = "Ningún dataset coincide con esta combinación de chips. Prueba quitar alguno."
     elif total <= 10 or req.tipo:
-        # Subset manejable o usuario ya marcó TIPO → ejecutar
-        chosen = candidates[0].dataset_id if candidates else None
+        # Subset manejable o usuario ya marcó TIPO → ejecutar sobre el primer
+        # candidato QUE PUEDA PRODUCIR DATOS. Un federado solo_metadatos
+        # (no_csv) no tiene filas que contar: elegirlo devolvía cifra None
+        # silenciosa (caso real n6k3-wycd, 2026-07-11).
+        ejecutable = next(
+            (r for r in rows
+             if r.get("source_type") == "socrata" or r.get("federated_status") == "ok"),
+            None,
+        )
+        if ejecutable is not None:
+            chosen = ejecutable["dataset_id"]
+        elif candidates:
+            msg = (
+                "Estos datasets solo son consultables en su portal de origen "
+                "(no exponen tabla de datos). Abre la fuente para verlos."
+            )
     else:
         # Subset grande sin TIPO marcado → sugerir refinar
         msg = f"Hay {total} datasets que coinciden. Marca otro chip para verlos más específicos."

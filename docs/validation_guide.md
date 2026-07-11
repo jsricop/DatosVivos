@@ -36,7 +36,9 @@ El significado de cada campo está en el [diccionario de datos](diccionario_dato
 
 ## Nivel 3 — Reproducir desde el código
 
-Requisitos: Docker + Docker Compose, Git. (Opcional para el motor NL local: ~8 GB de
+Requisitos: Docker + Docker Compose, Git. (El motor de lenguaje es conectable:
+`LLM_BACKEND=anthropic` con una API key de Claude — como corre producción — o
+`LLM_BACKEND=ollama` con un modelo local: ~8 GB de
 disco para el modelo.)
 
 ```bash

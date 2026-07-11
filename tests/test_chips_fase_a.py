@@ -184,3 +184,44 @@ def test_min_score_default_y_env(monkeypatch):
     monkeypatch.delenv("VECTOR_MIN_SCORE")
     importlib.reload(vi)
     assert vi.DEFAULT_MIN_SCORE == pytest.approx(0.815)
+
+
+def test_query_chips_chosen_solo_ejecutables():
+    """El chosen salta candidatos solo_metadatos (no_csv): elegirlos daba
+    cifra None silenciosa. El primer ejecutable gana; si ninguno, mensaje."""
+    client = _client()
+    no_csv = {
+        "dataset_id": "n6k3-wycd", "name": "Institución Educación Superior",
+        "entity_raw": "X", "category": "Educación", "row_count": None,
+        "view_count": 900, "last_updated": None, "url": None, "api_url": None,
+        "jurisdiccion_nivel": "distrito_capital", "jurisdiccion_geo_codes": None,
+        "score": 1.5, "source_type": "federated", "federated_status": "no_csv",
+    }
+    nativo = dict(no_csv, dataset_id="f3r4-br7h", name="Matrícula Total Bogotá",
+                  source_type="socrata", federated_status=None, score=1.0,
+                  row_count=5000)
+    capturas: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=2,
+                                                     rows=[no_csv, nativo]),
+    ):
+        body = client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Educación", "tipo": "Cuántos", "territorio": "11"},
+        ).json()
+    assert body["chosen_dataset_id"] == "f3r4-br7h"  # salta el no_csv
+
+    # ninguno ejecutable → chosen None + mensaje honesto
+    capturas2: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas2, total=1,
+                                                     rows=[no_csv]),
+    ):
+        body = client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Educación", "tipo": "Cuántos", "territorio": "11"},
+        ).json()
+    assert body["chosen_dataset_id"] is None
+    assert "portal de origen" in (body["message"] or "")

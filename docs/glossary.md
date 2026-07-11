@@ -59,13 +59,14 @@ Retrieval-Augmented Generation. Patrón donde antes de generar respuesta, el LLM
 ## Modelos y técnicas
 
 ### Backend LLM intercambiable (`LLM_BACKEND`)
-El generador de lenguaje es un componente conectable: `ollama` (modelo local),
-`anthropic` (API de Claude) o `mock` (tests). La migración a la API de Claude es uno
-de los dos pendientes del roadmap; el resto del motor (verificación, retrieval,
-plantillas) no cambia con el backend.
+El generador de lenguaje es un componente conectable: `anthropic` (API de Claude —
+**backend de producción desde 2026-07-11**, modelo Haiku), `ollama` (modelo local,
+opción para réplicas sin API key) o `mock` (tests). El resto del motor (verificación,
+retrieval, plantillas) no cambia con el backend. La migración a Claude bajó la
+interpretación NL de 31-45 s a 1.5-1.8 s.
 
 ### Ollama
-Servidor local de modelos LLM que permite correr modelos cuantizados (GGUF) en CPU/GPU sin enviar datos a APIs externas. Backend por defecto actual (`LLM_BACKEND=ollama`).
+Servidor local de modelos LLM que permite correr modelos cuantizados (GGUF) en CPU/GPU sin enviar datos a APIs externas. Fue el backend inicial; los modelos se retiraron de producción el 2026-07-11 (liberó 6.2 GB) y queda como opción local vía `LLM_BACKEND=ollama`.
 
 ### Qwen 2.5 Coder (3B / 7B, Q4_K_M)
 Modelo LLM de Alibaba, especializado en código y consultas estructuradas. **Default operativo: 3B (~2 GB RAM)** para correr en hardware modesto del Estado; **upgrade documentado: 7B (~5 GB RAM)** vía `OLLAMA_MODEL` env var cuando hay GPU/RAM disponible. Genera SoQL, narrativa y reformulaciones Tier 3.
