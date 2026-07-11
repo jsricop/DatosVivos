@@ -290,3 +290,38 @@ class CatalogStats(BaseModel):
     consultable_tabla: int          # directo + requiere_herramienta
     util: int                       # quality_flag NULL/'ok' (no administrativo)
     admin: int                      # quality_flag='admin_only' (Ley 1712)
+
+
+class SectorCount(BaseModel):
+    """Agregado por sector administrativo (solo datasets con sector conocido)."""
+
+    sector: str
+    n_datasets: int
+    n_entidades: int                # entidades distintas que publican en el sector
+
+
+class DeptCount(BaseModel):
+    """Agregado por departamento DIVIPOLA (datasets con jurisdicción identificada)."""
+
+    codigo: str                     # DIVIPOLA 2 dígitos ("11", "05", ...)
+    nombre: str                     # "Bogotá D.C.", "Antioquia", ...
+    n_datasets: int
+
+
+class PanoramaStats(BaseModel):
+    """GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
+
+    TODAS las cifras usan el filtro de calidad estándar (quality_flag NULL/'ok'),
+    el mismo de los chips: miden el catálogo ÚTIL para consulta. Por eso `total`
+    aquí es menor que el de /stats/catalog (inventario bruto). Documentado en
+    ADR-023 — no es inconsistencia, no "corregir".
+    """
+
+    total: int                      # datasets útiles
+    n_entidades: int                # entidades distintas con datasets útiles
+    semaforo: dict[str, int]        # verde / amarillo / rojo / desconocido
+    acceso: dict[str, int]          # directo / requiere_herramienta / solo_metadatos
+    por_sector: list[SectorCount]   # top 10 por n_datasets
+    por_departamento: list[DeptCount]  # hasta 33, orden n_datasets desc
+    nacional_sin_geo: int           # útiles sin códigos DIVIPOLA (alcance nacional)
+    generated_at: str               # ISO del momento de cómputo (caché TTL)

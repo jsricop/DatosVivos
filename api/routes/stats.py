@@ -1,20 +1,29 @@
-"""Endpoint de estadísticas del catálogo.
+"""Endpoints de estadísticas del catálogo.
 
 GET /api/v1/stats/catalog — conteos agregados (total, origen, acceso, calidad)
 calculados EN VIVO sobre `v_dataset_status_decisor`, la misma vista que alimenta
 el tablero Power BI. Fuente única de verdad: así el frontend y el tablero nunca
 se desfasan (evita números quemados como el viejo "más de 8.000 datasets").
+
+GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023): totales,
+semáforo de frescura, acceso, por sector y por departamento DIVIPOLA. Todas las
+cifras con el filtro de calidad estándar (quality_flag NULL/'ok'). Cacheado en
+memoria con TTL (`PANORAMA_TTL_SECONDS`, default 300s) porque la agregación por
+departamento expande JSONB sobre ~25k filas.
 """
 
 from __future__ import annotations
 
 import os
+import time
+from datetime import datetime, timezone
 
 import psycopg
 from fastapi import APIRouter, HTTPException
 from psycopg.rows import dict_row
 
-from api.models.schemas import CatalogStats
+from api.models.schemas import CatalogStats, DeptCount, PanoramaStats, SectorCount
+from api.routes.divipola import _DEPT_NAMES
 
 router = APIRouter()
 
@@ -52,3 +61,123 @@ def catalog_stats() -> CatalogStats:
     if not row:
         raise HTTPException(status_code=500, detail="sin datos de catálogo")
     return CatalogStats(**row)
+
+
+# ----------------------------------------------------------------------
+# Panorama nacional (ADR-023)
+# ----------------------------------------------------------------------
+
+# Filtro de calidad estándar (el mismo de chips.py): el panorama mide el
+# catálogo ÚTIL, no el inventario bruto. Por eso total < /stats/catalog.
+_QUALITY = "(quality_flag IS NULL OR quality_flag = 'ok')"
+
+_PANORAMA_TOTALS_SQL = f"""
+    SELECT
+        count(*)                                                      AS total,
+        count(DISTINCT entity_id)                                     AS n_entidades,
+        count(*) FILTER (WHERE status = 'verde')                      AS verde,
+        count(*) FILTER (WHERE status = 'amarillo')                   AS amarillo,
+        count(*) FILTER (WHERE status = 'rojo')                       AS rojo,
+        count(*) FILTER (WHERE status = 'desconocido'
+                            OR status IS NULL)                        AS desconocido,
+        count(*) FILTER (WHERE acceso_datos = 'directo')              AS directo,
+        count(*) FILTER (WHERE acceso_datos = 'requiere_herramienta') AS requiere_herramienta,
+        count(*) FILTER (WHERE acceso_datos = 'solo_metadatos')       AS solo_metadatos
+    FROM v_dataset_status_decisor
+    WHERE {_QUALITY}
+"""
+
+# Federados de datos.gov.co no declaran sector (0% cobertura) → quedan fuera;
+# el frontend lo anota como "de los N datasets con sector conocido".
+_PANORAMA_SECTOR_SQL = f"""
+    SELECT sector,
+           count(*)                  AS n_datasets,
+           count(DISTINCT entity_id) AS n_entidades
+    FROM v_dataset_status_decisor
+    WHERE sector IS NOT NULL AND sector != '' AND {_QUALITY}
+    GROUP BY sector
+    ORDER BY n_datasets DESC
+    LIMIT 10
+"""
+
+# Sobre la TABLA datasets: la vista _decisor no expone jurisdiccion_geo_codes.
+# Códigos DIVIPOLA: 2 dígitos = departamento, 5 = municipio → LEFT(code, 2).
+# DISTINCT obligatorio: un dataset multi-municipio del mismo dpto contaría doble.
+_PANORAMA_DEPT_SQL = f"""
+    SELECT LEFT(code, 2) AS codigo,
+           count(DISTINCT d.dataset_id) AS n_datasets
+    FROM datasets d
+    CROSS JOIN LATERAL jsonb_array_elements_text(d.jurisdiccion_geo_codes) AS code
+    WHERE d.jurisdiccion_geo_codes IS NOT NULL AND {_QUALITY}
+    GROUP BY 1
+    ORDER BY n_datasets DESC
+"""
+
+_PANORAMA_SIN_GEO_SQL = f"""
+    SELECT count(*) AS n
+    FROM datasets
+    WHERE jurisdiccion_geo_codes IS NULL AND {_QUALITY}
+"""
+
+# Caché módulo-level sin locks: peor caso bajo carga = cómputo duplicado,
+# aceptable. Se invalida por TTL, no por escritura (el ETL corre 1 vez/día).
+_PANORAMA_TTL = float(os.environ.get("PANORAMA_TTL_SECONDS", "300"))
+_panorama_cache: tuple[float, PanoramaStats] | None = None
+
+
+def _compute_panorama() -> PanoramaStats:
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(_PANORAMA_TOTALS_SQL)
+        totals = cur.fetchone()
+        if not totals:
+            raise HTTPException(status_code=500, detail="sin datos de catálogo")
+
+        cur.execute(_PANORAMA_SECTOR_SQL)
+        sectores = cur.fetchall()
+
+        cur.execute(_PANORAMA_DEPT_SQL)
+        dptos = cur.fetchall()
+
+        cur.execute(_PANORAMA_SIN_GEO_SQL)
+        sin_geo = cur.fetchone()
+
+    return PanoramaStats(
+        total=totals["total"],
+        n_entidades=totals["n_entidades"],
+        semaforo={
+            "verde": totals["verde"],
+            "amarillo": totals["amarillo"],
+            "rojo": totals["rojo"],
+            "desconocido": totals["desconocido"],
+        },
+        acceso={
+            "directo": totals["directo"],
+            "requiere_herramienta": totals["requiere_herramienta"],
+            "solo_metadatos": totals["solo_metadatos"],
+        },
+        por_sector=[SectorCount(**r) for r in sectores],
+        por_departamento=[
+            DeptCount(
+                codigo=r["codigo"],
+                nombre=_DEPT_NAMES[r["codigo"]],
+                n_datasets=r["n_datasets"],
+            )
+            # Defensivo: descartar códigos fuera del catálogo DIVIPOLA canónico.
+            for r in dptos
+            if r["codigo"] in _DEPT_NAMES
+        ],
+        nacional_sin_geo=(sin_geo or {}).get("n", 0),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.get("/stats/panorama", response_model=PanoramaStats)
+def panorama_stats() -> PanoramaStats:
+    """Panorama nacional para la home, cacheado con TTL en memoria."""
+    global _panorama_cache
+    now = time.monotonic()
+    if _panorama_cache is not None and (now - _panorama_cache[0]) < _PANORAMA_TTL:
+        return _panorama_cache[1]
+    stats = _compute_panorama()
+    _panorama_cache = (now, stats)
+    return stats
