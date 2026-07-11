@@ -123,7 +123,8 @@ def test_query_chips_subset_grande_sin_tipo_no_elige():
         assert data["total_in_subset"] == 50
         assert data["chosen_dataset_id"] is None
         assert data["suggested_chips"] is not None
-        assert "marcá" in (data["message"] or "").lower()
+        # Español Colombia (BRAND §1.3): "marca", sin voseo.
+        assert "marca otro chip" in (data["message"] or "").lower()
 
 
 def test_query_chips_con_tipo_marca_chosen():

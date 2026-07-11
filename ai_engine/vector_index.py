@@ -41,10 +41,13 @@ log = logging.getLogger(__name__)
 DEFAULT_MODEL = "intfloat/multilingual-e5-base"
 DEFAULT_COLLECTION = "datos_gov_co"
 DEFAULT_INDEX_PATH = Path("./data/vector_index")
-# Calibrado empíricamente sobre el catálogo completo de datos.gov.co (~8.000 datasets)
-# con e5-multilingual-base: queries reales producen top scores en [0.84, 0.89], queries
-# nonsense en [0.77, 0.81]. Threshold 0.83 separa ambos rangos sin falsos negativos.
-DEFAULT_MIN_SCORE = 0.83
+# Re-calibrado 2026-07-10 (medición sobre el índice real, 8.389 datasets, e5-base):
+# queries reales legítimas producen top scores en [0.833, 0.883]; nonsense y
+# fuera-de-dominio quedan en [0.79, 0.807]. El 0.83 anterior estaba al filo de
+# la navaja ("colegios en Boyacá" pasaba por 0.007) y en producción dejaba TODO
+# por fuera → dataset_hits vacío → el motor verificado nunca corría. 0.815 parte
+# la separación real entre ambas bandas. Ajustable sin redeploy vía VECTOR_MIN_SCORE.
+DEFAULT_MIN_SCORE = float(os.getenv("VECTOR_MIN_SCORE", "0.815"))
 
 
 @dataclass(frozen=True)

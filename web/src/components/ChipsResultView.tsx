@@ -74,6 +74,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     return isValidTipo(v) ? v : null;
   }, [filters.tipo]);
 
+  // COUNT(*) por defecto: si hay dataset elegido pero el usuario no marcó
+  // TIPO, ejecutamos "Cuántos" — siempre hay una cifra que mostrar en vez de
+  // tarjetas sin número (el conteo es la pregunta base de cualquier dataset).
+  const tipoEfectivo: ChipTipo | null = tipo ?? "Cuántos";
+
   // Cuando cambia el resultado, resetear narrativa.
   useEffect(() => {
     setExplain(null);
@@ -113,10 +118,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     }
   }
 
-  // Auto-execute cuando hay dataset elegido + TIPO marcado.
+  // Auto-execute cuando hay dataset elegido; sin TIPO marcado degrada a
+  // "Cuántos" (tipoEfectivo) para que siempre haya cifra, no tarjetas mudas.
   useEffect(() => {
     const dsId = data?.chosen_dataset_id;
-    if (!dsId || !tipo) {
+    if (!dsId || !tipoEfectivo) {
       setExec(null);
       setExecError(null);
       return;
@@ -129,7 +135,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
         const res = await fetch("/api/chips/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataset_id: dsId, tipo }),
+          body: JSON.stringify({ dataset_id: dsId, tipo: tipoEfectivo }),
         });
         if (!res.ok) {
           const txt = await res.text();
@@ -149,7 +155,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [data?.chosen_dataset_id, tipo]);
+  }, [data?.chosen_dataset_id, tipoEfectivo]);
 
   // (Se eliminó el scrollIntoView automático: movía el viewport sin acción del
   // usuario — anti-patrón de accesibilidad WCAG 2.4.3. El orden del DOM ya pone

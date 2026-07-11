@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 import httpx
@@ -396,7 +397,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     if not any([req.tema, req.tipo, req.territorio, req.entidad, req.refinador, req.subtags]):
         raise HTTPException(
             status_code=400,
-            detail="Marcá al menos un chip antes de buscar.",
+            detail="Marca al menos un chip antes de buscar.",
         )
 
     where_sql, params = _build_chips_where(
@@ -408,56 +409,84 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     )
 
     # Conteo + top-10
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
-            row = cur.fetchone()
-            total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
+    def _run(where_sql: str, params: list) -> tuple[int, list]:
+        """Conteo + top-10 con score compuesto para un WHERE dado."""
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
+                row = cur.fetchone()
+                total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
 
-        with conn.cursor() as cur:
-            # Score compuesto (A.2): view_count log-normalizado contra el max
-            # del subset + freshness lineal decay 2 años. Reemplaza ORDER BY
-            # crudo que elegía datasets popular-pero-viejos.
-            #
-            # Estructura CTE:
-            #   subset → todos los datasets que matchean los chips
-            #   stats  → max(view_count) del subset (constante para
-            #            normalización LN dentro del subset)
-            #
-            # max_view se calcula GREATEST(1) para que LN(0)=undefined no
-            # rompa, y NULLIF para que datasets sin view_count no propaguen
-            # NaN. last_updated NULL → freshness = 0.
-            cur.execute(
-                f"""
-                WITH subset AS (
-                  SELECT d.* FROM datasets d WHERE {where_sql}
-                ),
-                stats AS (
-                  SELECT GREATEST(MAX(view_count), 1) AS max_view FROM subset
+            with conn.cursor() as cur:
+                # Score compuesto (A.2): view_count log-normalizado contra el max
+                # del subset + freshness lineal decay 2 años. Reemplaza ORDER BY
+                # crudo que elegía datasets popular-pero-viejos.
+                #
+                # Estructura CTE:
+                #   subset → todos los datasets que matchean los chips
+                #   stats  → max(view_count) del subset (constante para
+                #            normalización LN dentro del subset)
+                #
+                # max_view se calcula GREATEST(1) para que LN(0)=undefined no
+                # rompa, y NULLIF para que datasets sin view_count no propaguen
+                # NaN. El COALESCE EXTERNO del término de popularidad es clave:
+                # si TODO el subset es federado sin view_count, max_view=1 →
+                # LN(1)=0 → NULLIF lo vuelve NULL y sin COALESCE el score entero
+                # quedaba NULL para todos (orden degradado a popularidad cruda).
+                cur.execute(
+                    f"""
+                    WITH subset AS (
+                      SELECT d.* FROM datasets d WHERE {where_sql}
+                    ),
+                    stats AS (
+                      SELECT GREATEST(MAX(view_count), 1) AS max_view FROM subset
+                    )
+                    SELECT s.dataset_id, s.name, s.entity_raw,
+                           s.category, s.row_count, s.view_count,
+                           s.rows_updated_at::text AS last_updated,
+                           s.socrata_url AS url, s.api_url,
+                           s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
+                           (
+                             COALESCE(
+                               %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
+                                     NULLIF(LN((SELECT max_view FROM stats)), 0)),
+                               0
+                             )
+                             +
+                             %s * GREATEST(0, 1 - LEAST(1,
+                                EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
+                                (%s * 2 * 86400)
+                             ))
+                           ) AS score
+                    FROM subset s
+                    ORDER BY score DESC NULLS LAST,
+                             s.view_count DESC NULLS LAST,
+                             s.rows_updated_at DESC NULLS LAST
+                    LIMIT 10
+                    """,
+                    params + [_SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS],
                 )
-                SELECT s.dataset_id, s.name, s.entity_raw,
-                       s.category, s.row_count, s.view_count,
-                       s.rows_updated_at::text AS last_updated,
-                       s.socrata_url AS url, s.api_url,
-                       s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
-                       (
-                         %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
-                               NULLIF(LN((SELECT max_view FROM stats)), 0))
-                         +
-                         %s * GREATEST(0, 1 - LEAST(1,
-                            EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
-                            (%s * 2 * 86400)
-                         ))
-                       ) AS score
-                FROM subset s
-                ORDER BY score DESC NULLS LAST,
-                         s.view_count DESC NULLS LAST,
-                         s.rows_updated_at DESC NULLS LAST
-                LIMIT 10
-                """,
-                params + [_SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS],
-            )
-            rows = cur.fetchall()
+                rows = cur.fetchall()
+        return total, rows
+
+    total, rows = _run(where_sql, params)
+
+    # Reintento sin refinador: el refinador (a menudo inventado por el mapper
+    # NL→chips) filtra por ILIKE literal y puede vaciar un subset perfectamente
+    # válido ("colegios" no aparece en datasets que dicen "Instituciones
+    # Educativas"). Antes esto era un callejón sin salida; ahora degradamos a
+    # los demás chips y se lo decimos al usuario.
+    refinador_ignorado = False
+    if total == 0 and req.refinador:
+        where_sql2, params2 = _build_chips_where(
+            tema=req.tema,
+            entidad=req.entidad,
+            territorio=req.territorio,
+            subtags=req.subtags,
+            refinador=None,
+        )
+        total, rows = _run(where_sql2, params2)
+        refinador_ignorado = total > 0
 
     candidates = [
         ChipsCandidateDataset(
@@ -485,14 +514,21 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     if req.force_dataset_id:
         chosen = req.force_dataset_id
     elif total == 0:
-        msg = "Ningún dataset coincide con esta combinación de chips. Probá quitar alguno."
+        msg = "Ningún dataset coincide con esta combinación de chips. Prueba quitar alguno."
     elif total <= 10 or req.tipo:
         # Subset manejable o usuario ya marcó TIPO → ejecutar
         chosen = candidates[0].dataset_id if candidates else None
     else:
         # Subset grande sin TIPO marcado → sugerir refinar
-        msg = f"Hay {total} datasets que coinciden. Marcá otro chip para verlos más específicos."
+        msg = f"Hay {total} datasets que coinciden. Marca otro chip para verlos más específicos."
         suggested = _suggest_chips(req)
+
+    if refinador_ignorado:
+        aviso = (
+            f'El texto "{req.refinador}" no coincidió con ningún dataset; '
+            "estos son los resultados sin ese filtro."
+        )
+        msg = f"{aviso} {msg}" if msg else aviso
 
     return ChipsQueryResponse(
         total_in_subset=total,
@@ -950,6 +986,26 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
 
 
 # ----------------------------------------------------------------------
+# Señales léxicas → TIPO. Orden = prioridad; "cuánt" es la más fuerte y
+# además la única que puede SOBREESCRIBIR al LLM (ver chips_from_nl).
+_TIPO_LEXICO: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bcu[aá]nt[oa]s?\b", re.IGNORECASE), "Cuántos"),
+    (re.compile(r"\b(comparar?|versus|vs\.?|frente a)\b", re.IGNORECASE), "Comparar"),
+    (re.compile(r"\b(ranking|top \d+|top\b|mayores|m[aá]s alt[oa]s)\b", re.IGNORECASE), "Ranking"),
+    (re.compile(r"\b(tendencia|evoluci[oó]n|hist[oó]rico|a lo largo)\b", re.IGNORECASE), "Tendencia"),
+    (re.compile(r"\b(mapa|d[oó]nde)\b", re.IGNORECASE), "Mapa"),
+]
+
+
+def _infer_tipo_lexico(q: str) -> str | None:
+    """TIPO por señal léxica inequívoca, o None si no hay ninguna."""
+    for pattern, tipo in _TIPO_LEXICO:
+        if pattern.search(q):
+            return tipo
+    return None
+
+
+# ----------------------------------------------------------------------
 # POST /api/v1/chips/from-nl (Hito 1 Fase 2 — mapper NL→chips)
 # ----------------------------------------------------------------------
 
@@ -975,6 +1031,18 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         "entidad": [{"value": opt.value, "label": opt.label} for opt in chips.entidad],
     }
     mapped = await map_nl_to_chips(req.q, available)
+
+    # Heurística léxica de TIPO (barata, determinista, corre después del LLM):
+    # "¿Cuántos…?" es señal inequívoca de conteo y el mapper LLM la pierde o
+    # la confunde con frecuencia (medido 2026-07-10: tipo=null o "Ranking"
+    # para preguntas de conteo). La señal fuerte SIEMPRE gana; las demás solo
+    # rellenan si el LLM no propuso tipo.
+    tipo_lexico = _infer_tipo_lexico(req.q)
+    if tipo_lexico == "Cuántos":
+        mapped["tipo"] = tipo_lexico
+    elif tipo_lexico and not mapped.get("tipo"):
+        mapped["tipo"] = tipo_lexico
+
     picked = sum(1 for v in mapped.values() if v is not None)
     emit_event(
         endpoint="from_nl",

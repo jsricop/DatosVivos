@@ -74,7 +74,7 @@ Modelo LLM de Alibaba, especializado en código y consultas estructuradas. **Def
 Modelo LLM de Meta. Alternativa de fallback considerada para narrativa en español. No es default; documentado como swap posible via `OLLAMA_MODEL`.
 
 ### sentence-transformers / multilingual-e5-large
-Modelo de embeddings multilingüe (Microsoft, familia `intfloat/multilingual-e5`) que mapea texto a vectores de **1024 dimensiones**. Lo usamos para el clasificador de intención (centroides) y el índice vectorial de datasets.
+Modelo de embeddings multilingüe (Microsoft, familia `intfloat/multilingual-e5`) que mapea texto a vectores de **768 dimensiones** (variante `base`). Lo usamos para el clasificador de intención (centroides) y el índice vectorial de datasets.
 
 ### ChromaDB
 Base de datos vectorial open-source. Persistencia en disco. Búsqueda por similitud coseno. Alternativa considerada: FAISS (ver ADR-005).
