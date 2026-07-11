@@ -22,7 +22,7 @@ export function Footer() {
               Inicio
             </Link>
             <Link href="/tablero" className="font-sans text-body-sm text-ink-2 focus-ring">
-              Detalle por entidad
+              Detalle entidad
             </Link>
             <Link href="/buscar" className="font-sans text-body-sm text-ink-2 focus-ring">
               Buscar
