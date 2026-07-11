@@ -337,8 +337,8 @@ Sustituyen a la iconografía cuando el contexto es textual:
 Footer minimal en cada vista, Plex Mono `caption`:
 
 ```
-Agencia Nacional de Infraestructura — Reto #07 MinTIC 2026
-Beta. Sin trackers. El modelo corre en una máquina del Estado.
+Agencia Nacional de Infraestructura — Datos al Ecosistema 2026 · Equipo 93 · Reto 7 (id 102)
+Beta. Sin trackers. Servicio sobre infraestructura del Estado.
 ```
 
 ---
@@ -457,7 +457,7 @@ La home es el nivel 1 de la arquitectura de información (panorama → `/tablero
 │                                                                 │
 │   ¿Cómo funciona y quién está detrás? → /acerca                 │
 ├─────────────────────────────────────────────────────────────────┤
-│   ANI — Reto #07 MinTIC 2026 · Beta · Sin trackers              │
+│   ANI — Datos al Ecosistema 2026 · Beta · Sin trackers          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -613,16 +613,16 @@ Si una propuesta viola alguna de estas reglas, se rechaza sin discusión. No req
 ## 12. Mantenimiento del documento
 
 - Este documento se cambia primero, el código después. No al revés.
-- Cualquier cambio requiere PR con razón documentada en `CHANGELOG.md` bajo "Brand".
+- Cualquier cambio requiere razón documentada en el mensaje del commit (prefijo `brand:`).
 - Decisiones estructurales (cambio de paleta, cambio de tipografía, cambio de wordmark) requieren ADR nuevo.
-- Decisiones tácticas (añadir un token, ajustar contraste de un acento, sumar un icono al MVP) no requieren ADR — pero deben quedar en `CHANGELOG.md`.
+- Decisiones tácticas (añadir un token, ajustar contraste de un acento, sumar un icono al MVP) no requieren ADR — pero deben quedar en el mensaje del commit.
 - Cada PR de `/web` que afecte estilos confirma en su descripción: *"Cumple BRAND.md §N"* citando las secciones tocadas.
 
 ### Referencias bidireccionales
 
 - [`README.md`](../README.md) — enlace en la tabla "Para el jurado MinTIC".
 - [`docs/architecture.md`](./architecture.md) — Capa 3 (Interfaz) cita este documento.
-- [`docs/accessibility.md`](./accessibility.md) — cruzar §3.4 (alto contraste) y §4.2 (escala tipográfica).
+- Accesibilidad — la página pública `/accesibilidad` y el `A11yPanel` implementan §3.4 (alto contraste) y §4.2 (escala tipográfica).
 - [`docs/adr/012-civic-editorial-design-system.md`](./adr/012-civic-editorial-design-system.md) — ADR que decide el sistema cuya implementación documenta este archivo.
 - ADR-011 — migración Streamlit→Next.js que habilita el rebranding (ADR temprano no conservado).
 - [`docs/crisp_mlq/00_index.md`](./crisp_mlq/00_index.md) — entrada del catálogo documental.

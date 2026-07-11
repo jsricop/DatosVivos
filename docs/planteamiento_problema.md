@@ -56,9 +56,15 @@ DatosVivos responde con una **arquitectura de información de tres niveles**:
    motor **NL2SQL (Text-to-SQL) con verificación determinista**: cada cifra sale de las
    filas reales del dataset citado, nunca se estima.
 
-El nivel avanzado se materializa en: integración de múltiples fuentes heterogéneas
-(6 portales, 3 protocolos), agente de IA para servicios públicos, IA generativa con
-verificación, y despliegue funcional en producción.
+El nivel avanzado se materializa —en los términos del propio TDR— en: **agente de IA
+para servicios públicos** que consulta y procesa datos abiertos de manera automática;
+**IA generativa** (sistema conversacional basado en datos abiertos con **modelos de
+lenguaje** y **arquitectura híbrida** generación+verificación); **integración de
+grandes volúmenes de datos** (25.192 datasets de 6 fuentes heterogéneas, estructurados
+y no estructurados, con 29 variables curadas por dataset); y **automatización,
+escalabilidad y despliegue funcional** en producción. La solución es aplicable,
+implementable y escalable, y apunta a la **toma de decisiones basada en evidencia** y
+a la **apropiación ciudadana del ecosistema digital** — el impacto declarado del Reto 7.
 
 ## Documentos relacionados
 

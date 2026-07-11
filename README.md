@@ -92,6 +92,19 @@ Organizado por nivel del producto (nivel avanzado del TDR):
 - Backend LLM intercambiable (`LLM_BACKEND = ollama | anthropic`).
 → Metodología CRISP-ML adaptada: [docs/marco_metodologico.md](docs/marco_metodologico.md)
 
+## Por qué Nivel Avanzado (con la letra del TDR)
+
+| El TDR (Nivel Avanzado) exige | DatosVivos lo cumple con |
+|---|---|
+| **Agentes de IA para servicios públicos** que consulten y procesen datos abiertos automáticamente | El agente consulta, cruza y procesa el catálogo para responder solicitudes ciudadanas |
+| **IA generativa** para asistentes y **sistemas conversacionales basados en datos abiertos** | Buscador en lenguaje natural con motor **NL2SQL / Text-to-SQL** generativo verificado |
+| **Modelos de lenguaje** y **arquitecturas híbridas** | LLM + verificación determinista de 3 capas ("la IA razona, el motor verifica") + embeddings neuronales de retrieval |
+| **Integración de grandes volúmenes de datos**, múltiples fuentes | **25.192 datasets** de 6 portales y 3 protocolos (Socrata, CKAN, DCAT) — muy por encima de los 3-10 conjuntos del nivel intermedio |
+| **Datos estructurados y no estructurados** | Metadata estructurada + texto libre (títulos, descripciones) procesado con embeddings y clasificadores |
+| Más variables que el nivel intermedio (10-20) | **29 variables curadas por dataset** en la vista analítica (sobre 42 columnas fuente) |
+| **Automatización, escalabilidad y despliegue funcional** | Actualización diaria automática, arquitectura agnóstica del portal, **en producción** en datosvivos.co |
+| IA **pertinente, aplicable, interpretable y con aporte real** (no superficial) | Cada componente de IA resuelve un problema concreto y es auditable: la verificación es código, la clasificación es reproducible, cada cifra cita su fuente |
+
 ## Resultados clave
 
 1. **Integración única**: nadie más consolida los portales federados territoriales de

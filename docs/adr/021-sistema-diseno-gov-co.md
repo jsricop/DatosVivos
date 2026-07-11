@@ -12,8 +12,8 @@ en la práctica leía como **periodismo de datos / think-tank**, no como un serv
 oficial del Estado — y esa estética editorial-minimal se confundía con el look
 genérico "hecho por IA" que el proyecto quería evitar desde el principio.
 
-DatosVivos **es** una propiedad del Estado colombiano (datos.gov.co, ANI, Reto #07
-MinTIC). Para el ciudadano, *parecerse a gov.co* es señal directa de legitimidad y
+DatosVivos **es** una propiedad del Estado colombiano (datos.gov.co, ANI, concurso Datos al
+Ecosistema 2026 de MinTIC). Para el ciudadano, *parecerse a gov.co* es señal directa de legitimidad y
 confianza. Colombia tiene un **Sistema de Diseño gov.co** oficial (Kit UI v9.2,
 MinTIC) con paleta y tipografía definidas.
 

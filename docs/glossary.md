@@ -162,8 +162,8 @@ Logger best-effort en `ai_engine/telemetry.py`. Persiste cada consulta en `data/
 ### Datos al Ecosistema 2026
 Concurso de MinTIC para impulsar el uso de datos abiertos con IA. Cierre: 13 julio 2026. Sustentación: 14-17 julio. Finalistas: 24 julio. Final presencial: 1ra semana agosto.
 
-### Reto #07
-"Innovación y Tecnología: Diseñar asistentes virtuales que faciliten el acceso ciudadano a datos abiertos". Es el reto en el que participa DatosVivos.
+### Reto 7 (id 102) — Innovación y Tecnología
+"Diseñar asistentes virtuales que faciliten el acceso ciudadano a datos abiertos". Es el reto en el que participa DatosVivos: Equipo 93, Nivel Avanzado.
 
 ### ANI
 Agencia Nacional de Infraestructura. Entidad para la cual trabaja el equipo. La Oficina de Tecnología lidera DatosVivos.

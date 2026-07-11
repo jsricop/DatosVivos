@@ -47,5 +47,5 @@ Direcciones alternativas evaluadas y descartadas:
 
 - [`docs/BRAND.md`](../BRAND.md) — documento operativo del sistema, fuente de verdad
 - ADR-011 — migración Streamlit→Next.js que habilita el sistema (ADR temprano no conservado)
-- [`docs/accessibility.md`](../accessibility.md) — cruza con §3.4 (alto contraste) y §4.2 (escala tipográfica)
+- Accesibilidad — implementada en la página pública `/accesibilidad` (§3.4 alto contraste, §4.2 escala tipográfica)
 - [`docs/crisp_mlq/05_evaluation.md`](../crisp_mlq/05_evaluation.md) — criterios de evaluación visual (no-AI look, WCAG AA en 3 modos)
