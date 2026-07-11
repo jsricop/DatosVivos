@@ -403,3 +403,27 @@ details[open] > summary::before {
 details > summary::-webkit-details-marker {
   display: none;
 }
+
+/* ---------------------------------------------------------------------
+   Revelado de datos — SOLO home panorama (ADR-023, BRAND.md §11.6).
+   Progresivo y a prueba de no-JS: el estado POR DEFECTO es el final
+   (visible). El hook useRevealOnce añade `.is-pending` al hidratar y la
+   quita al entrar al viewport — sin JS nunca se añade y el contenido se
+   ve completo. --duration-reveal colapsa a 0ms con prefers-reduced-motion
+   (tokens.css), volviendo estas clases no-op para ese usuario.
+   -------------------------------------------------------------------- */
+.reveal-bar {
+  transform: scaleX(1);
+  transform-origin: left;
+  transition: transform var(--duration-reveal) var(--easing-standard);
+}
+.reveal-bar.is-pending {
+  transform: scaleX(0);
+}
+.reveal-fade {
+  opacity: 1;
+  transition: opacity var(--duration-reveal) var(--easing-standard);
+}
+.reveal-fade.is-pending {
+  opacity: 0;
+}

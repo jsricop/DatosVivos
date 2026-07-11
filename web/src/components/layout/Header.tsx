@@ -25,16 +25,16 @@ export function Header() {
           className="flex items-center gap-6"
         >
           <Link
-            href="/buscar"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Buscar
-          </Link>
-          <Link
             href="/tablero"
             className="font-sans text-body-sm text-ink-2 focus-ring"
           >
             Tablero
+          </Link>
+          <Link
+            href="/buscar"
+            className="font-sans text-body-sm text-ink-2 focus-ring"
+          >
+            Buscar
           </Link>
           <Link
             href="/acerca"

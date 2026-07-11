@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getEmbedHeight, getEmbedUrl, isEmbedConfigured } from "@/lib/embed";
 
 export const metadata: Metadata = {
   title: "Tablero del catálogo",
   description:
-    "Estado y salud del catálogo de datos abiertos del Estado colombiano: orígenes, acceso, actualización y cobertura. Fuente: datos.gov.co.",
+    "El detalle del panorama de datos abiertos de Colombia: explora el catálogo por sector, entidad y territorio con filtros interactivos. Fuente: datos.gov.co.",
   alternates: { canonical: "/tablero" },
   openGraph: {
     type: "website",
     url: "/tablero",
     title: "Tablero del catálogo · DatosVivos",
     description:
-      "Analítica en vivo del catálogo de datos abiertos de Colombia: orígenes, acceso, actualización y cobertura.",
+      "Explora el catálogo de datos abiertos de Colombia por sector, entidad y territorio con filtros interactivos.",
   },
 };
 
@@ -29,11 +30,17 @@ export default function TableroPage() {
     <div className="container-narrow flex flex-col gap-6 py-8">
       <header className="pb-4 hairline-bottom">
         <span className="text-kicker">Tablero</span>
-        <h1 className="m-0 mt-2 font-sans text-h1">Analítica del catálogo</h1>
+        <h1 className="m-0 mt-2 font-sans text-h1">
+          El detalle, por sector y entidad
+        </h1>
         <p className="m-0 mt-2 max-w-[62ch] font-sans text-body text-ink-2 leading-relaxed">
-          Estado y salud del catálogo de datos abiertos del Estado colombiano —
-          orígenes, acceso, frescura y cobertura. Datos agregados del catálogo
-          público de{" "}
+          Explora el catálogo de datos abiertos con filtros interactivos:
+          salud y frescura, uso, y cobertura territorial — por sector, entidad,
+          tipo de acceso y territorio. La visión nacional resumida está en la{" "}
+          <Link href="/" className="focus-ring">
+            página principal
+          </Link>
+          ; la fuente es el catálogo público de{" "}
           <a
             href="https://www.datos.gov.co"
             target="_blank"

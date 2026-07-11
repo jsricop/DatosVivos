@@ -128,3 +128,33 @@ export type CatalogStats = {
   util: number;
   admin: number;
 };
+
+/** Agregado por sector administrativo (solo datasets con sector conocido). */
+export type SectorCount = {
+  sector: string;
+  n_datasets: number;
+  n_entidades: number;
+};
+
+/** Agregado por departamento DIVIPOLA. */
+export type DeptCount = {
+  codigo: string;
+  nombre: string;
+  n_datasets: number;
+};
+
+/**
+ * GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
+ * Todas las cifras con filtro de calidad (catálogo ÚTIL): `total` aquí es
+ * menor que el de CatalogStats (inventario bruto). Es deliberado.
+ */
+export type PanoramaStats = {
+  total: number;
+  n_entidades: number;
+  semaforo: Record<"verde" | "amarillo" | "rojo" | "desconocido", number>;
+  acceso: Record<"directo" | "requiere_herramienta" | "solo_metadatos", number>;
+  por_sector: SectorCount[];
+  por_departamento: DeptCount[];
+  nacional_sin_geo: number;
+  generated_at: string;
+};

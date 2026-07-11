@@ -38,8 +38,8 @@ export default async function AcercaPage() {
         </header>
 
         <P>
-          DatosVivos es un agente civil de datos del Estado colombiano.
-          Funciona sobre{" "}
+          DatosVivos muestra el estado de los datos abiertos del Estado
+          colombiano. Funciona sobre{" "}
           <a
             href="https://www.datos.gov.co"
             target="_blank"
@@ -48,16 +48,25 @@ export default async function AcercaPage() {
           >
             datos.gov.co
           </a>
-          {" "}— el portal de datos abiertos operado por MinTIC con{" "}
-          {totalDatasets} datasets publicados por entidades nacionales y
-          territoriales.
+          {" "}— el portal operado por MinTIC con {totalDatasets} datasets de
+          entidades nacionales y territoriales — en tres niveles: el{" "}
+          <Link href="/" className="focus-ring">
+            panorama nacional
+          </Link>{" "}
+          con cifras en vivo, el{" "}
+          <Link href="/tablero" className="focus-ring">
+            tablero interactivo
+          </Link>{" "}
+          para explorar por sector y entidad, y el{" "}
+          <Link href="/buscar" className="focus-ring">
+            buscador
+          </Link>{" "}
+          para preguntar en lenguaje natural.
         </P>
         <P>
-          Una persona pregunta en su idioma — el del barrio, el del trabajo,
-          el del periódico — y el agente responde ejecutando consultas reales
-          contra el catálogo. Cada cifra está calculada con{" "}
-          <code className="font-mono">pandas</code> sobre las filas devueltas
-          por el dataset citado.
+          Sin registro y sin rastreadores. Cada cifra del buscador está
+          calculada con <code className="font-mono">pandas</code> sobre las
+          filas reales del dataset citado — nunca estimada.
         </P>
 
         <section className="mt-6">

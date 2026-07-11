@@ -17,6 +17,9 @@ export function Footer() {
             aria-label="Enlaces del pie de página"
             className="flex flex-wrap gap-x-6 gap-y-2"
           >
+            <Link href="/tablero" className="font-sans text-body-sm text-ink-2 focus-ring">
+              Tablero
+            </Link>
             <Link href="/buscar" className="font-sans text-body-sm text-ink-2 focus-ring">
               Buscar
             </Link>
@@ -38,7 +41,7 @@ export function Footer() {
           </nav>
         </div>
         <p className="m-0 font-mono text-caption text-ink-muted">
-          Beta · Sin trackers · El modelo corre en una máquina del Estado
+          Beta · Sin trackers · Servicio sobre infraestructura del Estado
         </p>
       </div>
     </footer>

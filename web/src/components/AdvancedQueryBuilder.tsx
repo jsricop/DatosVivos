@@ -32,7 +32,7 @@ const AXIS_HINT: Record<Axis, string> = {
  *
  * En la versión final es la entrada SECUNDARIA (power users): vive colapsado en
  * un `<details>` al pie de la home. La entrada primaria es el lenguaje natural
- * (`HomeSearchPanel`/`HeroSearch`). El motor determinista de chips se conserva
+ * (`SearchPanel`/`HeroSearch`). El motor determinista de chips se conserva
  * intacto — solo cambia su jerarquía visual.
  */
 export function AdvancedQueryBuilder({ chips }: AdvancedQueryBuilderProps) {

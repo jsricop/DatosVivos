@@ -265,6 +265,9 @@
 :root {
   --duration-fast: 120ms;
   --duration-medium: 200ms;
+  /* Revelado de datos en la home panorama (ADR-023, BRAND.md §11.6).
+     Solo lo usan los componentes de web/src/components/panorama/. */
+  --duration-reveal: 700ms;
   --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -272,5 +275,6 @@
   :root {
     --duration-fast: 0ms;
     --duration-medium: 0ms;
+    --duration-reveal: 0ms;
   }
 }

@@ -16,14 +16,14 @@ const EXAMPLES = [
 ];
 
 /**
- * Entrada PRIMARIA de la home (versión final): búsqueda en lenguaje natural.
+ * Panel de búsqueda de /buscar (antes vivía en la home; ADR-023 movió la
+ * búsqueda al nivel 3 de la arquitectura de información).
  *
- * La caja de texto es lo primero y más prominente (cumple el tagline). El
- * submit prioriza el mapper NL→chips → motor determinista (ver `HeroSearch`).
- * La voz es de primera clase (visible, no escondida). El constructor de chips
- * es secundario y vive colapsado al pie (`AdvancedQueryBuilder`).
+ * La caja de texto es lo primero y más prominente. El submit prioriza el
+ * mapper NL→chips → motor determinista (ver `HeroSearch`). La voz es de
+ * primera clase (visible, no escondida).
  */
-export function HomeSearchPanel() {
+export function SearchPanel() {
   const [seed, setSeed] = useState("");
 
   return (

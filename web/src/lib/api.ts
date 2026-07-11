@@ -13,6 +13,7 @@
 import type {
   CatalogStats,
   DatasetMetadata,
+  PanoramaStats,
   PopularQuery,
   SuggestOption,
 } from "@/lib/types";
@@ -85,6 +86,19 @@ export async function fetchPopular(limit = 5): Promise<PopularQuery[]> {
 export async function fetchCatalogStats(): Promise<CatalogStats | null> {
   try {
     return await getJson<CatalogStats>("/stats/catalog");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Panorama nacional para la home (ADR-023): totales, semáforo, acceso,
+ * por sector y por departamento. Cacheado server-side en la API (TTL 5 min).
+ * Si el backend no responde, devuelve null y la home degrada sin romperse.
+ */
+export async function fetchPanoramaStats(): Promise<PanoramaStats | null> {
+  try {
+    return await getJson<PanoramaStats>("/stats/panorama");
   } catch {
     return null;
   }
