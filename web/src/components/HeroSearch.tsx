@@ -118,11 +118,12 @@ export function HeroSearch({
             entidad?: string | null;
             refinador?: string | null;
           };
-          // Aceptamos el mapeo si hay al menos UN chip inferido —
-          // basta TIPO o TEMA para activar el flujo de chips.
-          const hasAnyChip =
-            !!(j.tema || j.tipo || j.territorio || j.entidad);
-          if (hasAnyChip) {
+          // Aceptamos el mapeo solo si hay al menos UN chip de CONTENIDO
+          // (tema/territorio/entidad). TIPO solo no dice CUÁL dataset:
+          // "Cuántos" a secas contaría el top-1 global (arbitrario) — ese
+          // caso va mejor por el camino generativo con la pregunta completa.
+          const hasContentChip = !!(j.tema || j.territorio || j.entidad);
+          if (hasContentChip) {
             chipsParams = new URLSearchParams();
             if (j.tema) chipsParams.set("tema", j.tema);
             if (j.tipo) chipsParams.set("tipo", j.tipo);
