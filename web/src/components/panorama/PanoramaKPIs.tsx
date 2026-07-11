@@ -19,19 +19,19 @@ export function PanoramaKPIs({ stats }: { stats: PanoramaStats }) {
     stats.total > 0 ? (100 * consultables) / stats.total : 0;
 
   const cards: Array<{ label: string; value: number; format: (n: number) => string; hint?: string }> = [
-    { label: "Datasets útiles", value: stats.total, format: fmtInt },
+    { label: "Datasets en el catálogo", value: stats.total, format: fmtInt },
     { label: "Entidades publicadoras", value: stats.n_entidades, format: fmtInt },
     {
-      label: "Actualizados a tiempo",
+      label: "Actualizados al día",
       value: pctFrescos,
       format: fmtPct,
-      hint: "frente a su propia frecuencia declarada",
+      hint: "según la frecuencia que cada entidad declara",
     },
     {
       label: "Consultables como tabla",
       value: pctConsultables,
       format: fmtPct,
-      hint: "API directa o con herramienta",
+      hint: "en línea o descargando el archivo",
     },
   ];
 

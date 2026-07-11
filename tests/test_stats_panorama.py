@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 #   execute(sector)   → fetchall
 #   execute(dpto)     → fetchall
 #   execute(sin_geo)  → fetchone
+#   execute(portal)   → fetchall
 _TOTALS = {
     "total": 100,
     "n_entidades": 40,
@@ -38,6 +39,7 @@ _TOTALS = {
     "directo": 60,
     "requiere_herramienta": 25,
     "solo_metadatos": 15,
+    "administrativos": 12,
 }
 _SECTORES = [
     {"sector": "Salud", "n_datasets": 30, "n_entidades": 12},
@@ -49,12 +51,16 @@ _DPTOS = [
     {"codigo": "ZZ", "n_datasets": 3},  # código basura → debe descartarse
 ]
 _SIN_GEO = {"n": 35}
+_PORTALES = [
+    {"portal": "datos.gov.co", "n_datasets": 80},
+    {"portal": "datosabiertos.bogota.gov.co", "n_datasets": 20},
+]
 
 
 def _mock_conn():
     cur = MagicMock()
     cur.fetchone.side_effect = [_TOTALS, _SIN_GEO]
-    cur.fetchall.side_effect = [_SECTORES, _DPTOS]
+    cur.fetchall.side_effect = [_SECTORES, _DPTOS, _PORTALES]
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
     conn.cursor.return_value.__exit__.return_value = False
@@ -90,6 +96,10 @@ def test_panorama_shape_y_semantica():
     assert body["total"] == 100
     assert body["n_entidades"] == 40
 
+    # Composición: temáticos + administrativos == total.
+    assert body["composicion"] == {"tematicos": 88, "administrativos": 12}
+    assert sum(body["composicion"].values()) == body["total"]
+
     # Semáforo completo y consistente: suma == total.
     assert set(body["semaforo"]) == {"verde", "amarillo", "rojo", "desconocido"}
     assert sum(body["semaforo"].values()) == body["total"]
@@ -102,6 +112,8 @@ def test_panorama_shape_y_semantica():
         "n_datasets": 30,
         "n_entidades": 12,
     }
+    assert body["por_portal"][0] == {"portal": "datos.gov.co", "n_datasets": 80}
+    assert sum(p["n_datasets"] for p in body["por_portal"]) == body["total"]
     assert body["nacional_sin_geo"] == 35
     assert body["generated_at"]  # ISO no vacío
 

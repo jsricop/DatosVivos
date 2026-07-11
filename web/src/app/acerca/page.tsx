@@ -39,7 +39,7 @@ export default async function AcercaPage() {
 
         <P>
           DatosVivos muestra el estado de los datos abiertos del Estado
-          colombiano. Funciona sobre{" "}
+          colombiano. Integra en un solo catálogo el portal nacional{" "}
           <a
             href="https://www.datos.gov.co"
             target="_blank"
@@ -48,8 +48,10 @@ export default async function AcercaPage() {
           >
             datos.gov.co
           </a>
-          {" "}— el portal operado por MinTIC con {totalDatasets} datasets de
-          entidades nacionales y territoriales — en tres niveles: el{" "}
+          {" "}(operado por MinTIC) y los portales territoriales de Bogotá,
+          Cali, Medellín y Valle del Cauca — {totalDatasets} datasets de
+          entidades nacionales y territoriales — y lo presenta en tres
+          niveles: el{" "}
           <Link href="/" className="focus-ring">
             panorama nacional
           </Link>{" "}
@@ -64,26 +66,25 @@ export default async function AcercaPage() {
           para preguntar en lenguaje natural.
         </P>
         <P>
-          Sin registro y sin rastreadores. Cada cifra del buscador está
-          calculada con <code className="font-mono">pandas</code> sobre las
-          filas reales del dataset citado — nunca estimada.
+          Sin registro y sin rastreadores. Cada cifra del buscador se calcula
+          sobre las filas reales del dataset citado — nunca se estima.
         </P>
 
         <section className="mt-6">
           <Pilar
             number="01"
             title="Soberanía"
-            body="El servicio corre sobre infraestructura del Estado: la VM productiva está bajo la VPN estatal y la telemetría ciudadana es anónima. Los datos son públicos y del Estado colombiano."
+            body="El servicio corre sobre infraestructura del Estado colombiano y las estadísticas de uso son anónimas. Los datos que se consultan son públicos."
           />
           <Pilar
             number="02"
             title="Verificabilidad"
-            body="Cada respuesta enumera los datasets consultados con su ID, su página humana en datos.gov.co y su endpoint JSON SODA. Cero cifras inventadas: si el modelo intenta colar un número fuera de la lista calculada por pandas, esa oración se censura antes de mostrarse."
+            body="Cada respuesta enumera los datasets consultados, con enlace a su página oficial en el portal de origen. Cero cifras inventadas: cada número sale de las filas reales del dataset; si un número no se puede calcular a partir de ellas, no se muestra."
           />
           <Pilar
             number="03"
             title="Interoperabilidad"
-            body="Las cuatro herramientas internas (search_datasets, get_metadata, query_data, cross_datasets) se exponen como MCP Server estándar. Cualquier cliente MCP (Claude Desktop, Cursor, agentes Gemini, otros) puede consumirlas sin pasar por esta interfaz."
+            body="Las herramientas internas del agente se publican con el estándar abierto MCP, de modo que otros sistemas y asistentes de IA pueden consultar el catálogo directamente, sin pasar por esta página."
           />
         </section>
 

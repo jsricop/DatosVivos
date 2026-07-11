@@ -308,20 +308,28 @@ class DeptCount(BaseModel):
     n_datasets: int
 
 
+class PortalCount(BaseModel):
+    """Agregado por portal de origen del catálogo integrado."""
+
+    portal: str                     # hostname ("datos.gov.co", "datos.cali.gov.co", ...)
+    n_datasets: int
+
+
 class PanoramaStats(BaseModel):
     """GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
 
-    TODAS las cifras usan el filtro de calidad estándar (quality_flag NULL/'ok'),
-    el mismo de los chips: miden el catálogo ÚTIL para consulta. Por eso `total`
-    aquí es menor que el de /stats/catalog (inventario bruto). Documentado en
-    ADR-023 — no es inconsistencia, no "corregir".
+    Línea editorial sobre el CATÁLOGO COMPLETO (decisión 2026-07-10): `total`
+    coincide con /stats/catalog. La división temáticos/administrativos
+    (Ley 1712) se expone en `composicion` como una dimensión más del panorama.
     """
 
-    total: int                      # datasets útiles
-    n_entidades: int                # entidades distintas con datasets útiles
+    total: int                      # todos los datasets del catálogo
+    n_entidades: int                # entidades distintas que publican
+    composicion: dict[str, int]     # tematicos / administrativos (Ley 1712)
     semaforo: dict[str, int]        # verde / amarillo / rojo / desconocido
     acceso: dict[str, int]          # directo / requiere_herramienta / solo_metadatos
     por_sector: list[SectorCount]   # top 10 por n_datasets
     por_departamento: list[DeptCount]  # hasta 33, orden n_datasets desc
-    nacional_sin_geo: int           # útiles sin códigos DIVIPOLA (alcance nacional)
+    por_portal: list[PortalCount]   # catálogo integrado: nacional + territoriales
+    nacional_sin_geo: int           # sin códigos DIVIPOLA (alcance nacional)
     generated_at: str               # ISO del momento de cómputo (caché TTL)

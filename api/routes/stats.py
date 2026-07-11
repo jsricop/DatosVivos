@@ -22,7 +22,13 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from psycopg.rows import dict_row
 
-from api.models.schemas import CatalogStats, DeptCount, PanoramaStats, SectorCount
+from api.models.schemas import (
+    CatalogStats,
+    DeptCount,
+    PanoramaStats,
+    PortalCount,
+    SectorCount,
+)
 from api.routes.divipola import _DEPT_NAMES
 
 router = APIRouter()
@@ -67,11 +73,11 @@ def catalog_stats() -> CatalogStats:
 # Panorama nacional (ADR-023)
 # ----------------------------------------------------------------------
 
-# Filtro de calidad estándar (el mismo de chips.py): el panorama mide el
-# catálogo ÚTIL, no el inventario bruto. Por eso total < /stats/catalog.
-_QUALITY = "(quality_flag IS NULL OR quality_flag = 'ok')"
+# Línea editorial sobre el CATÁLOGO COMPLETO (decisión 2026-07-10): mismos
+# totales que /stats/catalog. La composición temáticos/administrativos se
+# muestra como una dimensión más (Ley 1712), no como filtro previo.
 
-_PANORAMA_TOTALS_SQL = f"""
+_PANORAMA_TOTALS_SQL = """
     SELECT
         count(*)                                                      AS total,
         count(DISTINCT entity_id)                                     AS n_entidades,
@@ -82,19 +88,19 @@ _PANORAMA_TOTALS_SQL = f"""
                             OR status IS NULL)                        AS desconocido,
         count(*) FILTER (WHERE acceso_datos = 'directo')              AS directo,
         count(*) FILTER (WHERE acceso_datos = 'requiere_herramienta') AS requiere_herramienta,
-        count(*) FILTER (WHERE acceso_datos = 'solo_metadatos')       AS solo_metadatos
+        count(*) FILTER (WHERE acceso_datos = 'solo_metadatos')       AS solo_metadatos,
+        count(*) FILTER (WHERE quality_flag = 'admin_only')           AS administrativos
     FROM v_dataset_status_decisor
-    WHERE {_QUALITY}
 """
 
 # Federados de datos.gov.co no declaran sector (0% cobertura) → quedan fuera;
-# el frontend lo anota como "de los N datasets con sector conocido".
-_PANORAMA_SECTOR_SQL = f"""
+# el frontend lo anota como "entre los que declaran sector".
+_PANORAMA_SECTOR_SQL = """
     SELECT sector,
            count(*)                  AS n_datasets,
            count(DISTINCT entity_id) AS n_entidades
     FROM v_dataset_status_decisor
-    WHERE sector IS NOT NULL AND sector != '' AND {_QUALITY}
+    WHERE sector IS NOT NULL AND sector != ''
     GROUP BY sector
     ORDER BY n_datasets DESC
     LIMIT 10
@@ -103,20 +109,31 @@ _PANORAMA_SECTOR_SQL = f"""
 # Sobre la TABLA datasets: la vista _decisor no expone jurisdiccion_geo_codes.
 # Códigos DIVIPOLA: 2 dígitos = departamento, 5 = municipio → LEFT(code, 2).
 # DISTINCT obligatorio: un dataset multi-municipio del mismo dpto contaría doble.
-_PANORAMA_DEPT_SQL = f"""
+_PANORAMA_DEPT_SQL = """
     SELECT LEFT(code, 2) AS codigo,
            count(DISTINCT d.dataset_id) AS n_datasets
     FROM datasets d
     CROSS JOIN LATERAL jsonb_array_elements_text(d.jurisdiccion_geo_codes) AS code
-    WHERE d.jurisdiccion_geo_codes IS NOT NULL AND {_QUALITY}
+    WHERE d.jurisdiccion_geo_codes IS NOT NULL
     GROUP BY 1
     ORDER BY n_datasets DESC
 """
 
-_PANORAMA_SIN_GEO_SQL = f"""
+_PANORAMA_SIN_GEO_SQL = """
     SELECT count(*) AS n
     FROM datasets
-    WHERE jurisdiccion_geo_codes IS NULL AND {_QUALITY}
+    WHERE jurisdiccion_geo_codes IS NULL
+"""
+
+# Portales de origen del catálogo integrado. NULL = filas ingestadas vía la
+# Discovery API de datos.gov.co antes de que existiera la columna → se
+# atribuyen a datos.gov.co (los harvesters CKAN/DCAT siempre la setean).
+_PANORAMA_PORTAL_SQL = """
+    SELECT COALESCE(source_portal, 'datos.gov.co') AS portal,
+           count(*) AS n_datasets
+    FROM datasets
+    GROUP BY 1
+    ORDER BY n_datasets DESC
 """
 
 # Caché módulo-level sin locks: peor caso bajo carga = cómputo duplicado,
@@ -141,9 +158,16 @@ def _compute_panorama() -> PanoramaStats:
         cur.execute(_PANORAMA_SIN_GEO_SQL)
         sin_geo = cur.fetchone()
 
+        cur.execute(_PANORAMA_PORTAL_SQL)
+        portales = cur.fetchall()
+
     return PanoramaStats(
         total=totals["total"],
         n_entidades=totals["n_entidades"],
+        composicion={
+            "tematicos": totals["total"] - totals["administrativos"],
+            "administrativos": totals["administrativos"],
+        },
         semaforo={
             "verde": totals["verde"],
             "amarillo": totals["amarillo"],
@@ -166,6 +190,7 @@ def _compute_panorama() -> PanoramaStats:
             for r in dptos
             if r["codigo"] in _DEPT_NAMES
         ],
+        por_portal=[PortalCount(**r) for r in portales],
         nacional_sin_geo=(sin_geo or {}).get("n", 0),
         generated_at=datetime.now(timezone.utc).isoformat(),
     )

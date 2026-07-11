@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "DatosVivos — Datos del Estado, en tus palabras",
     short_name: "DatosVivos",
     description:
-      "El panorama de los datos abiertos de Colombia: cifras en vivo del catálogo de datos.gov.co, tablero interactivo por sector y entidad, y consultas en lenguaje natural con fuente verificable.",
+      "El panorama de los datos abiertos de Colombia: cifras en vivo del catálogo que integra datos.gov.co y los portales territoriales, tablero interactivo por sector y entidad, y consultas en lenguaje natural con fuente verificable.",
     start_url: "/",
     display: "standalone",
     background_color: "#FFFFFF",

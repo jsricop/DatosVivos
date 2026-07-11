@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BarList } from "@/components/panorama/BarList";
 import { PanoramaKPIs } from "@/components/panorama/PanoramaKPIs";
 import { PanoramaMapLazy } from "@/components/panorama/PanoramaMapLazy";
-import { SectorBars } from "@/components/panorama/SectorBars";
 import { StackedBar } from "@/components/panorama/StackedBar";
 import { fetchPanoramaStats } from "@/lib/api";
 import type { PanoramaStats } from "@/lib/types";
 
 export const metadata: Metadata = {
   description:
-    "El panorama de los datos abiertos de Colombia: cuántos datasets hay, qué entidades publican, qué tan actualizados están y cómo acceder a ellos. Explora el detalle o pregunta en tus palabras.",
+    "El panorama de los datos abiertos de Colombia: cuántos datasets hay, qué entidades publican, qué tan actualizados están y cómo consultarlos. Un solo catálogo que integra datos.gov.co y los portales territoriales.",
 };
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,8 @@ export const revalidate = 0;
  * Home panorama (ADR-023): nivel 1 de la arquitectura de información.
  * Panorama nacional → /tablero (detalle por sector/entidad) → /buscar (dato
  * puntual). Cero cajas de búsqueda aquí: la búsqueda es un CTA.
+ * Línea editorial sobre el CATÁLOGO COMPLETO (temáticos + administrativos);
+ * la composición se muestra como una gráfica más.
  */
 export default async function HomePage() {
   const stats = await fetchPanoramaStats();
@@ -33,9 +35,10 @@ export default async function HomePage() {
           El panorama de los datos abiertos de Colombia
         </h1>
         <p className="m-0 max-w-[58ch] font-sans text-body-lg text-ink-2 leading-[1.5]">
-          Cuántos datasets públicos hay, qué entidades los publican, qué tan
-          actualizados están y cómo acceder a ellos. Cifras en vivo del
-          catálogo oficial de datos.gov.co.
+          Cuántos datos públicos existen, qué entidades los publican, qué tan
+          actualizados están y cómo consultarlos. Un solo catálogo, en vivo,
+          que integra el portal nacional datos.gov.co con los portales
+          territoriales de Bogotá, Cali, Medellín y Valle del Cauca.
         </p>
       </section>
 
@@ -46,8 +49,17 @@ export default async function HomePage() {
           {/* Gráficas de panorama: agregados nacionales, sin filtros — el
               corte interactivo por entidad/sector vive en /tablero. */}
           <div className="grid gap-8 md:grid-cols-2">
-            <PanelCard title="Datasets por sector" note={sectorNote(stats)}>
-              <SectorBars sectores={stats.por_sector} />
+            <PanelCard
+              title="Datasets por sector"
+              note="Los 10 sectores con más datasets, entre los que declaran sector. Junto a cada barra: número de datasets y cuántas entidades publican en ese sector."
+            >
+              <BarList
+                items={stats.por_sector.map((s) => ({
+                  label: s.sector,
+                  value: s.n_datasets,
+                  detail: `${s.n_entidades.toLocaleString("es-CO")} entidades`,
+                }))}
+              />
             </PanelCard>
 
             <PanelCard title="Cobertura por departamento">
@@ -70,23 +82,48 @@ export default async function HomePage() {
             </PanelCard>
 
             <PanelCard
-              title="Acceso a los datos"
-              note="Directo = consulta inmediata vía API. Con herramienta = archivo externo descargable. Solo metadatos = descubrible pero no tabular."
+              title="Cómo se accede a los datos"
+              note="Consulta en línea: los datos se consultan aquí mismo, al instante. Archivo descargable: la entidad publica un archivo (por ejemplo CSV o Excel) que se descarga para ver su contenido. Solo metadatos: el catálogo registra qué es el recurso y quién lo publica, pero su contenido no es una tabla — son mapas, servicios geográficos o documentos."
             >
               <StackedBar
-                ariaLabel="Acceso a los datos"
+                ariaLabel="Cómo se accede a los datos"
                 segments={[
-                  { label: "Directo", value: stats.acceso.directo, color: "var(--chart-1)" },
-                  { label: "Con herramienta", value: stats.acceso.requiere_herramienta, color: "var(--chart-2)" },
+                  { label: "Consulta en línea", value: stats.acceso.directo, color: "var(--chart-1)" },
+                  { label: "Archivo descargable", value: stats.acceso.requiere_herramienta, color: "var(--chart-2)" },
                   { label: "Solo metadatos", value: stats.acceso.solo_metadatos, color: "var(--ink-muted)" },
                 ]}
+              />
+            </PanelCard>
+
+            <PanelCard
+              title="Qué contiene el catálogo"
+              note="Los reportes administrativos son las publicaciones que la Ley de Transparencia (Ley 1712 de 2014) exige a cada entidad: registros de activos de información, esquemas de publicación e índices. Los datos temáticos son todo lo demás: salud, contratación, educación, movilidad y más."
+            >
+              <StackedBar
+                ariaLabel="Qué contiene el catálogo"
+                segments={[
+                  { label: "Datos temáticos", value: stats.composicion.tematicos, color: "var(--chart-1)" },
+                  { label: "Reportes administrativos", value: stats.composicion.administrativos, color: "var(--ink-muted)" },
+                ]}
+              />
+            </PanelCard>
+
+            <PanelCard
+              title="Portales integrados"
+              note="Estos portales publican cada uno por su lado; DatosVivos los consolida en un solo catálogo consultable, que de otra forma habría que revisar sitio por sitio."
+            >
+              <BarList
+                items={stats.por_portal.map((p) => ({
+                  label: portalLabel(p.portal),
+                  value: p.n_datasets,
+                }))}
               />
             </PanelCard>
           </div>
 
           <p className="m-0 font-mono text-caption text-ink-muted">
-            Cifras en vivo del catálogo útil (excluye reportes administrativos
-            de Ley 1712) · {relativeTime(stats.generated_at)}
+            Cifras en vivo sobre el catálogo completo ·{" "}
+            {relativeTime(stats.generated_at)}
           </p>
         </>
       ) : (
@@ -104,7 +141,7 @@ export default async function HomePage() {
           href="/tablero"
           kicker="Tablero interactivo"
           title="Explora el detalle por sector y entidad"
-          body="Salud del catálogo, engagement y cobertura territorial, con filtros por sector, entidad, acceso y territorio."
+          body="Frescura, uso y cobertura territorial del catálogo, con filtros por sector, entidad, tipo de acceso y territorio."
         />
         <CTACard
           href="/buscar"
@@ -117,7 +154,7 @@ export default async function HomePage() {
       <section className="hairline-top pt-6">
         <p className="m-0 max-w-[60ch] font-sans text-body text-ink-2 leading-relaxed">
           Este servicio es público y gratuito, sobre el catálogo oficial del
-          Estado colombiano en datos.gov.co.{" "}
+          Estado colombiano.{" "}
           <Link href="/acerca" className="focus-ring">
             Cómo funciona y quién está detrás.
           </Link>
@@ -176,19 +213,27 @@ function CTACard({
   );
 }
 
-/** Solo datasets con sector declarado — federados sin sector quedan fuera. */
-function sectorNote(_stats: PanoramaStats): string {
-  return 'Los 10 sectores con más datasets, entre los que declaran sector · barras: datasets · "ent." = entidades del sector.';
+/** Nombre corto y reconocible de cada portal de origen. */
+const PORTAL_LABELS: Record<string, string> = {
+  "datos.gov.co": "datos.gov.co",
+  "datosabiertos.bogota.gov.co": "Bogotá",
+  "datos.cali.gov.co": "Cali",
+  "www.medata.gov.co": "Medellín (MEDATA)",
+  "datosabiertos.valledelcauca.gov.co": "Valle del Cauca",
+};
+
+function portalLabel(portal: string): string {
+  return PORTAL_LABELS[portal] ?? portal;
 }
 
 function frescuraNote(stats: PanoramaStats): string {
   const conFecha =
     stats.semaforo.verde + stats.semaforo.amarillo + stats.semaforo.rojo;
-  if (conFecha === 0) {
-    return "Frescura medida contra la frecuencia de actualización que declara cada dataset.";
-  }
+  const base =
+    "Un dataset está al día si su última actualización cumple la frecuencia que su propia entidad declaró (por ejemplo, mensual).";
+  if (conFecha === 0) return base;
   const alDia = Math.round((10 * stats.semaforo.verde) / conFecha);
-  return `${alDia} de cada 10 datasets con fecha conocida están al día frente a su propia frecuencia declarada.`;
+  return `${base} Hoy, ${alDia} de cada 10 con fecha conocida lo están.`;
 }
 
 /** Tiempo relativo corto para "actualizado hace N min" (render server-side). */

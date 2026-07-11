@@ -112,8 +112,9 @@ export function PanoramaMap({
           ))}
         </ol>
         <p className="m-0 mt-1 font-sans text-caption text-ink-muted leading-relaxed">
-          Solo datasets con jurisdicción territorial identificada. Otros{" "}
-          {fmt(nacionalSinGeo)} son de alcance nacional o sin territorio declarado.
+          El mapa muestra los datasets asociados a un departamento o municipio.
+          Otros {fmt(nacionalSinGeo)} aplican a todo el país o no declaran
+          territorio.
         </p>
       </div>
     </div>

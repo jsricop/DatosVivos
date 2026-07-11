@@ -143,18 +143,26 @@ export type DeptCount = {
   n_datasets: number;
 };
 
+/** Agregado por portal de origen del catálogo integrado. */
+export type PortalCount = {
+  portal: string;
+  n_datasets: number;
+};
+
 /**
  * GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
- * Todas las cifras con filtro de calidad (catálogo ÚTIL): `total` aquí es
- * menor que el de CatalogStats (inventario bruto). Es deliberado.
+ * Línea editorial sobre el CATÁLOGO COMPLETO: `total` coincide con
+ * CatalogStats. La división temáticos/administrativos va en `composicion`.
  */
 export type PanoramaStats = {
   total: number;
   n_entidades: number;
+  composicion: Record<"tematicos" | "administrativos", number>;
   semaforo: Record<"verde" | "amarillo" | "rojo" | "desconocido", number>;
   acceso: Record<"directo" | "requiere_herramienta" | "solo_metadatos", number>;
   por_sector: SectorCount[];
   por_departamento: DeptCount[];
+  por_portal: PortalCount[];
   nacional_sin_geo: number;
   generated_at: string;
 };
