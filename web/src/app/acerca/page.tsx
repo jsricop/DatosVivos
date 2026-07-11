@@ -95,8 +95,9 @@ export default async function AcercaPage() {
           </h2>
           <P>
             Proyecto presentado al concurso{" "}
-            <em>Datos al Ecosistema 2026: IA para Colombia</em>, Reto #07
-            (Innovación y Tecnología) del Ministerio TIC.
+            <em>Datos al Ecosistema 2026: IA para Colombia</em> del Ministerio
+            TIC — Reto de Innovación y Tecnología (Reto 7, id 102) · Equipo 93 ·
+            Nivel Avanzado.
           </P>
         </section>
 

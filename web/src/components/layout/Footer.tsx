@@ -10,7 +10,8 @@ export function Footer() {
               República de Colombia
             </p>
             <p className="m-0 font-sans text-caption text-ink-2">
-              Agencia Nacional de Infraestructura — Reto #07 MinTIC 2026
+              Agencia Nacional de Infraestructura — Datos al Ecosistema 2026 ·
+              Equipo 93 · Reto 7 (id 102)
             </p>
           </div>
           <nav
