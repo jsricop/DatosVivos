@@ -18,8 +18,11 @@ export function Footer() {
             aria-label="Enlaces del pie de página"
             className="flex flex-wrap gap-x-6 gap-y-2"
           >
+            <Link href="/" className="font-sans text-body-sm text-ink-2 focus-ring">
+              Inicio
+            </Link>
             <Link href="/tablero" className="font-sans text-body-sm text-ink-2 focus-ring">
-              Tablero
+              Detalle por entidad
             </Link>
             <Link href="/buscar" className="font-sans text-body-sm text-ink-2 focus-ring">
               Buscar
