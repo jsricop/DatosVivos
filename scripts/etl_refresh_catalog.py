@@ -406,7 +406,10 @@ def _upsert_dataset(cur: psycopg.Cursor, rec: dict[str, Any], entity_id: int | N
             name = EXCLUDED.name,
             entity_id = EXCLUDED.entity_id,
             entity_raw = EXCLUDED.entity_raw,
-            category = EXCLUDED.category,
+            -- COALESCE+NULLIF: si la fuente no declara categoría, se conserva
+            -- la existente (puede ser inferida por backfill_categories.py) en
+            -- vez de pisarla con NULL cada noche.
+            category = COALESCE(NULLIF(EXCLUDED.category, ''), datasets.category),
             description = EXCLUDED.description,
             rows_updated_at = EXCLUDED.rows_updated_at,
             update_frequency = EXCLUDED.update_frequency,
