@@ -25,7 +25,12 @@ from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
 from ai_engine.chips_telemetry import emit_event
-from ai_engine.duckdb_executor import describe_csv, execute_csv
+from ai_engine.duckdb_executor import (
+    describe_csv,
+    describe_parquet,
+    execute_csv,
+    execute_parquet,
+)
 from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.llm_backend import get_backend, model_for_task
 from ai_engine.nl_to_chips import map_nl_to_chips
@@ -579,8 +584,15 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT source_type, row_count, data_url, federated_status
-                FROM datasets WHERE dataset_id = %s
+                SELECT d.source_type, d.row_count, d.data_url, d.federated_status,
+                       s.parquet_path,
+                       (s.status = 'downloaded'
+                        AND s.parquet_path IS NOT NULL
+                        AND s.source_updated_at IS NOT DISTINCT FROM d.rows_updated_at
+                       ) AS snapshot_fresco
+                FROM datasets d
+                LEFT JOIN dataset_snapshots s USING (dataset_id)
+                WHERE d.dataset_id = %s
                 """,
                 (req.dataset_id,),
             )
@@ -594,6 +606,45 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             local_row_count = row["row_count"]
             data_url = row["data_url"]
             federated_status = row["federated_status"]
+
+            # ---- Rama BODEGA (farmeo): Parquet local, sin red, milisegundos ----
+            # Mecanismo de decisión bodega-vs-vivo: si el dataset está en la
+            # bodega Y su snapshot es FRESCO (source_updated_at == el
+            # rows_updated_at actual del catálogo — la regla diaria lo
+            # mantiene), se consulta el Parquet local. Si el catálogo dice que
+            # la fuente cambió y la bodega aún no refresca, se cae al camino
+            # VIVO (SODA/CSV) — preferimos el dato más nuevo a la velocidad.
+            # Cualquier fallo local degrada silenciosamente al camino vivo.
+            if row["snapshot_fresco"]:
+                try:
+                    lake_cols = describe_parquet(row["parquet_path"])
+                    built = build_duckdb_sql(req.tipo, lake_cols, row["parquet_path"])
+                    if not built.error:
+                        rows_out = execute_parquet(row["parquet_path"], built.sql)
+                        rows_norm = [
+                            {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v))
+                             for k, v in r.items()}
+                            for r in rows_out
+                        ]
+                        emit_event(
+                            endpoint="execute", dataset_id=req.dataset_id,
+                            tipo=req.tipo, source_type="lake",
+                            elapsed_ms=int((_time.time()-t0)*1000),
+                            row_count=len(rows_norm), soql_chars=len(built.sql),
+                        )
+                        return ChipsExecuteResponse(
+                            dataset_id=req.dataset_id,
+                            tipo=req.tipo,
+                            soql=built.sql,
+                            columns_used=built.columns_used,
+                            rows=rows_norm,
+                            row_count=len(rows_norm),
+                        )
+                except Exception as exc:  # noqa: BLE001 — degradar a vivo
+                    log.warning(
+                        "Bodega falló para %s (%s) — degradando a vivo",
+                        req.dataset_id, exc,
+                    )
 
             # ---- Rama FEDERADO (Reto F.4 — DuckDB sobre CSV externo) ----
             if source_type == "federated":

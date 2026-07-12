@@ -225,3 +225,47 @@ def test_query_chips_chosen_solo_ejecutables():
         ).json()
     assert body["chosen_dataset_id"] is None
     assert "portal de origen" in (body["message"] or "")
+
+
+def test_execute_usa_bodega_cuando_snapshot_fresco():
+    """Con snapshot fresco en dataset_snapshots, execute consulta el Parquet
+    local (bodega) y no toca SODA ni el CSV remoto."""
+    client = _client()
+
+    def fake_connect():
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        cur = MagicMock()
+        cur.fetchone.return_value = {
+            "source_type": "socrata", "row_count": 108, "data_url": None,
+            "federated_status": None,
+            "parquet_path": "/app/data/lake/ry5e-gwqx.parquet",
+            "snapshot_fresco": True,
+        }
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=cur)
+        cm.__exit__ = MagicMock(return_value=False)
+        conn.cursor = MagicMock(return_value=cm)
+        return conn
+
+    built = MagicMock()
+    built.error = None
+    built.sql = "SELECT count(*) AS n FROM {src}"
+    built.columns_used = []
+
+    with patch("api.routes.chips._connect", side_effect=fake_connect), \
+         patch("api.routes.chips.describe_parquet", return_value=[]) as p_desc, \
+         patch("api.routes.chips.build_duckdb_sql", return_value=built), \
+         patch("api.routes.chips.execute_parquet",
+               return_value=[{"n": 108}]) as p_exec:
+        res = client.post(
+            "/api/v1/query/chips/execute",
+            json={"dataset_id": "ry5e-gwqx", "tipo": "Cuántos"},
+        )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["rows"] == [{"n": 108}]
+    p_desc.assert_called_once_with("/app/data/lake/ry5e-gwqx.parquet")
+    p_exec.assert_called_once()
