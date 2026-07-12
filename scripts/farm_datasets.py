@@ -196,11 +196,31 @@ def _csv_to_parquet(csv_path: Path, parquet_path: Path) -> int:
     raise last_err  # type: ignore[misc]
 
 
-def _json_get(url: str, timeout: int = 10):
+def _api_headers() -> dict:
+    h = {"User-Agent": "DatosVivos-farm/1.0"}
+    token = os.environ.get("SOCRATA_APP_TOKEN")
+    if token:
+        h["X-App-Token"] = token
+    return h
+
+
+def _json_get(url: str, timeout: int = 10, attempts: int = 2):
+    """GET JSON con reintento: Socrata devuelve 429 intermitentes cuando el
+    farmeo encadena count(1) sin App Token — un backoff corto los absorbe
+    (fue la causa de que 17 gigantes socrata pasaran el pre-chequeo el
+    2026-07-11: el None silencioso los dejaba seguir a descarga)."""
     import json
-    req = urllib.request.Request(url, headers={"User-Agent": "DatosVivos-farm/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers=_api_headers())
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.load(resp)
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if i + 1 < attempts:
+                time.sleep(2.0 * (i + 1))
+    raise last  # type: ignore[misc]
 
 
 def _live_size_estimate(dataset_id: str, n_cols_catalog: int) -> int | None:
@@ -249,11 +269,28 @@ def _farm_one(conn, cand: dict) -> bool:
                 _upsert(conn, ds, status="too_big",
                         error=f"tamaño vivo ≈ {est/1024**3:.1f} GB > cap; "
                               f"saltado sin descargar",
-                        priority_score=cand["score"])
+                        priority_score=cand["score"],
+                        last_scored_at=datetime.now(timezone.utc))
                 return False
             url = SOCRATA_CSV.format(id=ds)
         else:
             url = resolve_data_url(cand["data_url"])
+            # Pre-chequeo federado: HEAD Content-Length (muchos servidores lo
+            # dan). 3 federados llegaron al cap por streaming el 2026-07-11.
+            try:
+                head = urllib.request.Request(url, method="HEAD",
+                                              headers=_api_headers())
+                with urllib.request.urlopen(head, timeout=10) as resp:
+                    clen = int(resp.headers.get("Content-Length") or 0)
+                if clen > PER_DATASET_CAP:
+                    _upsert(conn, ds, status="too_big",
+                            error=f"Content-Length {clen/1024**3:.1f} GB > cap; "
+                                  f"saltado sin descargar",
+                            priority_score=cand["score"],
+                            last_scored_at=datetime.now(timezone.utc))
+                    return False
+            except Exception:  # noqa: BLE001 — sin HEAD, el stream acotado decide
+                pass
         _stream_download(url, csv_tmp)
         rows = _csv_to_parquet(csv_tmp, parquet)
         bytes_real = parquet.stat().st_size
@@ -267,13 +304,17 @@ def _farm_one(conn, cand: dict) -> bool:
         )
         return True
     except ValueError as e:
-        # cap por dataset
+        # cap por dataset (incluye UnicodeDecodeError, subclase de ValueError:
+        # encodings imposibles quedan como too_big = skip permanente, correcto
+        # porque reintentar es fútil)
         _upsert(conn, ds, status="too_big", error=str(e)[:400],
-                priority_score=cand["score"])
+                priority_score=cand["score"],
+                last_scored_at=datetime.now(timezone.utc))
         return False
     except Exception as e:  # noqa: BLE001 — un fallo nunca tumba la corrida
         _upsert(conn, ds, status="failed", error=str(e)[:400],
-                priority_score=cand["score"])
+                priority_score=cand["score"],
+                last_scored_at=datetime.now(timezone.utc))
         return False
     finally:
         csv_tmp.unlink(missing_ok=True)
