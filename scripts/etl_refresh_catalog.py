@@ -46,7 +46,7 @@ from psycopg.types.json import Jsonb
 from mcp_server.socrata.discovery_client import DiscoveryClient
 from mcp_server.socrata.metadata_client import MetadataClient
 from mcp_server.socrata.soda_client import SodaClient
-from scripts.classify_quality_flag import mark_admin_only
+from scripts.classify_quality_flag import mark_admin_only, normalize_categories
 
 log = logging.getLogger("etl_refresh_catalog")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -669,6 +669,12 @@ async def main(args: argparse.Namespace) -> int:
         n_admin = mark_admin_only(conn)
         conn.commit()
         log.info("Clasificación calidad: admin_only marcados/actualizados=%d", n_admin)
+
+        # Grafías de categoría: la fuente re-declara variantes cada noche
+        # ("Función Pública"/"Función pública") → se re-unifican a la dominante.
+        n_norm = normalize_categories(conn)
+        conn.commit()
+        log.info("Categorías normalizadas (grafía dominante): %d", n_norm)
 
         with conn.cursor() as cur:
             cur.execute(

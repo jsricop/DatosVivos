@@ -43,15 +43,25 @@ _ADMIN_PATTERNS = [
     "indice de informacion clasificada",
     # Variante sin "de": "Índice Información Clasificada y Reservada" (q59t-e9gs).
     "indice informacion clasificada",
+    # Variantes reales encontradas 2026-07-12 en el barrido de categorías:
+    "informacion clasificada y reservada",   # "ÍNDICE TEMÁTICO DE LA ..."
+    "informacion reservada y clasificada",   # orden invertido (URT, IDRD)
+    "clasificacion y reservada",             # "CLASIFICACIÓN Y RESERVADA" (typo fuente)
     "registro de activos de informacion",
     "activos de informacion",
+    "activos de la informacion",             # "Activos de LA Información" (IMETY)
+    "registro_activos",                      # nombres con underscore
+    "programa de gestion documental",        # PGD (gestión documental Ley 594)
+    "instrumentos de gestion de la informacion",  # tríada Ley 1712 (evrg-gy2w)
     "informe de gestion",
     "tabla de retencion documental",
     "instrumentos archivisticos",
 ]
 
-# Normalización en SQL puro (sin extensión unaccent): minúsculas + tildes fuera.
-_NORM = "translate(lower(name), 'áéíóúüñ', 'aeiouun')"
+# Normalización en SQL puro (sin extensión unaccent): minúsculas + tildes fuera
+# + espacios múltiples colapsados ("ACTIVOS DE  INFORMACION" con doble espacio).
+_NORM = ("regexp_replace(translate(lower(name), 'áéíóúüñ', 'aeiouun'), "
+         "'\\s+', ' ', 'g')")
 
 
 def mark_admin_only(conn) -> int:
@@ -71,6 +81,90 @@ def mark_admin_only(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.rowcount
+
+
+# Consolidación semántica de la cola larga de categorías → vocabulario
+# canónico del portal. Curada por Claude Code (2026-07-12) revisando el
+# vocabulario completo; se re-aplica cada noche (la fuente re-declara).
+# Las claves se comparan con btrim() (hay categorías con espacio final).
+_CATEGORY_MERGE = {
+    "Ciencia Tecnología e Innovación": "Ciencia, Tecnología e Innovación",
+    "Tecnologías de la Información y las Comunicaciones": "Ciencia, Tecnología e Innovación",
+    "Economía-Microdatos": "Economía y Finanzas",
+    "Desarrollo Económico, Competitividad": "Economía y Finanzas",
+    "Económica, Industria y Comercio": "Comercio, Industria y Turismo",
+    "Turismo": "Comercio, Industria y Turismo",
+    "Sociedad-Microdatos": "Inclusión Social y Reconciliación",
+    "Social / Población": "Inclusión Social y Reconciliación",
+    "Asuntos Étnicos": "Inclusión Social y Reconciliación",
+    "Paz Territorial y Reconciliación": "Inclusión Social y Reconciliación",
+    "Mujer": "Inclusión Social y Reconciliación",
+    "Mujer, Equidad de Género y Diversidad Sexual": "Inclusión Social y Reconciliación",
+    "Desarrollo, Inclusión y Participación Social": "Inclusión Social y Reconciliación",
+    "Territorio-Microdatos": "Ordenamiento Territorial",
+    "Catastro": "Ordenamiento Territorial",
+    "Mapas Nacionales": "Ordenamiento Territorial",
+    "Presupuestos Gubernamentales": "Gastos Gubernamentales",
+    "Impuestos ,Rentas y Gestión Tributaria": "Hacienda y Crédito Público",
+    "Administrativo de Hacienda y Finanzas Públicas": "Hacienda y Crédito Público",
+    "Vivienda y Hábitat": "Vivienda, Ciudad y Territorio",
+    "Salud": "Salud y Protección Social",
+    "Gestión Pública/Administrativa": "Función pública",
+    "Secretaría General": "Función pública",
+    "Desarrollo Institucional": "Función pública",
+    "Oficina para la Transparencia de la Gestión Pública": "Función pública",
+    "Jurídica": "Justicia y Derecho",
+    "Seguridad y Justicia/ Paz /Cultura Ciudadana": "Seguridad y Defensa",
+    "Gestión del Riesgo de Desastres": "Ambiente y Desarrollo Sostenible",
+    "Educación, Cultura y Recreación": "Educación",
+    "Estadísticas": "Estadísticas Nacionales",
+    "Infraestrutura": "Transporte",
+    "Resultados Electorales": "Participación ciudadana",
+    "Administrativo de Planeación": "Planeación",
+    "Agricultura": "Agricultura y Desarrollo Rural",
+}
+
+
+def normalize_categories(conn) -> int:
+    """Unifica variantes de grafía de `category` a la dominante.
+
+    datos.gov.co trae la misma categoría con mayúsculas distintas ("Función
+    Pública"/"Función pública") y el filtro TEMA de chips las parte en dos.
+    La grafía canónica se elige DINÁMICAMENTE (la más frecuente por grupo
+    lower()), así el paso es auto-mantenido: si la fuente re-declara una
+    variante esta noche, mañana se re-unifica sola. Idempotente.
+
+    Returns el número de filas re-etiquetadas.
+    """
+    total = 0
+    with conn.cursor() as cur:
+        # 1) Consolidación semántica de la cola larga (mapa curado).
+        for src, dst in _CATEGORY_MERGE.items():
+            cur.execute(
+                "UPDATE datasets SET category = %s WHERE btrim(category) = %s",
+                (dst, src),
+            )
+            total += cur.rowcount
+        # 2) Variantes de mayúsculas/tildes → grafía dominante (dinámico).
+        cur.execute("""
+            UPDATE datasets d
+            SET category = c.canon
+            FROM (
+                SELECT lower(category) AS low,
+                       (array_agg(category ORDER BY n DESC))[1] AS canon
+                FROM (
+                    SELECT category, count(*) AS n
+                    FROM datasets
+                    WHERE category IS NOT NULL AND category != ''
+                    GROUP BY category
+                ) t
+                GROUP BY lower(category)
+                HAVING count(*) > 1
+            ) c
+            WHERE lower(d.category) = c.low AND d.category != c.canon
+        """)
+        total += cur.rowcount
+    return total
 
 
 def mark_no_rows(conn) -> int:
