@@ -161,6 +161,19 @@ def _is_placeholder(value: str) -> bool:
     return bool(_PLACEHOLDER_RE.match(value.strip()))
 
 
+def _scrub_placeholder(value: str | None) -> str | None:
+    """El valor, o None si es una plantilla sin diligenciar.
+
+    El caso {{name}} descarta la fila completa (arriba), pero un portal puede
+    federar con el título bien y OTROS campos de plantilla vacíos (117 datasets
+    llegaron con entity_raw='{{source}}', 2026-07-12): el dataset vale, el
+    campo no.
+    """
+    if value and _is_placeholder(value):
+        return None
+    return value
+
+
 def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
     """Mapea un `result` de la Discovery API a las columnas de `datasets`."""
     resource = result.get("resource") or {}
@@ -232,9 +245,9 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "dataset_id": dataset_id,
         "name": resource.get("name") or "",
-        "entity_raw": entity_raw_val,
-        "category": category_val,
-        "description": (resource.get("description") or "")[:2000],
+        "entity_raw": _scrub_placeholder(entity_raw_val) or "",
+        "category": _scrub_placeholder(category_val),
+        "description": (_scrub_placeholder(resource.get("description")) or "")[:2000],
         # rows_updated_at = fecha del DATO (no del metadata) → semáforo correcto.
         "rows_updated_at": data_updated,
         "data_updated_at": data_updated,
