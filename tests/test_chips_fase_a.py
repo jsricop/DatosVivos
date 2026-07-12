@@ -269,3 +269,37 @@ def test_execute_usa_bodega_cuando_snapshot_fresco():
     assert body["rows"] == [{"n": 108}]
     p_desc.assert_called_once_with("/app/data/lake/ry5e-gwqx.parquet")
     p_exec.assert_called_once()
+
+
+def test_execute_mapa_nunca_usa_bodega():
+    """Mapa salta la bodega aunque el snapshot esté fresco: el choropleth
+    necesita códigos DIVIPOLA y el Parquet agruparía por nombres."""
+    client = _client()
+
+    def fake_connect():
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        cur = MagicMock()
+        cur.fetchone.return_value = {
+            "source_type": "socrata", "row_count": 108, "data_url": None,
+            "federated_status": None,
+            "parquet_path": "/app/data/lake/ry5e-gwqx.parquet",
+            "snapshot_fresco": True,
+        }
+        cur.fetchall.return_value = []  # dataset_columns_curated vacío
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=cur)
+        cm.__exit__ = MagicMock(return_value=False)
+        conn.cursor = MagicMock(return_value=cm)
+        return conn
+
+    with patch("api.routes.chips._connect", side_effect=fake_connect), \
+         patch("api.routes.chips.describe_parquet") as p_desc:
+        res = client.post(
+            "/api/v1/query/chips/execute",
+            json={"dataset_id": "ry5e-gwqx", "tipo": "Mapa"},
+        )
+
+    assert res.status_code == 200, res.text
+    p_desc.assert_not_called()

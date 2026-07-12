@@ -615,7 +615,11 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             # la fuente cambió y la bodega aún no refresca, se cae al camino
             # VIVO (SODA/CSV) — preferimos el dato más nuevo a la velocidad.
             # Cualquier fallo local degrada silenciosamente al camino vivo.
-            if row["snapshot_fresco"]:
+            # Mapa NUNCA va a la bodega: el choropleth casa por código
+            # DIVIPOLA y el heurístico sobre el Parquet elige columnas de
+            # NOMBRE ("Departamento" → 'ANTIOQUIA'), que el mapa no pinta.
+            # El camino vivo (columnas curadas SODA) sí produce códigos.
+            if row["snapshot_fresco"] and req.tipo != "Mapa":
                 try:
                     lake_cols = describe_parquet(row["parquet_path"])
                     built = build_duckdb_sql(req.tipo, lake_cols, row["parquet_path"])
