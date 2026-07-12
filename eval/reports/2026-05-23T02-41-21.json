@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-05-23T02:41:21+00:00",
+  "base_url": "https://datosvivos.co",
+  "golden_path": "eval/golden_queries.yaml",
+  "metrics": {
+    "total_queries": 1,
+    "curated_queries": 1,
+    "errored": 0,
+    "accuracy_at_1": {
+      "pass": 1,
+      "total": 1,
+      "rate": 1.0
+    },
+    "intent_accuracy": {
+      "pass": 0,
+      "total": 1,
+      "rate": 0.0
+    },
+    "forbidden_dataset_hits": 0,
+    "hallucination_rate": 0.0,
+    "p50_latency_s": 3.65,
+    "p95_latency_s": 3.65
+  },
+  "per_query": [
+    {
+      "id": "q001",
+      "q": "¿Cuántos municipios tiene Antioquia?",
+      "expected_dataset_id": "gdxc-w37w",
+      "expected_intent": "count_in",
+      "expected_territory": "Antioquia",
+      "needs_curation": false,
+      "not_acceptable_datasets": [],
+      "actual_dataset_top1": "gdxc-w37w",
+      "actual_intent": "comparative",
+      "actual_geo_resolved": null,
+      "dashboard_emitted": false,
+      "had_narrative_correction": false,
+      "events_seen": [
+        "intent",
+        "dataset_hits",
+        "soql",
+        "rows",
+        "citations",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_summary",
+        "narrative_chunk_extended",
+        "done"
+      ],
+      "elapsed_s": 3.65,
+      "error": null
+    }
+  ]
+}

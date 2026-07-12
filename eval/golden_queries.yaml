@@ -52,10 +52,13 @@ queries:
     expected_intent: count
     expected_territory: null
     expected_territory_code: null
-    expected_dataset_id: "gdxc-w37w"
+    expected_dataset_id: ["vcjz-niiq", "gdxc-w37w"]
     expected_dataset_must_match_jurisdiction: false
     needs_curation: false
-    notes: "Canon DIVIPOLA nacional. Hoy responde vcjz-niiq."
+    notes: >
+      Canon DIVIPOLA nacional. vcjz-niiq (DIVIPOLA códigos DEPARTAMENTOS,
+      DANE) es incluso más preciso que el de municipios para contar
+      departamentos y produce cifra verificada — ambos aceptados (2026-07-12).
 
   # ---- Salud ----
   - id: q004

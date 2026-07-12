@@ -150,14 +150,16 @@ def check(case: dict, obs: dict, err: str | None) -> tuple[bool, list[str], bool
         msgs.append(f"transport_error={err}")
         return False, msgs, False
 
-    # 1) Dataset top-1 (solo si está curado).
+    # 1) Dataset top-1 (solo si está curado). Acepta un id o una lista de
+    # ids igualmente correctos (p. ej. DIVIPOLA municipios vs departamentos).
     if not case.get("needs_curation") and case.get("expected_dataset_id"):
         exp = case["expected_dataset_id"]
-        if obs["top1"] == exp:
+        aceptables = exp if isinstance(exp, list) else [exp]
+        if obs["top1"] in aceptables:
             msgs.append(f"dataset top1={obs['top1']} ✓")
         else:
             ok = False
-            msgs.append(f"dataset top1={obs['top1']} != {exp}")
+            msgs.append(f"dataset top1={obs['top1']} != {aceptables}")
 
     # 2) not_acceptable_datasets.
     for bad in case.get("not_acceptable_datasets") or []:
