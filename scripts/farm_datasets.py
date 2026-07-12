@@ -91,7 +91,12 @@ _CANDIDATES_SQL = """
       AND (
             (d.source_type = 'socrata' AND d.row_count > 0)
          OR (d.source_type = 'federated' AND d.federated_status = 'ok'
-             AND d.data_url IS NOT NULL AND d.data_url != '')
+             AND d.data_url IS NOT NULL AND d.data_url != ''
+             -- Solo TABULARES: el catálogo ya sabe el formato. 76 candidatos
+             -- con data_url PDF/XLSX/etc. gastaban resolución y descarga para
+             -- fallar (2026-07-12). Los no-tabulares y solo-metadatos no
+             -- tienen filas que farmear.
+             AND lower(COALESCE(d.data_format, '')) = 'csv')
       )
 """
 
