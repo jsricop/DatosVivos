@@ -45,6 +45,14 @@ idempotente por `dataset_id` — verificado por auditoría: 0 duplicados de clav
     recurso), con atribución por portal de origen.
 - Vistas curadas (`v_dataset_status_decisor`, `v_entity_summary_decisor`) como fuente
   única del tablero y del panorama — ver [diccionario de datos](diccionario_datos.md).
+- **Bodega local Parquet (farmeo)**: los datasets tabulares más valiosos se descargan a
+  disco con prioridad determinista (valor por GB = uso real + engagement + frescura ÷
+  tamaño estimado con conteos vivos), se convierten a Parquet comprimido y quedan
+  registrados en el manifest `dataset_snapshots`. Guardas: presupuesto global, cap por
+  dataset (bytes y tiempo), pre-chequeo de tamaño sin descargar, y solo tabulares.
+- **Cobertura total de categorías**: clasificación semántica por centroides de
+  embeddings (validación holdout 82.9 %) + curación manual revisada + consolidación del
+  vocabulario (60+ variantes → 25 canónicas, re-unificadas cada noche).
 
 ## Fase 3 — Modelado (el motor de IA)
 
@@ -99,6 +107,10 @@ imagen horneada (reproducible), PostgreSQL, FastAPI, Next.js, Power BI embebido
   personales.
 - Clasificación de calidad re-ejecutada en cada corrida del ETL (idempotente), de modo
   que los datasets nuevos quedan catalogados sin intervención humana.
+- **Regla diaria de la bodega** (post-ETL): refresca los snapshots cuya fuente cambió y
+  rota la cola entra-uno-sale-uno con histéresis — la bodega nunca envejece ni crece
+  más allá del presupuesto. El buscador decide por frescura: snapshot al día → responde
+  la copia local en milisegundos; fuente más nueva → dato vivo.
 
 ## Resumen de adaptaciones a CRISP-ML
 

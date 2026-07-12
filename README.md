@@ -116,7 +116,14 @@ Organizado por nivel del producto (nivel avanzado del TDR):
 4. **Cero cifras inventadas**: verificación determinista + citación de fuente en cada
    respuesta del buscador.
 5. **Calidad medida**: 17/18 columnas al 100 % de fidelidad contra la fuente; ~89 % de
-   cobertura territorial inferida.
+   cobertura territorial inferida; **100 % de cobertura de categoría temática** (2.504
+   huecos cerrados con clasificación semántica + curación revisada; vocabulario
+   consolidado de 60+ etiquetas redundantes a 25 canónicas).
+6. **Bodega local en Parquet**: los datasets más valiosos del catálogo (prioridad
+   determinista "valor por GB": uso real + engagement + frescura ÷ tamaño) se descargan
+   a disco de la infraestructura y **el buscador responde desde la copia local en
+   milisegundos** cuando el snapshot está fresco; si la fuente cambió, cae al dato vivo.
+   Una regla diaria de cola (entra-uno-sale-uno) la mantiene actualizada sola.
 
 ## Interpretación
 
@@ -172,8 +179,10 @@ Presentación del proyecto:
 
 ## Roadmap (trabajo futuro)
 
-1. **Cosecha y catalogación previa de datasets** — perfilado y casos de consulta
-   verificados para una búsqueda aún más precisa.
+1. **Casos de consulta verificados sobre la bodega** — la cosecha (bodega Parquet
+   con regla diaria) y la catalogación (100 % de categorías) ya están en producción;
+   falta el perfilado con casos de consulta generados y verificados por el motor para
+   un retrieval aún más preciso.
 
 ## Equipo
 

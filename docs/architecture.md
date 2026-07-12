@@ -184,6 +184,21 @@ elif source_type == "socrata":
 - **Cloudflare Tunnel + nginx**: expone `datosvivos.co` a internet, sin
   abrir puertos en la VM.
 
+## Bodega local Parquet (farmeo, 2026-07-12)
+
+```
+  ETL diario ──► regla de cola (farm_datasets --daily)
+                   │  refresca fuentes cambiadas · entra-uno-sale-uno
+                   ▼
+  data/lake/{id}.parquet  ◄── manifest: dataset_snapshots (migración 027)
+                   ▲
+  /query/chips/execute ── snapshot FRESCO → DuckDB sobre Parquet local (ms)
+                        └─ fuente cambió / no está → camino VIVO (SODA/CSV)
+```
+
+Prioridad determinista (valor por GB), presupuesto de disco con caps por dataset
+(bytes + tiempo + pre-chequeo con conteos vivos), solo tabulares, advisory lock.
+
 ## Referencias
 
 - ADR-017 IA razona / motor verifica.

@@ -87,6 +87,21 @@ La tabla núcleo tiene 42 columnas; las que agregan a la vista:
 - **`GET /api/v1/dashboard/datasets_decisor.csv`** y **`/entities_decisor.csv`** —
   exportes completos de las vistas para el tablero Power BI (públicos).
 
+## Tabla `dataset_snapshots` (manifest de la bodega Parquet)
+
+Una fila por dataset farmeado a la bodega local (migración 027). Es el checkpoint del
+farmeo (reanudable) y la fuente de la decisión bodega-vs-vivo del buscador.
+
+| Columna | Descripción |
+|---|---|
+| `dataset_id` | PK, referencia al catálogo |
+| `status` | `downloaded` · `too_big` (no cabe, skip permanente) · `failed` · `evicted` (rotado por la cola) |
+| `priority_score` | Valor-por-GB al momento de puntuar (uso real + engagement + frescura ÷ tamaño) |
+| `bytes` / `rows` | Tamaño REAL del Parquet y filas |
+| `parquet_path` | Ruta del archivo en la bodega (`data/lake/`) |
+| `source_updated_at` | `rows_updated_at` del catálogo al descargar — si difiere del actual, el snapshot está viejo y el buscador va al dato vivo |
+| `downloaded_at` / `last_scored_at` / `error` | Trazabilidad |
+
 ## Vista `v_entity_summary_decisor` (14 columnas, una por entidad)
 
 `n_datasets`, `n_datasets_directos`, `n_datasets_federados`, semáforo agregado
