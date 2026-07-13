@@ -1345,7 +1345,11 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
     # para preguntas de conteo). La señal fuerte SIEMPRE gana; las demás solo
     # rellenan si el LLM no propuso tipo.
     tipo_lexico = _infer_tipo_lexico(req.q)
-    if tipo_lexico == "Cuántos":
+    if tipo_lexico in ("Cuántos", "Total"):
+        # Señales inequívocas que SOBREESCRIBEN al LLM: el plural cuenta y
+        # "cuánto vale/cuesta" suma — el mapper insistía en Cuántos para
+        # montos (ciclo 3, 2026-07-13) y el conteo de filas es la respuesta
+        # equivocada a una pregunta de plata.
         mapped["tipo"] = tipo_lexico
     elif tipo_lexico and not mapped.get("tipo"):
         mapped["tipo"] = tipo_lexico
