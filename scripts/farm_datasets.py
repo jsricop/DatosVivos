@@ -338,6 +338,20 @@ def bootstrap(conn, budget: int, dry: bool) -> None:
     used = _used_bytes(conn)
     log.info("bootstrap: %d candidatos, presupuesto %.1f GB, usado %.2f GB",
              len(cands), budget / 1024**3, used / 1024**3)
+
+    def _fallo_permanente(prev: dict, cand: dict) -> bool:
+        """403/404/encoding del origen NO se curan reintentando: cada
+        relanzamiento del bootstrap quemaba ~1 h re-fallando 883 entradas
+        ("0 ok · N fail", 2026-07-13). Los transitorios (timeout, 5xx, 429)
+        sí se reintentan; y si la FUENTE cambió desde el fallo, se
+        reintenta también (el publicador pudo arreglar el dataset)."""
+        err = (prev.get("error") or "").lower()
+        permanente = ("403" in err or "404" in err
+                      or "encoded" in err or "unicode" in err
+                      or "decode" in err)
+        fuente_cambio = prev.get("source_updated_at") is not None and \
+            prev["source_updated_at"] != cand["rows_updated_at"]
+        return permanente and not fuente_cambio
     ok = skip = fail = 0
     for cand in cands:
         if used >= budget:
@@ -349,6 +363,9 @@ def bootstrap(conn, budget: int, dry: bool) -> None:
             skip += 1
             continue
         if prev and prev["status"] in ("too_big",):
+            skip += 1
+            continue
+        if prev and prev["status"] == "failed" and _fallo_permanente(prev, cand):
             skip += 1
             continue
         if dry:
