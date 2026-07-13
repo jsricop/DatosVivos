@@ -99,6 +99,8 @@ export type ChipsExecuteResponse = {
   filters_applied?: FilterSpec[] | null;
   filter_note?: string | null;
   unfiltered_total?: number | null;
+  /** Unidad de UNA fila ("estudiantes matriculados") — da unidad al conteo. */
+  row_unit?: string | null;
 };
 
 /** GET /api/datasets/{id}/filters — perfil de filtrables (ADR-024). */

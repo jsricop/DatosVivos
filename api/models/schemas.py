@@ -241,6 +241,10 @@ class ChipsExecuteResponse(BaseModel):
     filters_applied: list[FilterSpec] | None = None  # los que SÍ se aplicaron
     filter_note: str | None = None       # filtros ignorados / no disponibles
     unfiltered_total: int | None = None  # total sin filtros (honestidad, Cuántos)
+    # Unidad de UNA fila del dataset ("estudiantes matriculados",
+    # "contratos") inferida de su metadata — da unidad de medida al conteo
+    # de Cuántos ("390.903" a secas se leía como lo que no era, 2026-07-13).
+    row_unit: str | None = None
 
 
 class FilterOption(BaseModel):

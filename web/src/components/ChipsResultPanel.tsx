@@ -106,9 +106,17 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       value_from: "n",
       format: "number_es_co",
     };
+    // Unidad junto a la cifra: "390.903" a secas se leía como lo que no era
+    // (¿instituciones? eran estudiantes). Inferida de la metadata del
+    // dataset; si no hay, "registros" — siempre honesto.
     return (
       <div className="flex flex-col gap-2">
-        <KPICardBlock block={block} rows={rowsTyped} stats={null} />
+        <KPICardBlock
+          block={block}
+          rows={rowsTyped}
+          stats={null}
+          unit={response.row_unit ?? "registros"}
+        />
         <VerifiedNote countNote />
       </div>
     );

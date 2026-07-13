@@ -940,6 +940,67 @@ JSON:"""
     return out
 
 
+# Unidad de fila por dataset — cache en memoria del proceso: la unidad solo
+# depende del dataset, y 1 llamada Haiku por dataset y por vida del contenedor
+# es despreciable.
+_UNIT_CACHE: dict[str, str | None] = {}
+_UNIT_RE = re.compile(r"^[a-záéíóúüñ][a-záéíóúüñ\- ]{2,40}$")
+
+
+async def _unidad_de_fila(dataset_id: str) -> str | None:
+    """Qué representa UNA fila del dataset ("estudiantes matriculados",
+    "contratos"), inferido de su metadata oficial con el LLM.
+
+    La CIFRA sigue siendo verificada (count de filas reales); la unidad es
+    interpretación de la metadata — por eso se valida a un sustantivo corto
+    y ante cualquier duda se devuelve None (la UI cae a "registros")."""
+    if dataset_id in _UNIT_CACHE:
+        return _UNIT_CACHE[dataset_id]
+    unit: str | None = None
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT name, left(coalesce(description, ''), 400) AS descr "
+                    "FROM datasets WHERE dataset_id = %s",
+                    (dataset_id,),
+                )
+                ds = cur.fetchone()
+                cur.execute(
+                    "SELECT col_name FROM dataset_columns_curated "
+                    "WHERE dataset_id = %s ORDER BY confidence DESC LIMIT 10",
+                    (dataset_id,),
+                )
+                cols = [r["col_name"] for r in cur.fetchall()]
+        if ds:
+            prompt = (
+                f"Dataset de datos abiertos:\n"
+                f"Nombre: {ds['name']}\n"
+                f"Descripción: {ds['descr']}\n"
+                f"Columnas: {', '.join(cols) or '(desconocidas)'}\n\n"
+                f"¿Qué representa UNA fila de este dataset? Responde SOLO un "
+                f"sustantivo plural en minúsculas, máximo 3 palabras (ej: "
+                f"'estudiantes matriculados', 'contratos', 'establecimientos "
+                f"educativos'). Si una fila es un agregado o no está claro, "
+                f"responde exactamente: registros"
+            )
+            raw = await get_backend().generate(
+                prompt, max_tokens=20, model=model_for_task("fast")
+            )
+            cand = (raw or "").strip().splitlines()[0].strip(" .\"'«»").lower()
+            if (
+                cand
+                and cand != "registros"
+                and len(cand.split()) <= 3
+                and _UNIT_RE.match(cand)
+            ):
+                unit = cand
+    except Exception as exc:  # noqa: BLE001 — la unidad es opcional
+        log.warning("unidad de fila falló para %s: %s", dataset_id, exc)
+    _UNIT_CACHE[dataset_id] = unit
+    return unit
+
+
 _GEO_NORM_SQL = "translate(upper(trim({col})), 'ÁÉÍÓÚÜÑ', 'AEIOUUN')"
 
 
@@ -997,6 +1058,10 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             "Los filtros no se aplicaron en esta consulta (solo están "
             "disponibles sobre la copia local del dataset)."
         )
+    # Unidad de medida del conteo: "390.903" a secas se leía como lo que no
+    # era. Solo para Cuántos (el conteo de filas es el que necesita unidad).
+    if req.tipo == "Cuántos" and resp.rows and not resp.error:
+        resp.row_unit = await _unidad_de_fila(req.dataset_id)
     return resp
 
 
