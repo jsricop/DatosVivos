@@ -54,12 +54,8 @@ export function Header() {
           >
             Acerca
           </Link>
-          <Link
-            href="/accesibilidad"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Accesibilidad
-          </Link>
+          {/* La página /accesibilidad vive en el footer: el header ya cubre
+              la necesidad inmediata con el switch de apariencia. */}
           <ColorModeToggle />
         </nav>
       </div>
