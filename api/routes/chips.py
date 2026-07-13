@@ -451,6 +451,13 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
         boost_sql = "0"
         boost_params = []
 
+    # Preguntas DEPARTAMENTALES prefieren datasets de alcance departamental o
+    # nacional: con territorio='05' el subset incluye datasets de cada
+    # municipio de Antioquia y el top ciego elegía uno ("Instituciones
+    # Educativas de Yondó" para "¿cuántas IE hay en Antioquia?", 2026-07-12).
+    # Es un boost, no un filtro: los municipales siguen como candidatos.
+    es_dpto = bool(req.territorio and re.fullmatch(r"\d{2}", req.territorio))
+
     def _run(where_sql: str, params: list) -> tuple[int, list]:
         """Conteo + top-10 con score compuesto para un WHERE dado."""
         with _connect() as conn:
@@ -502,6 +509,10 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                              ))
                              +
                              ({boost_sql})
+                             +
+                             CASE WHEN %s AND s.jurisdiccion_nivel IN
+                                    ('departamental', 'nacional')
+                                  THEN 0.3 ELSE 0 END
                            ) AS score
                     FROM subset s
                     ORDER BY score DESC NULLS LAST,
@@ -511,7 +522,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                     """,
                     params + [
                         _SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS,
-                    ] + boost_params,
+                    ] + boost_params + [es_dpto],
                 )
                 rows = cur.fetchall()
         return total, rows
@@ -550,13 +561,42 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
         # candidato QUE PUEDA PRODUCIR DATOS. Un federado solo_metadatos
         # (no_csv) no tiene filas que contar: elegirlo devolvía cifra None
         # silenciosa (caso real n6k3-wycd, 2026-07-11).
-        ejecutable = next(
-            (r for r in rows
-             if r.get("source_type") == "socrata" or r.get("federated_status") == "ok"),
-            None,
-        )
-        if ejecutable is not None:
-            chosen = ejecutable["dataset_id"]
+        ejecutables = [
+            r for r in rows
+            if r.get("source_type") == "socrata" or r.get("federated_status") == "ok"
+        ]
+        # El elegido además debe SOPORTAR el TIPO pedido: Tendencia necesita
+        # una columna fecha y Mapa una geo. Elegir el top ciego producía
+        # errores honestos evitables ("evolución de homicidios" → dataset sin
+        # fecha) cuando el candidato #2 sí podía responder (2026-07-12). Solo
+        # se conoce el esquema curado de los nativos; los federados quedan
+        # como respaldo (su CSV puede tener la columna). Si ninguno soporta
+        # el TIPO, cae al comportamiento anterior (error honesto).
+        necesita = {"Tendencia": "fecha", "Mapa": "geo"}.get(req.tipo or "")
+        if necesita and ejecutables:
+            nativos = [r["dataset_id"] for r in ejecutables
+                       if r.get("source_type") == "socrata"]
+            capaces: set[str] = set()
+            if nativos:
+                with _connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT dataset_id FROM dataset_columns_curated
+                        WHERE dataset_id = ANY(%s) AND semantic_type = %s
+                        """,
+                        (nativos, necesita),
+                    )
+                    capaces = {r["dataset_id"] for r in cur.fetchall()}
+            compatible = next(
+                (r for r in ejecutables if r["dataset_id"] in capaces), None
+            ) or next(
+                (r for r in ejecutables if r.get("source_type") == "federated"),
+                None,
+            )
+            if compatible is not None:
+                ejecutables = [compatible]
+        if ejecutables:
+            chosen = ejecutables[0]["dataset_id"]
         elif candidates:
             msg = (
                 "Estos datasets solo son consultables en su portal de origen "
@@ -584,8 +624,51 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
 import time as _time
 
 
+def _merge_categorias_duplicadas(resp: ChipsExecuteResponse) -> ChipsExecuteResponse:
+    """Funde filas de Comparar/Ranking cuya categoría difiere solo en
+    mayúsculas/tildes ("Transporte" + "TRANSPORTE" del SIIF, 2026-07-12).
+
+    El dato de origen viene sucio y el GROUP BY los separa; para el ciudadano
+    son la misma barra. Se queda la etiqueta de la variante con mayor valor y
+    se suman los valores. Solo toca la forma {categoria, n|total}.
+    """
+    if resp.tipo not in ("Comparar", "Ranking") or not resp.rows:
+        return resp
+    metrica = "total" if "total" in resp.rows[0] else "n"
+    if "categoria" not in resp.rows[0] or metrica not in resp.rows[0]:
+        return resp
+    tabla = str.maketrans("áéíóúüñ", "aeiouun")
+    grupos: dict[str, dict] = {}
+    for r in resp.rows:
+        cat = str(r.get("categoria") or "")
+        try:
+            val = float(r.get(metrica) or 0)
+        except (TypeError, ValueError):
+            return resp  # métrica no numérica: no tocar
+        clave = cat.strip().lower().translate(tabla)
+        g = grupos.setdefault(clave, {"categoria": cat, "valor": 0.0, "mayor": -1.0})
+        g["valor"] += val
+        if val > g["mayor"]:
+            g["mayor"] = val
+            g["categoria"] = cat
+    if len(grupos) == len(resp.rows):
+        return resp  # no había duplicados
+    fundidas = sorted(grupos.values(), key=lambda g: g["valor"], reverse=True)
+    resp.rows = [
+        {"categoria": g["categoria"],
+         metrica: int(g["valor"]) if g["valor"].is_integer() else g["valor"]}
+        for g in fundidas
+    ]
+    resp.row_count = len(resp.rows)
+    return resp
+
+
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
+    return _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
+
+
+async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     """Ejecuta una consulta SoQL determinista sobre el dataset elegido.
 
     Flujo:
@@ -683,6 +766,36 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                             "expone CSV consultable (federated_status="
                             f"{federated_status!r}). Sólo es descubrible."
                         ),
+                    )
+                # Guarda de tamaño: consultar en vivo un CSV federado gigante
+                # revienta el timeout del gateway (502 con gwqv-sqvs,
+                # 2026-07-12). Si el origen declara Content-Length por encima
+                # del tope, respuesta honesta inmediata en vez de colgarse.
+                try:
+                    head = httpx.head(data_url, follow_redirects=True, timeout=6)
+                    fed_bytes = int(head.headers.get("content-length") or 0)
+                except Exception:  # noqa: BLE001 — sin HEAD, se intenta igual
+                    fed_bytes = 0
+                if fed_bytes > 250 * 1024 * 1024:
+                    friendly = (
+                        "El archivo de este dataset pesa "
+                        f"{fed_bytes / (1024 * 1024):.0f} MB — demasiado para "
+                        "consultarlo en vivo. Descárgalo desde su portal de origen."
+                    )
+                    emit_event(
+                        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                        source_type="federated",
+                        elapsed_ms=int((_time.time()-t0)*1000),
+                        row_count=0, error=friendly,
+                    )
+                    return ChipsExecuteResponse(
+                        dataset_id=req.dataset_id,
+                        tipo=req.tipo,
+                        soql="",
+                        columns_used=[],
+                        rows=[],
+                        row_count=0,
+                        error=friendly,
                     )
                 # Descubrir columnas via DuckDB DESCRIBE (sin descargar filas).
                 try:
@@ -1092,6 +1205,26 @@ def _infer_tipo_lexico(q: str) -> str | None:
     return None
 
 
+# Señales léxicas → TEMA. Solo entradas con evidencia de fallo del mapper
+# (2026-07-12: "producción agrícola" → Comercio; "estaciones de policía" →
+# Función pública). Inequívocas y cortas a propósito: un guardrail, no un
+# clasificador. Solo aplican si el tema existe en las listas de la BD.
+_TEMA_LEXICO: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"agr[ií]col|agricultur|cultivo|cosecha|ganader|pecuari",
+                re.IGNORECASE), "Agricultura y Desarrollo Rural"),
+    (re.compile(r"polic[ií]a|homicid|hurto|delito|secuestro|extorsi[oó]n",
+                re.IGNORECASE), "Seguridad y Defensa"),
+]
+
+
+def _infer_tema_lexico(q: str) -> str | None:
+    """TEMA por señal léxica inequívoca, o None si no hay ninguna."""
+    for pattern, tema in _TEMA_LEXICO:
+        if pattern.search(q):
+            return tema
+    return None
+
+
 # ----------------------------------------------------------------------
 # POST /api/v1/chips/from-nl (Hito 1 Fase 2 — mapper NL→chips)
 # ----------------------------------------------------------------------
@@ -1129,6 +1262,13 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         mapped["tipo"] = tipo_lexico
     elif tipo_lexico and not mapped.get("tipo"):
         mapped["tipo"] = tipo_lexico
+
+    # Guardrail léxico de TEMA: señales inequívocas ganan al LLM (medido:
+    # el mapper puso "producción agrícola" en Comercio y "policía" en
+    # Función pública). Solo si el tema existe en las listas reales.
+    tema_lexico = _infer_tema_lexico(req.q)
+    if tema_lexico and tema_lexico in available["tema"]:
+        mapped["tema"] = tema_lexico
 
     picked = sum(1 for v in mapped.values() if v is not None)
     emit_event(

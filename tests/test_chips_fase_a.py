@@ -186,8 +186,8 @@ def test_refinador_boost_por_palabras():
     assert "%energia%" in score_params  # sin tilde
     assert "%estrato%" in score_params
     assert "%de%" not in score_params  # cortas fuera
-    # tres palabras → tres CASE sumados
-    assert score_sql.count("CASE WHEN") == 3
+    # tres palabras → tres CASE de boost (aparte va el CASE de jurisdicción)
+    assert score_sql.count("translate(lower(s.name)") == 3
 
 
 # ----------------------------------------------------------------------
