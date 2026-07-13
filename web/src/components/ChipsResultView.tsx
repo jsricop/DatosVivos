@@ -129,6 +129,7 @@ export function ChipsResultView({
           tipo: exec.tipo,
           rows: exec.rows,
           columns_used: exec.columns_used,
+          row_unit: exec.row_unit ?? null,
         }),
       });
       if (!res.ok) throw new Error(`Backend ${res.status}`);

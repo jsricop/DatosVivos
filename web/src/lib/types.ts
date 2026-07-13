@@ -118,6 +118,8 @@ export type ChipsExplainRequest = {
   tipo: ChipTipo;
   rows: Row[];
   columns_used?: string[];
+  /** Unidad de UNA fila — sin ella la narrativa inventaba la unidad. */
+  row_unit?: string | null;
 };
 
 export type ChipsFromNLResponse = {

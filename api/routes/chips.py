@@ -1545,7 +1545,7 @@ def _format_for_prompt(rows: list[dict]) -> str:
 _EXPLAIN_PROMPT = """Eres un explicador de cifras públicas colombianas para ciudadanos.
 
 Dataset: {dataset_name}
-TIPO de consulta: {tipo}
+TIPO de consulta: {tipo}{unidad_linea}
 Datos resultantes (JSON):
 {rows_json}
 
@@ -1553,6 +1553,7 @@ Reglas estrictas:
 - 2 frases en español neutro. NO uses listas.
 - Empieza con la cifra principal.
 - NO INVENTES números. Cada cifra que menciones DEBE estar en los datos arriba.
+- NO INVENTES la unidad: si arriba dice qué representa cada fila, usa ESA unidad; si no lo dice, di "registros".
 - Si la cifra es 0 o vacía, di "no se reportaron datos" sin más.
 
 Respuesta:"""
@@ -1581,10 +1582,15 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
     # ceros — esto reduce alucinaciones de magnitud en Ranking.
     sample = req.rows[:10]
     rows_json = _format_for_prompt(sample)
+    unidad_linea = (
+        f"\nCada fila del dataset representa: {req.row_unit}"
+        if req.row_unit else ""
+    )
     prompt = _EXPLAIN_PROMPT.format(
         dataset_name=req.dataset_name,
         tipo=req.tipo,
         rows_json=rows_json,
+        unidad_linea=unidad_linea,
     )
 
     backend = get_backend()

@@ -285,6 +285,11 @@ class ChipsExplainRequest(BaseModel):
     tipo: ChipTipo
     rows: list[dict]                # filas tal como el motor las devolvió
     columns_used: list[str] = []
+    # Unidad de UNA fila ("programas matriculados") — sin ella la narrativa
+    # inventaba la unidad ("390.903 estudiantes" cuando cada fila era un
+    # registro por programa, 2026-07-13). El validador censura cifras, no
+    # unidades: hay que dárselas.
+    row_unit: str | None = None
 
 
 class ChipsFromNLRequest(BaseModel):
