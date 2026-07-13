@@ -28,3 +28,15 @@ export function getEmbedHeight(): number {
 export function isEmbedConfigured(): boolean {
   return getEmbedUrl().length > 0;
 }
+
+/** Tamaño NATIVO del lienzo del reporte (para el escalado del embed).
+ *  Defaults del lienzo estándar 16:9 de Power BI; la barra inferior de
+ *  publish-to-web suma ~56px al alto. Ajustable por env sin rebuild. */
+export function getReportNativeSize(): { width: number; height: number } {
+  const w = Number(process.env.PBI_REPORT_WIDTH);
+  const h = Number(process.env.PBI_REPORT_HEIGHT);
+  return {
+    width: Number.isFinite(w) && w > 0 ? w : 1280,
+    height: (Number.isFinite(h) && h > 0 ? h : 720) + 56,
+  };
+}

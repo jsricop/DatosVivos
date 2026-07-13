@@ -16,6 +16,8 @@ diccionario ciudadano↔institucional (ADR-024).
                       (alimentado por /api/v1/dashboard/*_decisor.csv)
   Nivel 3  /buscar    Dato puntual — lenguaje natural + chips
                       (motor NL2SQL verificado, pipeline abajo)
+  Puerta 4 /mcp       El mismo motor para AGENTES DE IA — servidor MCP
+                      (search · metadata · query · cross, transporte SSE)
 ```
 
 ## Vista alta — pipeline del buscador (nivel 3)

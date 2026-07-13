@@ -43,3 +43,16 @@ STATUS.md
 
 # Lock files de Office (PowerPoint abierto)
 ~$*
+
+# === Documentos de TRABAJO (se conservan localmente, no se publican) ===
+# Bitácoras, handoffs y salidas regenerables: útiles para el desarrollo,
+# exponen proceso interno sin aportar al lector del repo (ADR de depuración
+# documental 2026-07-13).
+docs/lessons_learned.md
+docs/powerbi/HANDOFF_*.md
+docs/powerbi/guia_powerbi.html
+eval/ciudadano/entregado_ciclo*.yaml
+eval/reports/*
+!eval/reports/data_quality_hito_q_2026-05-29.md
+!eval/reports/chips_2026-07-13T22-07-35.md
+!eval/reports/queries_2026-07-13T21-55-41.md

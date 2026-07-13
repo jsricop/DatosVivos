@@ -51,23 +51,32 @@ export default async function AcercaPage() {
           {" "}(operado por MinTIC), el geoportal del IGAC y los portales
           territoriales de Bogotá, Cali, Medellín y Valle del Cauca —{" "}
           {totalDatasets} datasets de entidades nacionales y territoriales —
-          y lo presenta en tres niveles: el{" "}
+          y lo entrega en cuatro puertas, una por audiencia: el{" "}
           <Link href="/" className="focus-ring">
             panorama nacional
           </Link>{" "}
-          con cifras en vivo, el{" "}
+          con cifras en vivo (tomadores de decisiones y prensa), el{" "}
           <Link href="/tablero" className="focus-ring">
             tablero interactivo
           </Link>{" "}
-          para explorar por sector y entidad, y el{" "}
+          por sector y entidad (gerentes y entidades publicadoras), el{" "}
           <Link href="/buscar" className="focus-ring">
             buscador
           </Link>{" "}
-          para preguntar en lenguaje natural.
+          en lenguaje natural (ciudadanía), y el{" "}
+          <Link href="/mcp" className="focus-ring">
+            servidor MCP
+          </Link>{" "}
+          que expone el motor a cualquier agente de IA (desarrolladores).
         </P>
         <P>
           Sin registro y sin rastreadores. Cada cifra del buscador se calcula
-          sobre las filas reales del dataset citado — nunca se estima.
+          sobre las filas reales del dataset citado — nunca se estima. E
+          incluye{" "}
+          <Link href="/accesibilidad" className="focus-ring">
+            modo de accesibilidad
+          </Link>{" "}
+          con voz, narración y alto contraste (Ley 1618 de 2013).
         </P>
 
         <section className="mt-6">
@@ -118,6 +127,11 @@ export default async function AcercaPage() {
         <section className="mt-6 pt-6 hairline-top">
           <span className="text-kicker">Documentación</span>
           <ul className="mt-3 flex flex-col gap-2">
+            <li>
+              <Link href="/mcp" className="focus-ring">
+                Servidor MCP — conectar un agente de IA
+              </Link>
+            </li>
             <li>
               <Link href="/accesibilidad" className="focus-ring">
                 Accesibilidad

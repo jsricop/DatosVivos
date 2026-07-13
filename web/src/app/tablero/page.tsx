@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getEmbedHeight, getEmbedUrl, isEmbedConfigured } from "@/lib/embed";
+import { getEmbedUrl, getReportNativeSize, isEmbedConfigured } from "@/lib/embed";
+import { PowerBIEmbed } from "@/components/PowerBIEmbed";
 
 export const metadata: Metadata = {
   title: "Tablero del catálogo",
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
 
 export default function TableroPage() {
   const embedUrl = getEmbedUrl();
-  const embedHeight = getEmbedHeight();
+  const native = getReportNativeSize();
   const ready = isEmbedConfigured();
 
   return (
@@ -58,21 +59,15 @@ export default function TableroPage() {
           aria-label="Tablero del catálogo"
           className="mx-auto w-full max-w-[1440px] px-[clamp(8px,2vw,32px)]"
         >
-          {/* El alto sigue al ancho con la proporción del reporte Power BI
-              (página 16:9 + 56px de barra inferior): así "Ajustar a la
-              página" llena el marco a ~100% en cualquier resolución, sin
-              verse gigante ni al 83% (2026-07-13). */}
-          <div
-            className="surface-elev relative w-full overflow-hidden p-0"
-            style={{ paddingBottom: "calc(56.25% + 56px)", minHeight: embedHeight }}
-          >
-            <iframe
+          {/* El reporte se renderiza a su tamaño nativo y se ESCALA al
+              ancho del marco (como un visor de PDF): sin scroll horizontal
+              ni zoom manual a ninguna resolución (2026-07-13). */}
+          <div className="surface-elev overflow-hidden p-0">
+            <PowerBIEmbed
               src={embedUrl}
               title="Tablero del catálogo — DatosVivos"
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="strict-origin-when-cross-origin"
-              className="absolute inset-0 block h-full w-full border-0 bg-bg-elev"
+              nativeWidth={native.width}
+              nativeHeight={native.height}
             />
           </div>
         </section>

@@ -9,10 +9,18 @@
 > 🔴 **En producción:** https://datosvivos.co — cifras en vivo, actualización diaria automática.
 
 DatosVivos integra en un solo catálogo consultable los **25.226 datasets** públicos de
-Colombia (corte 2026-07-12; se actualiza a diario) y los presenta en **tres niveles**:
-el **panorama nacional** para tomadores de decisiones, el **tablero interactivo** por
-sector y entidad, y un **buscador en lenguaje natural** con motor NL2SQL verificado
-para la ciudadanía. Incluye modo de accesibilidad (voz y narración, Ley 1618 de 2013).
+Colombia (corte 2026-07-12; se actualiza a diario) y los entrega en **cuatro puertas,
+una por audiencia**:
+
+| Funcionalidad | Para quién | Dónde |
+|---|---|---|
+| **Panorama general** — cifras en vivo del ecosistema (frescura, sectores, territorio) | Tomadores de decisiones, prensa, ciudadanía | [datosvivos.co](https://datosvivos.co) |
+| **Tablero por entidad** — detalle interactivo por sector, entidad y territorio | Gerentes sectoriales y entidades publicadoras | [/tablero](https://datosvivos.co/tablero) |
+| **Buscador ciudadano** — preguntas en lenguaje natural, cifra verificada + fuente | Cualquier persona, sin barrera técnica | [/buscar](https://datosvivos.co/buscar) |
+| **Servidor MCP** — el motor expuesto como herramientas para agentes de IA | Desarrolladores y agentes (Claude, OpenAI, etc.) | [/mcp](https://datosvivos.co/mcp) |
+
+Todo con **modo de accesibilidad**: entrada por voz, narración de resultados y alto
+contraste (Ley 1618 de 2013).
 
 ---
 

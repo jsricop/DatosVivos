@@ -628,5 +628,4 @@ Si una propuesta viola alguna de estas reglas, se rechaza sin discusión. No req
 - Accesibilidad — la página pública `/accesibilidad` y el `A11yPanel` implementan §3.4 (alto contraste) y §4.2 (escala tipográfica).
 - [`docs/adr/012-civic-editorial-design-system.md`](./adr/012-civic-editorial-design-system.md) — ADR que decide el sistema cuya implementación documenta este archivo.
 - ADR-011 — migración Streamlit→Next.js que habilita el rebranding (ADR temprano no conservado).
-- [`docs/crisp_mlq/00_index.md`](./crisp_mlq/00_index.md) — entrada del catálogo documental.
 - [`docs/glossary.md`](./glossary.md) — términos del sistema visual (token, hairline, Civic Editorial, IBM Plex, anti-FOUC, modo).

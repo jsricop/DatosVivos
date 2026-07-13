@@ -5,16 +5,13 @@
 #   - api         → ✅ FastAPI + SSE (ADR-013)     — backend de la SPA
 #   - web         → ✅ Next.js 15 (ADR-011)        — frontend Civic Editorial
 #   - postgres    → ✅ ACTIVO (ADR-014)            — telemetría + catálogo para PowerBI
-#   - streamlit   → ⚙️ legacy (profile=legacy)     — disponible 30 días tras cutover
-#   - ollama      → ⚠️ opcional, recomendado en host para no duplicar memoria
-#   - nginx       → ✅ reverse proxy con routing / → web · /legacy → streamlit · /api → api
+#   - nginx       → ✅ reverse proxy con routing / → web · /api → api
 #
 # Comandos comunes (local):
 #   docker compose up postgres -d                  # solo BD
 #   docker compose up mcp-server api web nginx     # stack completo Beta-2
-#   docker compose --profile legacy up streamlit   # solo si necesitas la UI vieja
 #
-# Despliegue en producción: ver docs/deployment_runbook.md.
+# Despliegue en producción: ver docs/validation_guide.md (replicación) y README.
 
 services:
   mcp-server:
@@ -108,27 +105,6 @@ services:
     depends_on:
       - api
       - postgres
-
-  streamlit:
-    profiles: ["legacy"]
-    build:
-      context: .
-      dockerfile: Dockerfile.streamlit
-      args:
-        APP_UID: "${APP_UID:-1000}"
-        APP_GID: "${APP_GID:-1000}"
-    env_file: .env
-    environment:
-      MCP_SERVER_URL: http://mcp-server:3000/sse
-      LLM_BACKEND: ${LLM_BACKEND:-ollama}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      PYTHONPATH: /app
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      - mcp-server
 
   nginx:
     image: nginx:1.27-alpine

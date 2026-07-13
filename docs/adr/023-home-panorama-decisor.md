@@ -14,7 +14,7 @@ DatosVivos nació "buscador primero": la home era una caja de lenguaje natural +
 analítica del catálogo vivía escondida (primero tras login, luego en `/tablero` como página
 secundaria). Dos hechos cambiaron el peso relativo de las piezas:
 
-1. **El tablero Power BI maduró** (spec: `docs/powerbi/guia_powerbi.html`): 4 páginas — salud
+1. **El tablero Power BI maduró** (spec: `docs/powerbi/GUIA_PowerBI_DatosVivos.pdf`): 4 páginas — salud
    del catálogo, engagement, por entidad, cobertura territorial — con slicers por
    `acceso_datos`, `entity_name`, `category`, `sector`, `quality_flag`. Está diseñado
    explícitamente **para un tomador de decisiones por sector o entidad**, y desde 2026-07-10
