@@ -1,8 +1,10 @@
 # Arquitectura DatosVivos
 
-Última actualización: **2026-07-10**. Refleja el estado tras el motor NL2SQL
+Última actualización: **2026-07-12**. Refleja el estado tras el motor NL2SQL
 generativo verificado (ADR-022), el pivote a home "panorama primero" (ADR-023),
-la integración de portales por origen y el tablero Power BI público.
+la integración de portales por origen, el tablero Power BI público, la bodega
+Parquet (mecanismo bodega-vs-vivo) y la migración del backend LLM a la API de
+Claude (Haiku) en producción.
 
 ## Arquitectura de información — 3 niveles (ADR-023)
 
@@ -30,7 +32,7 @@ la integración de portales por origen y el tablero Power BI público.
 │ POST /api/v1/chips/from-nl │                          │ POST /api/v1/query/chips   │
 │   (Fase 2 — LLM mapper)    │                          │   (Fase 1 — filtro SQL)    │
 │                            │                          │                            │
-│  qwen2.5:3b + guardrail    │                          │  Postgres SELECT + score   │
+│  LLM (Haiku) + guardrail   │                          │  Postgres SELECT + score   │
 │  → {tema, tipo, terr, ...} │                          │  → top-N candidatos + ELEGIDO  │
 └────────┬───────────────────┘                          └────────────┬───────────────┘
          │ navega con chips                                          │
@@ -58,7 +60,7 @@ la integración de portales por origen y el tablero Power BI público.
 │ (Fase C)        │    │  toggle "Ver     │         │      explain                │
 │                 │    │   consulta SoQL" │         │   (Fase D — narrativa LLM)  │
 │  Cuántos→KPI    │    │                  │         │                             │
-│  Comparar→Bar   │    └──────────────────┘         │ qwen2.5:7b + validator      │
+│  Comparar→Bar   │    └──────────────────┘         │ LLM (Haiku) + validator     │
 │  Ranking→Bar    │                                 │ anti-alucinación censura    │
 │  Tendencia→Line │                                 │ cifras no presentes en rows │
 │  Mapa→Choropleth│                                 │                             │
