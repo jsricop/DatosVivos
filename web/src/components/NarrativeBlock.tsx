@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { Citation } from "@/components/Citation";
+import { SparkIcon } from "@/components/icons";
 
 type NarrativeBlockProps = {
   /** Resumen corto (2-3 frases). Llega primero, TTFB ≤ 1s. */
@@ -49,7 +50,7 @@ export function NarrativeBlock({
       {/* Etiqueta persistente: esto lo redactó un modelo, no es un hecho del
           dataset. La cifra verificada vive aparte y por encima. */}
       <span className="inline-flex items-center gap-2 text-kicker text-ink-2">
-        <span aria-hidden>✦</span> Interpretado por IA — la cifra exacta sale de la fuente
+        <SparkIcon /> Interpretado por IA — la cifra exacta sale de la fuente
       </span>
 
       {/* Summary: siempre visible. */}

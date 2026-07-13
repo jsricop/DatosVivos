@@ -8,6 +8,8 @@
  * antes: no solo "qué consulté" sino "qué entendí que me pediste".
  */
 
+import { CheckIcon, WarnIcon } from "@/components/icons";
+
 type Filtro = { campo: string; valor?: string | null; etiqueta?: string | null };
 
 export type Interpretation = {
@@ -35,16 +37,22 @@ function VerificationBadge({
 }) {
   if (passed && fallback === "template") {
     return (
-      <span className="text-caption text-ok">
-        ✓ Verificada (plantilla determinista)
+      <span className="inline-flex items-center gap-1.5 text-caption text-ok">
+        <CheckIcon /> Verificada (plantilla determinista)
       </span>
     );
   }
   if (passed) {
-    return <span className="text-caption text-ok">✓ Consulta verificada</span>;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-caption text-ok">
+        <CheckIcon /> Consulta verificada
+      </span>
+    );
   }
   return (
-    <span className="text-caption text-warn">⚠ Consulta sin verificar del todo</span>
+    <span className="inline-flex items-center gap-1.5 text-caption text-warn">
+      <WarnIcon /> Consulta sin verificar del todo
+    </span>
   );
 }
 

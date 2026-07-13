@@ -28,6 +28,7 @@ from api.models.schemas import (
     PanoramaStats,
     PortalCount,
     SectorCount,
+    YearCumulative,
 )
 from api.routes.divipola import _DEPT_NAMES
 
@@ -125,6 +126,23 @@ _PANORAMA_SIN_GEO_SQL = """
     WHERE jurisdiccion_geo_codes IS NULL
 """
 
+# Línea de tiempo del catálogo: cuándo se creó cada dataset EN SU PORTAL DE
+# ORIGEN (created_at_socrata; publication_date de respaldo). Para los
+# anteriores al registro de DatosVivos es un estimado del origen — para los
+# nuevos coincide con su ingreso. La cola 2008-2015 (9 datasets) se agrupa
+# en el primer punto para no alargar la gráfica con años vacíos.
+_PANORAMA_CRECIMIENTO_SQL = """
+    SELECT GREATEST(
+             EXTRACT(YEAR FROM COALESCE(created_at_socrata, publication_date))::int,
+             2015
+           ) AS anio,
+           count(*) AS n
+    FROM datasets
+    WHERE COALESCE(created_at_socrata, publication_date) IS NOT NULL
+    GROUP BY 1
+    ORDER BY 1
+"""
+
 # Portales de ORIGEN del catálogo integrado. Criterio único (decisión
 # 2026-07-10): cada dataset se atribuye al portal donde su entidad lo publica
 # originalmente, sin importar la ruta de cosecha. En orden:
@@ -197,6 +215,13 @@ def _compute_panorama() -> PanoramaStats:
         cur.execute("SELECT max(finished_at) AS t FROM etl_runs")
         last_etl = (cur.fetchone() or {}).get("t")
 
+        cur.execute(_PANORAMA_CRECIMIENTO_SQL)
+        acumulado = 0
+        crecimiento = []
+        for r in cur.fetchall():
+            acumulado += r["n"]
+            crecimiento.append(YearCumulative(anio=r["anio"], acumulado=acumulado))
+
     return PanoramaStats(
         total=totals["total"],
         n_entidades=totals["n_entidades"],
@@ -230,6 +255,7 @@ def _compute_panorama() -> PanoramaStats:
         nacional_sin_geo=(sin_geo or {}).get("n", 0),
         generated_at=datetime.now(timezone.utc).isoformat(),
         last_etl_at=last_etl.isoformat() if last_etl else None,
+        crecimiento=crecimiento,
     )
 
 

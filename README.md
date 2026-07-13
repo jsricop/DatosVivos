@@ -8,8 +8,8 @@
 >
 > 🔴 **En producción:** https://datosvivos.co — cifras en vivo, actualización diaria automática.
 
-DatosVivos integra en un solo catálogo consultable los **25.192 datasets** públicos de
-Colombia (corte 2026-07-10; se actualiza a diario) y los presenta en **tres niveles**:
+DatosVivos integra en un solo catálogo consultable los **25.226 datasets** públicos de
+Colombia (corte 2026-07-12; se actualiza a diario) y los presenta en **tres niveles**:
 el **panorama nacional** para tomadores de decisiones, el **tablero interactivo** por
 sector y entidad, y un **buscador en lenguaje natural** con motor NL2SQL verificado
 para la ciudadanía. Incluye modo de accesibilidad (voz y narración, Ley 1618 de 2013).
@@ -28,7 +28,7 @@ podemos medir — y si no medimos, no podemos mejorar.**
 
 ## Justificación (valor público)
 
-El dato bien gobernado es infraestructura. Al corte del 2026-07-10, **el 71 % del
+El dato bien gobernado es infraestructura. Al corte del 2026-07-12, **el 71 % del
 catálogo está desactualizado frente a la frecuencia que su propia entidad declaró** —
 un incumplimiento invisible hasta ahora porque no existía la herramienta que lo
 mostrara. DatosVivos convierte ese punto ciego en un indicador gestionable por
@@ -38,13 +38,13 @@ apropiación ciudadana del ecosistema digital (objetivo del Reto 7).
 
 ## Cantidad de datasets utilizados
 
-**25.192 datasets** de **1.423 entidades** (corte 2026-07-10 — el catálogo se
+**25.226 datasets** de **1.423 entidades** (corte 2026-07-12 — el catálogo se
 re-ingesta automáticamente a diario, las cifras varían). Nivel Avanzado: integración
 masiva de fuentes heterogéneas, no un análisis de dataset único.
 
 ## Datasets utilizados de datos.gov.co
 
-- **El catálogo completo del portal nacional**: 12.101 datasets vía Socrata Discovery
+- **El catálogo completo del portal nacional**: 12.112 datasets vía Socrata Discovery
   API + SODA + Metadata API (8.458 nativos consultables en línea).
 - **DIVIPOLA — Codificación de municipios** (`gdxc-w37w`, DANE): referencia canónica
   territorial para la inferencia geográfica y el mapa por departamento.
@@ -54,7 +54,7 @@ masiva de fuentes heterogéneas, no un análisis de dataset único.
 ## Datasets utilizados externos
 
 Portales integrados por harvesting directo y atribución de origen:
-**IGAC / Colombia en Mapas** (6.622) · **Datos Abiertos Bogotá** (4.304, CKAN) ·
+**IGAC / Colombia en Mapas** (6.626) · **Datos Abiertos Bogotá** (4.323, CKAN) ·
 **Datos Abiertos Cali** (1.236, CKAN) · **MEDATA Medellín** (823, DCAT) ·
 **Datos Abiertos Valle del Cauca** (106, CKAN).
 → Detalle y mecanismos: [docs/fuentes_datos.md](docs/fuentes_datos.md)
@@ -99,7 +99,7 @@ Organizado por nivel del producto (nivel avanzado del TDR):
 | **Agentes de IA para servicios públicos** que consulten y procesen datos abiertos automáticamente | El agente consulta, cruza y procesa el catálogo para responder solicitudes ciudadanas |
 | **IA generativa** para asistentes y **sistemas conversacionales basados en datos abiertos** | Buscador en lenguaje natural con motor **NL2SQL / Text-to-SQL** generativo verificado |
 | **Modelos de lenguaje** y **arquitecturas híbridas** | LLM + verificación determinista de 3 capas ("la IA razona, el motor verifica") + embeddings neuronales de retrieval |
-| **Integración de grandes volúmenes de datos**, múltiples fuentes | **25.192 datasets** de 6 portales y 3 protocolos (Socrata, CKAN, DCAT) — muy por encima de los 3-10 conjuntos del nivel intermedio |
+| **Integración de grandes volúmenes de datos**, múltiples fuentes | **25.226 datasets** de 6 portales y 3 protocolos (Socrata, CKAN, DCAT) — muy por encima de los 3-10 conjuntos del nivel intermedio |
 | **Datos estructurados y no estructurados** | Metadata estructurada + texto libre (títulos, descripciones) procesado con embeddings y clasificadores |
 | Más variables que el nivel intermedio (10-20) | **29 variables curadas por dataset** en la vista analítica (sobre 42 columnas fuente) |
 | **Automatización, escalabilidad y despliegue funcional** | Actualización diaria automática, arquitectura agnóstica del portal, **en producción** en datosvivos.co |

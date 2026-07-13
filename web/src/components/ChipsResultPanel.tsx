@@ -25,6 +25,7 @@ import type {
   MapBlock,
 } from "@/lib/schemas/dashboard";
 import type { Row } from "@/lib/dashboard-data";
+import { CheckIcon } from "@/components/icons";
 
 // Cargas dinámicas con SSR off — mismo patrón que BlockRenderer.tsx para
 // los charts pesados.
@@ -71,7 +72,7 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
         </span>
         <p className="font-sans text-body text-ink-2 m-0">{error}</p>
         <p className="font-sans text-caption text-ink-muted m-0">
-          Probá <em>Cuántos</em> o <em>Comparar</em> — funcionan sobre cualquier
+          Prueba <em>Cuántos</em> o <em>Comparar</em> — funcionan sobre cualquier
           dataset con datos tabulares.
         </p>
       </article>
@@ -88,7 +89,7 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       >
         <span className="text-kicker">Sin datos</span>
         <p className="font-sans text-body text-ink-2 m-0">
-          El dataset existe pero no devolvió filas para esta combinación. Probá
+          El dataset existe pero no devolvió filas para esta combinación. Prueba
           quitar un chip o cambiar de TIPO.
         </p>
       </article>
@@ -203,7 +204,7 @@ function VerifiedNote({ countNote = false }: { countNote?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="inline-flex items-center gap-1.5 font-sans text-caption font-semibold text-ok">
-        <span aria-hidden>✓</span> Cifra verificada — sale del dataset, no de IA
+        <CheckIcon /> Cifra verificada — sale del dataset, no de IA
       </span>
       {countNote ? (
         <span className="font-sans text-caption text-ink-muted">

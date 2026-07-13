@@ -12,6 +12,7 @@ Como stats.py usa psycopg.connect síncrono, mockeamos a nivel de _connect()
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,11 +25,13 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 
 # Secuencia real de _compute_panorama sobre UN cursor:
-#   execute(totales)  → fetchone
-#   execute(sector)   → fetchall
-#   execute(dpto)     → fetchall
-#   execute(sin_geo)  → fetchone
-#   execute(portal)   → fetchall
+#   execute(totales)     → fetchone
+#   execute(sector)      → fetchall
+#   execute(dpto)        → fetchall
+#   execute(sin_geo)     → fetchone
+#   execute(portal)      → fetchall
+#   execute(last_etl)    → fetchone
+#   execute(crecimiento) → fetchall
 _TOTALS = {
     "total": 100,
     "n_entidades": 40,
@@ -55,12 +58,18 @@ _PORTALES = [
     {"portal": "datos.gov.co", "n_datasets": 80},
     {"portal": "datosabiertos.bogota.gov.co", "n_datasets": 20},
 ]
+_LAST_ETL = {"t": datetime(2026, 7, 12, 5, 15, 9, tzinfo=timezone.utc)}
+_CRECIMIENTO = [
+    {"anio": 2015, "n": 10},
+    {"anio": 2020, "n": 30},
+    {"anio": 2026, "n": 60},
+]
 
 
 def _mock_conn():
     cur = MagicMock()
-    cur.fetchone.side_effect = [_TOTALS, _SIN_GEO]
-    cur.fetchall.side_effect = [_SECTORES, _DPTOS, _PORTALES]
+    cur.fetchone.side_effect = [_TOTALS, _SIN_GEO, _LAST_ETL]
+    cur.fetchall.side_effect = [_SECTORES, _DPTOS, _PORTALES, _CRECIMIENTO]
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
     conn.cursor.return_value.__exit__.return_value = False
@@ -116,6 +125,16 @@ def test_panorama_shape_y_semantica():
     assert sum(p["n_datasets"] for p in body["por_portal"]) == body["total"]
     assert body["nacional_sin_geo"] == 35
     assert body["generated_at"]  # ISO no vacío
+
+    # last_etl_at = cierre real del ETL (lo que muestra la home), no el caché.
+    assert body["last_etl_at"].startswith("2026-07-12T05:15:09")
+
+    # Línea de tiempo: acumulado creciente que termina en la suma total.
+    assert body["crecimiento"] == [
+        {"anio": 2015, "acumulado": 10},
+        {"anio": 2020, "acumulado": 40},
+        {"anio": 2026, "acumulado": 100},
+    ]
 
 
 def test_panorama_departamentos_solo_codigos_canonicos():

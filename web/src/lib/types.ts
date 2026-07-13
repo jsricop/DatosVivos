@@ -149,6 +149,12 @@ export type PortalCount = {
   n_datasets: number;
 };
 
+/** Punto de la línea de tiempo: acumulado del catálogo a fin de ese año. */
+export type YearCumulative = {
+  anio: number;
+  acumulado: number;
+};
+
 /**
  * GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
  * Línea editorial sobre el CATÁLOGO COMPLETO: `total` coincide con
@@ -167,4 +173,6 @@ export type PanoramaStats = {
   generated_at: string;
   /** finished_at de la última corrida del ETL (la fecha real del dato). */
   last_etl_at?: string | null;
+  /** Acumulado de datasets por año de creación en su portal de origen. */
+  crecimiento?: YearCumulative[];
 };

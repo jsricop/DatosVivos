@@ -315,6 +315,13 @@ class PortalCount(BaseModel):
     n_datasets: int
 
 
+class YearCumulative(BaseModel):
+    """Punto de la línea de tiempo del catálogo: acumulado a fin de ese año."""
+
+    anio: int
+    acumulado: int
+
+
 class PanoramaStats(BaseModel):
     """GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
 
@@ -336,3 +343,7 @@ class PanoramaStats(BaseModel):
     # ISO de finished_at de la última corrida del ETL: la fecha que ve el
     # usuario en "Actualizado ...". generated_at es del caché, no del dato.
     last_etl_at: str | None = None
+    # Línea de tiempo: acumulado de datasets por año de creación en su portal
+    # de origen (para los anteriores al registro de DatosVivos es un estimado;
+    # los años ≤2015 se agrupan en el primer punto).
+    crecimiento: list[YearCumulative] = []

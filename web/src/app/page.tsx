@@ -5,6 +5,7 @@ import { BarList } from "@/components/panorama/BarList";
 import { PanoramaKPIs } from "@/components/panorama/PanoramaKPIs";
 import { PanoramaMapLazy } from "@/components/panorama/PanoramaMapLazy";
 import { StackedBar } from "@/components/panorama/StackedBar";
+import { TimelineArea } from "@/components/panorama/TimelineArea";
 import { fetchPanoramaStats } from "@/lib/api";
 import type { PanoramaStats } from "@/lib/types";
 
@@ -46,6 +47,17 @@ export default async function HomePage() {
       {stats ? (
         <>
           <PanoramaKPIs stats={stats} />
+
+          {/* Línea de tiempo a ancho completo: el crecimiento del catálogo
+              es LA historia del ecosistema — abre la sección de gráficas. */}
+          {stats.crecimiento && stats.crecimiento.length >= 2 ? (
+            <PanelCard
+              title="Cómo ha crecido el catálogo"
+              note="Acumulado según la fecha de creación de cada dataset en su portal de origen. Para los publicados antes de la integración de DatosVivos esa fecha es el mejor estimado disponible."
+            >
+              <TimelineArea puntos={stats.crecimiento} />
+            </PanelCard>
+          ) : null}
 
           {/* Gráficas de panorama: agregados nacionales, sin filtros — el
               corte interactivo por entidad/sector vive en /tablero. */}

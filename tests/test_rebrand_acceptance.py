@@ -514,11 +514,12 @@ def test_brand_paletas_pasan_contraste_minimo():
     content = brand.read_text(encoding="utf-8")
 
     # Tabla de pares (modo, bg, ink, expected_min_ratio) — chequea AA normal.
+    # Paleta gov.co vigente (ADR-021, 2026-06-24): la Civic Editorial
+    # (#F3EFE3 crema) quedó superseded y ya no vive en BRAND.md.
     pairs = [
-        ("light", "#F3EFE3", "#16130E", 4.5),
-        ("dark", "#0E0C08", "#E8E1CE", 4.5),
-        ("contrast-light", "#FFFFFF", "#000000", 4.5),
-        ("contrast-dark", "#000000", "#FFFFFF", 4.5),
+        ("light", "#FFFFFF", "#16161D", 4.5),
+        ("light-accent", "#FFFFFF", "#004884", 4.5),
+        ("dark", "#0E1422", "#E8ECF2", 4.5),
     ]
     for mode, bg, ink, min_ratio in pairs:
         assert _wcag_contrast(bg, ink) >= min_ratio, (
