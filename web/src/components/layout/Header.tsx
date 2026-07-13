@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { ColorModeToggle } from "@/components/ColorModeToggle";
+import { NavLink } from "@/components/layout/NavLink";
 import { Wordmark } from "@/components/Wordmark";
 
 export function Header() {
@@ -22,41 +21,18 @@ export function Header() {
         <Wordmark size="header" />
         <nav
           aria-label="Navegación primaria"
-          className="flex items-center gap-6"
+          className="flex items-center gap-1.5"
         >
-          <Link
-            href="/"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Inicio
-          </Link>
-          <Link
-            href="/tablero"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Tablero
-          </Link>
-          <Link
-            href="/buscar"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Buscar
-          </Link>
-          <Link
-            href="/mcp"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            MCP
-          </Link>
-          <Link
-            href="/acerca"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Acerca
-          </Link>
+          <NavLink href="/">Inicio</NavLink>
+          <NavLink href="/tablero">Tablero</NavLink>
+          <NavLink href="/buscar">Buscar</NavLink>
+          <NavLink href="/mcp">MCP</NavLink>
+          <NavLink href="/acerca">Acerca</NavLink>
           {/* La página /accesibilidad vive en el footer: el header ya cubre
               la necesidad inmediata con el switch de apariencia. */}
-          <ColorModeToggle />
+          <span className="ml-3">
+            <ColorModeToggle />
+          </span>
         </nav>
       </div>
     </header>
