@@ -25,10 +25,9 @@ type HeroSearchProps = {
 
 const DEFAULT_PLACEHOLDERS = [
   "¿Cuántos colegios públicos hay en Boyacá?",
-  "¿Tendencia de matrícula en Cundinamarca 2018-2024?",
-  "¿Cobertura de vacunación contra fiebre amarilla?",
-  "¿Top 10 municipios con más estudiantes matriculados?",
-  "¿Cuántos contratos firmó la ANI en 2024?",
+  "¿Está subiendo o bajando el hurto de celulares en Colombia?",
+  "¿Cuántos hurtos hubo en Boyacá en 2024?",
+  "¿Cuánto cuesta el programa de alimentación escolar?",
 ];
 
 /**

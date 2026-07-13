@@ -8,7 +8,7 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "DatosVivos — Datos del Estado, en tus palabras",
+    name: "DatosVivos — El panorama de los datos abiertos de Colombia",
     short_name: "DatosVivos",
     description:
       "El panorama de los datos abiertos de Colombia: cifras en vivo del catálogo que integra datos.gov.co y los portales territoriales, tablero interactivo por sector y entidad, y consultas en lenguaje natural con fuente verificable.",

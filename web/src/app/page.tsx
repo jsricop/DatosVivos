@@ -31,7 +31,7 @@ export default async function HomePage() {
     <div className="container-narrow flex flex-col gap-10 py-10">
       {/* Hero: línea de marca como kicker, titular de panorama. */}
       <section className="flex flex-col gap-4">
-        <span className="text-kicker">Datos del Estado, en tus palabras</span>
+        <span className="text-kicker">Panorama de datos abiertos · Colombia</span>
         <h1 className="m-0 max-w-[22ch] text-h1 font-extrabold leading-tight text-ink">
           El panorama de los datos abiertos de Colombia
         </h1>

@@ -220,8 +220,8 @@ s = slide(AZUL)
 rect(s, Inches(0), Inches(6.85), W, Inches(0.05), AZUL2)
 tf = box(s, Inches(0.9), Inches(1.9), Inches(11.5), Inches(3.4))
 para(tf, "Datos|Vivos", 64, color=BLANCO, bold=True, font=MONO, first=True, space_after=4)
-para(tf, "── el panorama de los datos abiertos de Colombia", 20, color=CELESTE, font=MONO, space_after=20)
-para(tf, "Datos del Estado, en tus palabras.", 28, color=BLANCO, bold=True)
+para(tf, "── datosvivos.co", 20, color=CELESTE, font=MONO, space_after=20)
+para(tf, "El panorama de los datos abiertos de Colombia.", 28, color=BLANCO, bold=True)
 # mini-barra semáforo como firma visual
 stacked_bar(s, Inches(0.95), Inches(5.35), Inches(6.5), Inches(0.28), [
     (9, OK, ""), (20, WARN, ""), (71, BAD, "")])

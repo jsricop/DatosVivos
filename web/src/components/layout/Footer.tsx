@@ -7,11 +7,14 @@ export function Footer() {
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex flex-col gap-1">
             <p className="m-0 font-sans text-body-sm font-bold text-ink">
-              República de Colombia
+              DatosVivos — el panorama de los datos abiertos de Colombia
             </p>
             <p className="m-0 font-sans text-caption text-ink-2">
-              Agencia Nacional de Infraestructura — Datos al Ecosistema 2026 ·
-              Equipo 93 · Reto 7 (id 102)
+              Andrea Navarro, Jhonatan Rico &amp; Hernán Gutiérrez · GIT-TIC,
+              Agencia Nacional de Infraestructura (ANI)
+            </p>
+            <p className="m-0 font-sans text-caption text-ink-muted">
+              Datos al Ecosistema 2026 · Equipo 93 · Reto 7
             </p>
           </div>
           <nav
@@ -45,7 +48,8 @@ export function Footer() {
           </nav>
         </div>
         <p className="m-0 font-mono text-caption text-ink-muted">
-          Beta · Sin trackers · Servicio sobre infraestructura del Estado
+          Sin trackers · Fuentes: datos.gov.co + 6 portales integrados ·
+          República de Colombia
         </p>
       </div>
     </footer>

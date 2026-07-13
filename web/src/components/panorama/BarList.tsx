@@ -31,24 +31,35 @@ export function BarList({ items }: { items: BarItem[] }) {
           key={s.label}
           className="grid grid-cols-[minmax(9ch,14ch)_1fr_auto] items-center gap-3"
         >
-          {s.href ? (
-            <a
-              href={s.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-sans text-body-sm text-ink-2 truncate focus-ring"
-              title={s.href}
-            >
-              {s.label}
-            </a>
-          ) : (
+          {/* group/relative: al pasar el mouse por una etiqueta truncada
+              aparece el nombre COMPLETO al instante (el title nativo tarda
+              ~1 s y el usuario no lo descubre, 2026-07-13). */}
+          <span className="relative group min-w-0">
+            {s.href ? (
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block font-sans text-body-sm text-ink-2 truncate focus-ring"
+                title={s.href}
+              >
+                {s.label}
+              </a>
+            ) : (
+              <span
+                className="block font-sans text-body-sm text-ink-2 truncate"
+                title={s.label}
+              >
+                {s.label}
+              </span>
+            )}
             <span
-              className="font-sans text-body-sm text-ink-2 truncate"
-              title={s.label}
+              role="tooltip"
+              className="pointer-events-none absolute left-0 bottom-full z-10 mb-1 hidden max-w-[40ch] whitespace-normal rounded-[var(--radius-1)] bg-ink px-2 py-1 font-sans text-caption text-bg shadow group-hover:block"
             >
               {s.label}
             </span>
-          )}
+          </span>
           <span className="block h-4 bg-bg-overlay rounded-[var(--radius-0)] overflow-hidden">
             <span
               className={`block h-full bg-accent reveal-bar${revealed ? "" : " is-pending"}`}

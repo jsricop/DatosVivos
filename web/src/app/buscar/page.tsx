@@ -149,7 +149,6 @@ function EmptyState({ chipsLists, popular }: EmptyStateProps) {
     territorio: chipsLists.territorio,
     entidad: chipsLists.entidad,
   };
-  const sectores = chipsLists.tema.slice(0, 8);
 
   return (
     <div className="container-narrow py-12 flex flex-col gap-10">
@@ -163,29 +162,6 @@ function EmptyState({ chipsLists, popular }: EmptyStateProps) {
       </header>
 
       <SearchPanel />
-
-      {sectores.length > 0 ? (
-        <section className="hairline-top pt-8">
-          <div className="mb-4 flex items-baseline justify-between gap-2 flex-wrap">
-            <h2 className="text-h3 m-0">¿No sabes por dónde empezar? Explora por sector</h2>
-            <span className="font-mono text-caption text-ink-muted">
-              {chipsLists.tema.length} sectores
-            </span>
-          </div>
-          <ul className="grid grid-cols-2 md:grid-cols-4 gap-3 list-none m-0 p-0">
-            {sectores.map((s) => (
-              <li key={s.value}>
-                <Link
-                  href={`/buscar?tema=${encodeURIComponent(s.value)}`}
-                  className="surface-card flex h-full items-center px-4 py-3 font-sans text-body-sm font-semibold text-ink no-underline transition-colors hover:border-accent focus-ring"
-                >
-                  {s.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       {popular.length > 0 ? (
         <section className="hairline-top pt-8">
@@ -216,6 +192,14 @@ function EmptyState({ chipsLists, popular }: EmptyStateProps) {
 
       {/* Constructor determinista para power users, colapsado al final. */}
       <AdvancedQueryBuilder chips={chips} />
+
+      {/* Detalle técnico: el mismo motor, expuesto como servidor MCP. */}
+      <p className="m-0 font-mono text-caption text-ink-muted">
+        ¿Eres desarrollador o usas un agente de IA?{" "}
+        <Link href="/mcp" className="text-ink-2 focus-ring">
+          Usar el MCP de DatosVivos →
+        </Link>
+      </p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # DatosVivos — el panorama de los datos abiertos de Colombia
 
-**Datos del Estado, en tus palabras.**
+**El panorama de los datos abiertos de Colombia.**
 
 > **Concurso Datos al Ecosistema 2026: IA para Colombia** (MinTIC)
 > **Equipo 93 · Reto de Innovación y Tecnología (Reto 7, id 102) · Nivel Avanzado**
@@ -169,6 +169,11 @@ Para ver y probar la solución funcionando en tiempo real:
 **Aplicación Web / Producción:** [https://datosvivos.co](https://datosvivos.co)
 · [Tablero del decisor](https://datosvivos.co/tablero)
 · [Buscador en lenguaje natural](https://datosvivos.co/buscar)
+
+**Registro oficial de uso:** el proyecto está postulado en el portal de usos de
+datos.gov.co como *"DatosVivos - El panorama de los datos abiertos de Colombia"*
+(**Uso n.º 1074**, registrado el 2026-07-13 en
+[herramientas.datos.gov.co/usos](https://herramientas.datos.gov.co/usos)).
 
 **API pública de estadísticas (verificación en vivo):**
 [`/api/v1/stats/panorama`](https://datosvivos.co/api/v1/stats/panorama) ·

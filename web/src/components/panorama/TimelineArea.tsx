@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { useRevealOnce } from "@/components/panorama/useRevealOnce";
 import type { YearCumulative } from "@/lib/types";
 
@@ -13,6 +15,9 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
  */
 export function TimelineArea({ puntos }: { puntos: YearCumulative[] }) {
   const { ref, revealed } = useRevealOnce<HTMLDivElement>();
+  // Punto bajo el cursor: muestra su valor exacto (tooltip SVG propio — el
+  // <title> nativo tarda y el punto de 3px era un blanco imposible).
+  const [hover, setHover] = useState<number | null>(null);
   const primero = puntos[0];
   const ultimo = puntos[puntos.length - 1];
   if (!primero || !ultimo || puntos.length < 2) return null;
@@ -90,13 +95,65 @@ export function TimelineArea({ puntos }: { puntos: YearCumulative[] }) {
               key={p.anio}
               cx={x(i)}
               cy={y(p.acumulado)}
-              r="3"
+              r={hover === i ? 5 : 3}
               fill="var(--chart-1)"
-            >
-              <title>{`${p.anio}: ${fmt(p.acumulado)} datasets acumulados`}</title>
-            </circle>
+            />
           ))}
         </g>
+
+        {/* Blancos de hover invisibles (columna completa por punto) + tooltip. */}
+        {puntos.map((p, i) => (
+          <rect
+            key={`hit-${p.anio}`}
+            x={x(i) - innerW / (puntos.length - 1) / 2}
+            y={0}
+            width={innerW / (puntos.length - 1)}
+            height={H - PAD_B}
+            fill="transparent"
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          />
+        ))}
+        {hover !== null && puntos[hover] ? (
+          <g pointerEvents="none">
+            <line
+              x1={x(hover)}
+              x2={x(hover)}
+              y1={PAD_T}
+              y2={PAD_T + innerH}
+              stroke="var(--hairline-strong)"
+              strokeDasharray="2 3"
+            />
+            {(() => {
+              const p = puntos[hover]!;
+              const texto = `${hover === 0 ? "≤" : ""}${p.anio}: ${fmt(p.acumulado)}`;
+              const tw = texto.length * 7.5 + 16;
+              const tx = Math.min(Math.max(x(hover) - tw / 2, PAD_L), W - PAD_R - tw);
+              const ty = Math.max(y(p.acumulado) - 34, 2);
+              return (
+                <g transform={`translate(${tx}, ${ty})`}>
+                  <rect
+                    width={tw}
+                    height={24}
+                    rx={3}
+                    fill="var(--ink)"
+                    opacity="0.92"
+                  />
+                  <text
+                    x={tw / 2}
+                    y={16}
+                    textAnchor="middle"
+                    className="font-mono"
+                    fontSize="12"
+                    fill="var(--bg)"
+                  >
+                    {texto}
+                  </text>
+                </g>
+              );
+            })()}
+          </g>
+        ) : null}
 
         {etiquetas.map(({ p, i }) => (
           <text

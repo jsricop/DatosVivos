@@ -33,7 +33,7 @@ export default async function AcercaPage() {
         <header className="pb-4 hairline-bottom">
           <span className="text-kicker">Manifiesto</span>
           <h1 className="m-0 mt-2 font-sans text-h1">
-            Datos del Estado, en tus palabras.
+            El panorama de los datos abiertos de Colombia.
           </h1>
         </header>
 

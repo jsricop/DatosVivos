@@ -320,25 +320,28 @@ Sustituyen a la iconografía cuando el contexto es textual:
 
 ### 7.2 Subtítulo (siempre acompaña al wordmark)
 
-`── datos.gov.co`
+`── panorama de datos abiertos`
 
 - Em-dashes ASCII (`──`) en lugar de un icono. Plex Mono 500, `var(--ink-2)`.
-- Función: declara el origen de los datos, sin necesidad de explicación.
+- Función: declara el alcance del producto (integra datos.gov.co + 6 portales;
+  nombrar uno solo quedó corto — cambio 2026-07-13).
 
 ### 7.3 Tagline
 
-`Datos del Estado, en tus palabras.`
+`El panorama de los datos abiertos de Colombia.`
 
 - Nunito Sans bold, tamaño `h2` en home, `h1` en `/acerca`, escondido en otras vistas.
-- **Inmutable.** Esta es la única promesa que la marca proclama. No se varía estacionalmente.
+- Actualizado 2026-07-13: "Datos del Estado, en tus palabras" nació con el
+  buscador-primero; tras ADR-023 el producto ES el panorama y el tagline lo dice.
 
 ### 7.4 Firma técnica al pie
 
 Footer minimal en cada vista, Plex Mono `caption`:
 
 ```
-Agencia Nacional de Infraestructura — Datos al Ecosistema 2026 · Equipo 93 · Reto 7 (id 102)
-Beta. Sin trackers. Servicio sobre infraestructura del Estado.
+Andrea Navarro, Jhonatan Rico & Hernán Gutiérrez · GIT-TIC, Agencia Nacional de Infraestructura (ANI)
+Datos al Ecosistema 2026 · Equipo 93 · Reto 7
+Sin trackers · Fuentes: datos.gov.co + 6 portales integrados · República de Colombia
 ```
 
 ---
