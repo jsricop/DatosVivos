@@ -27,15 +27,21 @@
    y guardas contra metadata basura.
 6. **Interoperabilidad**: las herramientas del motor expuestas como **MCP server** —
    cualquier agente de IA puede consultar el catálogo colombiano de forma estándar.
-7. **Bodega local Parquet (2026-07-12)**: los datasets tabulares más valiosos del
-   catálogo, priorizados de forma determinista (valor por GB), viven como copia local
-   comprimida en la infraestructura; el buscador decide entre **bodega** (snapshot
-   fresco → milisegundos, sin red) y **dato vivo** (la fuente cambió → SODA/CSV), y una
-   regla diaria de cola la mantiene rotando sola.
+7. **Bodega local Parquet completa (2026-07-13)**: **10.279 datasets tabulares**
+   (6,4 GB comprimidos — todos los viables del catálogo) como copia local en la
+   infraestructura; el buscador decide entre **bodega** (snapshot fresco →
+   milisegundos, sin red) y **dato vivo** (la fuente cambió → SODA/CSV), y una regla
+   diaria de cola la mantiene sola. Los orígenes muertos (403/404) quedan marcados y
+   penalizados en el ranking.
 8. **Cobertura total de categorías (2026-07-12)**: 0 datasets útiles sin categoría
    temática (eran 2.504) — clasificación semántica con embeddings + curación revisada
    por Claude Code, y vocabulario consolidado a 25 etiquetas canónicas re-unificadas
    cada noche.
+9. **Evaluación centrada en el ciudadano (2026-07-13)**: 50 preguntas reales con
+   respuesta esperada pre-registrada, corridas por ciclos contra producción
+   (`eval/ciudadano/`); las mejoras derivadas (re-ranking semántico en el camino
+   estructurado, TIPO Total para montos, honestidad de lejanía) cambiaron el dataset
+   elegido en 39/50 preguntas hacia pertinencia real.
 
 ## Interpretación
 
@@ -82,7 +88,12 @@ CKAN/DCAT; y el MCP server permite que terceros construyan encima sin tocar el s
 > La cosecha y la catalogación se **ejecutaron el 2026-07-12**: bodega Parquet en
 > producción con regla diaria de cola, y 100 % de cobertura de categorías.
 
-1. **Casos de consulta verificados sobre la bodega**: perfilar los datasets farmeados y
-   generar casos de consulta comunes **verificados por el motor** (solo sobreviven los
-   que producen cifra verificada), construyendo el set etiquetado para un retrieval de
-   mayor precisión.
+1. **Filtros de año y municipio dentro del dataset elegido**: los chips filtran el
+   catálogo, no las filas — "¿cuántos contratos ESTE AÑO en MI municipio?" necesita
+   trasladar esos filtros a la consulta. Es lo que más preguntas desbloquea según el
+   ciclo ciudadano (`eval/ciudadano/seguimiento_50.md`).
+2. **Respuestas compuestas**: KPI + tendencia + desglose en una sola vista, y tasas
+   per cápita cruzando con población.
+3. **Casos de consulta verificados sobre la bodega**: perfilar los datasets farmeados
+   y generar casos de consulta comunes **verificados por el motor**, construyendo el
+   set etiquetado para un retrieval aún más preciso.

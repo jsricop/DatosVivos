@@ -87,8 +87,11 @@ Organizado por nivel del producto (nivel avanzado del TDR):
 - **En el buscador** — **motor NL2SQL generativo con verificación determinista de 3
   capas** (genera con LLM viendo solo columnas curadas reales; verifica con código
   antes de ejecutar; repara o rehúsa): embeddings `multilingual-e5` + ChromaDB para
-  retrieval semántico, clasificador de intención, narrativa anti-alucinación (cero
-  cifras inventadas) y **MCP server** que expone las herramientas a cualquier agente de IA.
+  retrieval semántico **en ambos caminos** (el estructurado re-rankea sus candidatos
+  con el mismo índice: el chip filtra, el embedding ordena), clasificador de
+  intención, 6 TIPOs de respuesta (conteo, **suma de montos**, comparación, ranking,
+  tendencia, mapa), narrativa anti-alucinación (cero cifras inventadas) y **MCP
+  server** que expone las herramientas a cualquier agente de IA.
 - Backend LLM conectable: **producción con la API de Claude (Haiku)** desde 2026-07-11 — interpretación NL en ~1.5 s (antes 31-45 s con modelo local); `LLM_BACKEND=ollama` queda para réplicas sin API key.
 → Metodología CRISP-ML adaptada: [docs/marco_metodologico.md](docs/marco_metodologico.md)
 
@@ -119,11 +122,16 @@ Organizado por nivel del producto (nivel avanzado del TDR):
    cobertura territorial inferida; **100 % de cobertura de categoría temática** (2.504
    huecos cerrados con clasificación semántica + curación revisada; vocabulario
    consolidado de 60+ etiquetas redundantes a 25 canónicas).
-6. **Bodega local en Parquet**: los datasets más valiosos del catálogo (prioridad
-   determinista "valor por GB": uso real + engagement + frescura ÷ tamaño) se descargan
-   a disco de la infraestructura y **el buscador responde desde la copia local en
-   milisegundos** cuando el snapshot está fresco; si la fuente cambió, cae al dato vivo.
-   Una regla diaria de cola (entra-uno-sale-uno) la mantiene actualizada sola.
+6. **Bodega local en Parquet — completa**: **10.279 datasets** (6,4 GB comprimidos,
+   todos los tabulares viables del catálogo) viven como copia local en la
+   infraestructura y **el buscador responde desde ellos en milisegundos** cuando el
+   snapshot está fresco; si la fuente cambió, cae al dato vivo. Una regla diaria de
+   cola la mantiene sola, y los orígenes muertos (403/404) penalizan el ranking.
+7. **Evaluación centrada en el ciudadano**: 50 preguntas reales con respuesta
+   esperada escrita ANTES de correrlas ([`eval/ciudadano/`](eval/ciudadano/)),
+   corridas en ciclos contra producción; los patrones detectados se convirtieron en
+   mejoras estructurales (re-ranking semántico, TIPO Total para montos, honestidad
+   de lejanía) y el ciclo se repite con seguimiento versionado.
 
 ## Interpretación
 
@@ -179,10 +187,12 @@ Presentación del proyecto:
 
 ## Roadmap (trabajo futuro)
 
-1. **Casos de consulta verificados sobre la bodega** — la cosecha (bodega Parquet
-   con regla diaria) y la catalogación (100 % de categorías) ya están en producción;
-   falta el perfilado con casos de consulta generados y verificados por el motor para
-   un retrieval aún más preciso.
+1. **Filtros de año y municipio dentro del dataset elegido** — los chips filtran el
+   catálogo, no las filas: "¿cuántos contratos ESTE AÑO en MI municipio?" necesita
+   trasladar esos filtros a la consulta. Es lo que más preguntas desbloquea según el
+   ciclo ciudadano ([`eval/ciudadano/seguimiento_50.md`](eval/ciudadano/seguimiento_50.md)).
+2. **Respuestas compuestas** — KPI + tendencia + desglose en una sola vista, y tasas
+   per cápita cruzando con población.
 
 ## Equipo
 

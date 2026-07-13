@@ -299,8 +299,8 @@ footer(s)
 s = slide(AZUL)
 tf = box(s, Inches(0.9), Inches(1.6), Inches(11.5), Inches(3.2))
 para(tf, "Lo que sigue", 14, color=RGBColor(0xBF, 0xD4, 0xE8), bold=True, font=MONO, first=True, space_after=8)
-para(tf, "Ya ejecutado (julio 2026): motor de lenguaje migrado a la API de Claude (interpretación en ~1.5 s) · bodega local Parquet en producción con regla diaria de cola (el buscador responde en milisegundos desde la copia local) · catalogación temática al 100 % del catálogo.", 15, color=BLANCO, space_after=6)
-para(tf, "Lo que falta: casos de consulta generados y verificados por el motor sobre la bodega — retrieval aún más preciso.", 15, color=BLANCO, space_after=20)
+para(tf, "Ya ejecutado (julio 2026): motor de lenguaje en la API de Claude (~1.5 s) · bodega local Parquet COMPLETA (10.279 datasets, el buscador responde en milisegundos desde la copia local) · catalogación temática al 100 % · evaluación ciudadana de 50 preguntas convertida en mejoras estructurales del buscador.", 14, color=BLANCO, space_after=6)
+para(tf, "Lo que sigue: filtros de año/municipio dentro del dataset elegido y respuestas compuestas (KPI + tendencia + per cápita).", 14, color=BLANCO, space_after=20)
 para(tf, "datosvivos.co", 34, color=BLANCO, bold=True, font=MONO, space_after=4)
 para(tf, "El panorama de los datos abiertos de Colombia. En vivo, verificable, para decidir.", 16, color=RGBColor(0xBF, 0xD4, 0xE8))
 footer(s, dark=True)
@@ -316,7 +316,7 @@ def backup(kicker, title):
 s = backup("B1", "Arquitectura de 3 capas (fiel al plan inicial de inscripción)")
 bullets(s, [
     ("Capa MCP", "servidor MCP sobre las APIs Socrata de datos.gov.co (Discovery, SODA, Metadata) — search_datasets · get_metadata · query_data · cross_datasets."),
-    ("Capa motor", "FastAPI + PostgreSQL (catálogo curado, vistas _decisor) + ChromaDB (retrieval) + DuckDB (federados con CSV externo) + backend LLM intercambiable (producción: API de Claude · réplicas sin key: Ollama)."),
+    ("Capa motor", "FastAPI + PostgreSQL (catálogo curado, vistas _decisor) + ChromaDB (retrieval semántico en ambos caminos) + DuckDB (bodega Parquet local de 10.279 datasets + CSVs federados) + backend LLM intercambiable (producción: API de Claude)."),
     ("Capa presentación", "Next.js (panorama + buscador SSE) y Power BI (tablero publish-to-web sobre CSVs públicos de la API). Evolución documentada: Streamlit → Next.js (ADR-011)."),
     ("Despliegue", "Docker Compose con imagen reproducible, túnel seguro de salida, cron diario: ETL + regla de cola de la bodega Parquet (snapshot fresco → respuesta local en milisegundos; fuente cambió → dato vivo)."),
 ])

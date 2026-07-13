@@ -45,11 +45,13 @@ idempotente por `dataset_id` — verificado por auditoría: 0 duplicados de clav
     recurso), con atribución por portal de origen.
 - Vistas curadas (`v_dataset_status_decisor`, `v_entity_summary_decisor`) como fuente
   única del tablero y del panorama — ver [diccionario de datos](diccionario_datos.md).
-- **Bodega local Parquet (farmeo)**: los datasets tabulares más valiosos se descargan a
-  disco con prioridad determinista (valor por GB = uso real + engagement + frescura ÷
-  tamaño estimado con conteos vivos), se convierten a Parquet comprimido y quedan
-  registrados en el manifest `dataset_snapshots`. Guardas: presupuesto global, cap por
-  dataset (bytes y tiempo), pre-chequeo de tamaño sin descargar, y solo tabulares.
+- **Bodega local Parquet (farmeo) — completa**: **10.279 datasets tabulares** (6,4 GB
+  comprimidos) descargados con prioridad determinista (valor por GB = uso real +
+  engagement + frescura ÷ tamaño estimado con conteos vivos) y registrados en el
+  manifest `dataset_snapshots`. Guardas: presupuesto global, cap por dataset (bytes y
+  tiempo), pre-chequeo de tamaño sin descargar, solo tabulares, y fallos permanentes
+  del origen (403/404) marcados para no reintentar — y penalizados en el ranking del
+  buscador (un origen muerto no es una buena respuesta).
 - **Cobertura total de categorías**: clasificación semántica por centroides de
   embeddings (validación holdout 82.9 %) + curación manual revisada + consolidación del
   vocabulario (60+ variantes → 25 canónicas, re-unificadas cada noche).
@@ -71,9 +73,12 @@ composición temáticos/administrativos, acceso, cobertura territorial.
   reparación y, si no se puede verificar, **refusal** (la respuesta se niega antes que
   inventarse).
 - **Retrieval semántico**: embeddings `multilingual-e5` sobre ChromaDB (~8.400 datasets
-  tabulares indexados) para elegir el dataset correcto.
-- **Clasificador de intención** (conteo/comparación/ranking/tendencia/mapa) y mapeo
-  NL→chips deterministas como camino estructurado.
+  tabulares indexados) para elegir el dataset correcto — usado en AMBOS caminos: el
+  estructurado re-rankea el top-50 de su subset con el mismo índice (el chip filtra,
+  el embedding ordena).
+- **Clasificador de intención** y mapeo NL→chips deterministas como camino
+  estructurado, con 6 TIPOs de respuesta: conteo, **suma de montos** ("cuánto vale" ≠
+  "cuántos"), comparación, ranking, tendencia y mapa.
 - **Narrativa anti-alucinación**: toda cifra de la respuesta se valida contra la lista
   calculada sobre las filas reales; un número que no esté en ella censura la oración.
 - **MCP server**: las herramientas del motor (búsqueda, metadata, consulta, cruce) se
@@ -85,7 +90,12 @@ composición temáticos/administrativos, acceso, cobertura territorial.
 
 - **Golden sets** versionados ([`eval/golden_queries.yaml`](../eval/golden_queries.yaml),
   [`eval/golden_chips.yaml`](../eval/golden_chips.yaml)) con corridas reproducibles y
-  16 reportes históricos en `eval/reports/`.
+  reportes históricos en `eval/reports/`.
+- **Ciclo ciudadano** ([`eval/ciudadano/`](../eval/ciudadano/)): 50 preguntas reales
+  con la respuesta esperada escrita ANTES de correrlas (sin sesgo), corridas por
+  ciclos contra producción; los patrones detectados (no los casos sueltos) se
+  convierten en mejoras estructurales y el ciclo se repite. Es la evaluación centrada
+  en el usuario, complementaria a los golden sets técnicos.
 - **35 archivos de pruebas automatizadas** (`tests/`): verificador SoQL, validador de
   números, reparación de consultas, geo/DIVIPOLA, harvesting, servidor MCP, rutas API.
 - El **verificador es también el filtro de curación**: solo sobreviven respuestas cuya

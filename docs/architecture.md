@@ -186,7 +186,7 @@ elif source_type == "socrata":
 - **Cloudflare Tunnel + nginx**: expone `datosvivos.co` a internet, sin
   abrir puertos en la VM.
 
-## Bodega local Parquet (farmeo, 2026-07-12)
+## Bodega local Parquet (farmeo — COMPLETA: 10.279 datasets · 6,4 GB)
 
 ```
   ETL diario ──► regla de cola (farm_datasets --daily)
@@ -200,6 +200,13 @@ elif source_type == "socrata":
 
 Prioridad determinista (valor por GB), presupuesto de disco con caps por dataset
 (bytes + tiempo + pre-chequeo con conteos vivos), solo tabulares, advisory lock.
+Fallos permanentes del origen (403/404) marcados en el manifest: no se reintentan
+y PENALIZAN el ranking del buscador (un origen muerto no es una buena respuesta).
+
+**Re-ranking semántico del camino estructurado (2026-07-13):** `query_chips` toma el
+top-50 de su subset SQL y lo reordena con el índice e5/ChromaDB (el chip filtra, el
+embedding ordena). TIPOs de respuesta: 6 — Cuántos, **Total** (suma de montos),
+Comparar, Ranking, Tendencia, Mapa.
 
 ## Referencias
 

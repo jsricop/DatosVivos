@@ -543,8 +543,19 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                              +
                              CASE WHEN %s AND s.jurisdiccion_nivel = 'nacional'
                                   THEN 0.3 ELSE 0 END
+                             -
+                             -- Origen MUERTO: el farmeo ya intentó bajarlo y
+                             -- el portal respondió 403/404 (privado o
+                             -- retirado). Sin columnas nuevas: la marca vive
+                             -- en dataset_snapshots. Penaliza, no excluye —
+                             -- la metadata sigue siendo válida como catálogo.
+                             CASE WHEN snap.status = 'failed'
+                                   AND (snap.error ILIKE '%%403%%'
+                                        OR snap.error ILIKE '%%404%%')
+                                  THEN 0.6 ELSE 0 END
                            ) AS score
                     FROM subset s
+                    LEFT JOIN dataset_snapshots snap USING (dataset_id)
                     ORDER BY score DESC NULLS LAST,
                              s.view_count DESC NULLS LAST,
                              s.rows_updated_at DESC NULLS LAST
