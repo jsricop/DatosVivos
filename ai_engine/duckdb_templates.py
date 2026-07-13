@@ -183,12 +183,13 @@ def build_duckdb_sql(
                 sql="", error="Tendencia requiere ≥1 columna de tipo `fecha`"
             )
         expr = _fecha_expr(fecha_col)
+        # DESC: los ÚLTIMOS 60 periodos (ver nota en soql_templates.py).
         return BuildResult(
             sql=(
                 f"SELECT {expr} AS periodo, count(*) AS n "
                 f"FROM {src} "
                 f"GROUP BY periodo "
-                f"ORDER BY periodo "
+                f"ORDER BY periodo DESC "
                 f"LIMIT 60"
             ),
             columns_used=[fecha_col["col_name"]],

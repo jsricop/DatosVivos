@@ -193,11 +193,15 @@ def build_soql(
                 soql="", error="Tendencia requiere ≥1 columna de tipo `fecha`"
             )
         expr = _fecha_expr(fecha_col)
+        # DESC: los ÚLTIMOS 60 periodos, no los primeros. Con ASC un dataset
+        # 2010-2025 mostraba solo 2010-2014 y "¿está subiendo?" se respondía
+        # con datos de hace una década (2026-07-13). El endpoint re-ordena
+        # ascendente antes de responder para que la gráfica lea izq→der.
         return BuildResult(
             soql=(
                 f"SELECT {expr} AS periodo, count(*) AS n "
                 f"GROUP BY periodo "
-                f"ORDER BY periodo "
+                f"ORDER BY periodo DESC "
                 f"LIMIT 60"
             ),
             columns_used=[fecha_col["col_name"]],

@@ -774,7 +774,14 @@ def _merge_categorias_duplicadas(resp: ChipsExecuteResponse) -> ChipsExecuteResp
 
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
-    return _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
+    resp = _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
+    # Tendencia pide ORDER BY periodo DESC LIMIT 60 (los últimos 60 periodos,
+    # no los primeros — un dataset 2010-2025 mostraba solo 2010-2014). La
+    # gráfica lee izq→der: invertir es el inverso exacto del DESC del SQL,
+    # sin re-interpretar el formato de la fecha.
+    if req.tipo == "Tendencia" and resp.rows:
+        resp.rows = list(reversed(resp.rows))
+    return resp
 
 
 async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
