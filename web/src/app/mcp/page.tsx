@@ -86,22 +86,63 @@ docker compose up -d mcp-server
 # SSE endpoint: http://localhost:3000/sse`}
         </Code>
         <p className="m-0 max-w-[70ch] font-sans text-body-sm text-ink-2 leading-relaxed">
-          En <strong>Claude Code</strong> basta un comando:
+          MCP es un protocolo abierto: el servidor funciona con{" "}
+          <strong>cualquier cliente que lo soporte</strong>. Configuración por
+          cliente:
         </p>
-        <Code>{`claude mcp add --transport sse datosvivos http://localhost:3000/sse`}</Code>
+
+        <h3 className="m-0 mt-1 text-h4">Claude (Code / Desktop)</h3>
+        <Code>{`# Claude Code — un comando:
+claude mcp add --transport sse datosvivos http://localhost:3000/sse
+
+# Claude Desktop — claude_desktop_config.json:
+{ "mcpServers": { "datosvivos": { "url": "http://localhost:3000/sse" } } }`}</Code>
+
+        <h3 className="m-0 mt-1 text-h4">OpenAI (Agents SDK / Responses API)</h3>
+        <Code>{`# Agents SDK (pip install openai-agents):
+from agents import Agent, Runner
+from agents.mcp import MCPServerSse
+
+async with MCPServerSse(params={"url": "http://localhost:3000/sse"}) as mcp:
+    agent = Agent(name="datos-colombia", mcp_servers=[mcp])
+    out = await Runner.run(agent, "¿Cuántos colegios oficiales hay en Boyacá?")
+
+# Responses API (exige URL pública — expón el servidor o usa un túnel):
+client.responses.create(
+    model="gpt-4.1",
+    tools=[{"type": "mcp", "server_label": "datosvivos",
+            "server_url": "https://<tu-host>/sse"}],
+    input="¿Cuántos colegios oficiales hay en Boyacá?")`}</Code>
+
+        <h3 className="m-0 mt-1 text-h4">Cursor · VS Code (GitHub Copilot) · Gemini CLI</h3>
+        <Code>{`# Cursor — ~/.cursor/mcp.json:
+{ "mcpServers": { "datosvivos": { "url": "http://localhost:3000/sse" } } }
+
+# VS Code (Copilot agent mode) — .vscode/mcp.json:
+{ "servers": { "datosvivos": { "type": "sse", "url": "http://localhost:3000/sse" } } }
+
+# Gemini CLI — ~/.gemini/settings.json:
+{ "mcpServers": { "datosvivos": { "url": "http://localhost:3000/sse" } } }`}</Code>
+
+        <h3 className="m-0 mt-1 text-h4">Grok, DeepSeek, Llama u otro modelo</h3>
         <p className="m-0 max-w-[70ch] font-sans text-body-sm text-ink-2 leading-relaxed">
-          En <strong>Claude Desktop</strong> (u otro cliente MCP), se registra
-          en la configuración:
+          Esos modelos no traen cliente MCP propio: se conectan a través de un
+          cliente que sí lo soporte eligiendo el modelo ahí (Cursor, Cline,
+          Continue aceptan Grok/DeepSeek como backend), o programáticamente con
+          el SDK oficial de MCP — útil para cualquier stack:
         </p>
-        <Code>
-          {`{
-  "mcpServers": {
-    "datosvivos": {
-      "url": "http://localhost:3000/sse"
-    }
-  }
-}`}
-        </Code>
+        <Code>{`# pip install mcp — cliente universal en Python:
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+
+async with sse_client("http://localhost:3000/sse") as (read, write):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+        r = await session.call_tool("query_data", {
+            "dataset_id": "emd6-ef7x",
+            "soql_query": "SELECT count(*) AS n WHERE sector='OFICIAL'"})
+        # → [{ "n": "1721" }] — desde aquí, cualquier LLM consume el resultado`}</Code>
+
         <p className="m-0 max-w-[70ch] font-sans text-body-sm text-ink-2 leading-relaxed">
           Las herramientas consultan la API pública de datos.gov.co — no
           necesitan credenciales; un App Token de Socrata (opcional, variable{" "}
