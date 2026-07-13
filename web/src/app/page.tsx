@@ -176,7 +176,7 @@ export default async function HomePage() {
 
           <p className="m-0 font-mono text-caption text-ink-muted">
             Cifras en vivo sobre el catálogo completo ·{" "}
-            {relativeTime(stats.generated_at)}
+            {etlTimestamp(stats.last_etl_at)}
           </p>
         </>
       ) : (
@@ -317,12 +317,21 @@ function frescuraResumen(stats: PanoramaStats): string | null {
   return `Hoy, ${alDia} de cada 10 datasets con fecha conocida están al día.`;
 }
 
-/** Tiempo relativo corto para "actualizado hace N min" (render server-side). */
-function relativeTime(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "actualizado en vivo";
-  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (mins < 1) return "actualizado hace un momento";
-  if (mins < 60) return `actualizado hace ${mins} min`;
-  return `actualizado hace ${Math.round(mins / 60)} h`;
+/**
+ * Fecha y hora del cierre de la última corrida del ETL, en hora de Colombia.
+ * Es la fecha REAL del dato — no la del caché de la API (que se regenera cada
+ * 5 min y producía el engañoso "actualizado hace 2 min").
+ */
+function etlTimestamp(iso: string | null | undefined): string {
+  const then = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(then)) return "actualización diaria automática";
+  const fecha = new Intl.DateTimeFormat("es-CO", {
+    timeZone: "America/Bogota",
+    day: "numeric",
+    month: "long",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(then));
+  return `actualizado el ${fecha} (hora de Colombia)`;
 }

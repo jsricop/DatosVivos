@@ -333,3 +333,6 @@ class PanoramaStats(BaseModel):
     por_portal: list[PortalCount]   # catálogo integrado: nacional + territoriales
     nacional_sin_geo: int           # sin códigos DIVIPOLA (alcance nacional)
     generated_at: str               # ISO del momento de cómputo (caché TTL)
+    # ISO de finished_at de la última corrida del ETL: la fecha que ve el
+    # usuario en "Actualizado ...". generated_at es del caché, no del dato.
+    last_etl_at: str | None = None

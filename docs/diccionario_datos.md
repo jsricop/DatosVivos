@@ -83,7 +83,9 @@ La tabla núcleo tiene 42 columnas; las que agregan a la vista:
   `composicion` (temáticos/administrativos), `semaforo` (4 estados), `acceso`
   (3 modos), `por_sector` (top 10 con datasets y entidades), `por_departamento`
   (DIVIPOLA con nombre), `por_portal` (6 portales de origen), `nacional_sin_geo`,
-  `generated_at`. Caché de 5 minutos.
+  `generated_at` (momento de cómputo del caché) y **`last_etl_at`** (cierre de la
+  última corrida del ETL — la fecha real del dato, la que muestra la home).
+  Caché de 5 minutos.
 - **`GET /api/v1/dashboard/datasets_decisor.csv`** y **`/entities_decisor.csv`** —
   exportes completos de las vistas para el tablero Power BI (públicos).
 

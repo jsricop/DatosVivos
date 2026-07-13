@@ -192,6 +192,11 @@ def _compute_panorama() -> PanoramaStats:
         cur.execute(_PANORAMA_PORTAL_SQL)
         portales = cur.fetchall()
 
+        # La fecha de actualización REAL del catálogo es el cierre de la
+        # última corrida del ETL, no el momento de cómputo de este caché.
+        cur.execute("SELECT max(finished_at) AS t FROM etl_runs")
+        last_etl = (cur.fetchone() or {}).get("t")
+
     return PanoramaStats(
         total=totals["total"],
         n_entidades=totals["n_entidades"],
@@ -224,6 +229,7 @@ def _compute_panorama() -> PanoramaStats:
         por_portal=[PortalCount(**r) for r in portales],
         nacional_sin_geo=(sin_geo or {}).get("n", 0),
         generated_at=datetime.now(timezone.utc).isoformat(),
+        last_etl_at=last_etl.isoformat() if last_etl else None,
     )
 
 

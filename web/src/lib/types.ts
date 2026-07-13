@@ -165,4 +165,6 @@ export type PanoramaStats = {
   por_portal: PortalCount[];
   nacional_sin_geo: number;
   generated_at: string;
+  /** finished_at de la última corrida del ETL (la fecha real del dato). */
+  last_etl_at?: string | null;
 };
