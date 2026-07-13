@@ -122,7 +122,7 @@ Organizado por nivel del producto (nivel avanzado del TDR):
    cobertura territorial inferida; **100 % de cobertura de categoría temática** (2.504
    huecos cerrados con clasificación semántica + curación revisada; vocabulario
    consolidado de 60+ etiquetas redundantes a 25 canónicas).
-6. **Bodega local en Parquet — completa**: **10.279 datasets** (6,4 GB comprimidos,
+6. **Bodega local en Parquet — completa**: **10.280 datasets** (6,6 GB comprimidos,
    todos los tabulares viables del catálogo) viven como copia local en la
    infraestructura y **el buscador responde desde ellos en milisegundos** cuando el
    snapshot está fresco; si la fuente cambió, cae al dato vivo. Una regla diaria de
@@ -132,6 +132,16 @@ Organizado por nivel del producto (nivel avanzado del TDR):
    corridas en ciclos contra producción; los patrones detectados se convirtieron en
    mejoras estructurales (re-ranking semántico, TIPO Total para montos, honestidad
    de lejanía) y el ciclo se repite con seguimiento versionado.
+8. **Filtros de valor dentro del dataset** (ADR-024): la bodega se perfila sola
+   (10.280 datasets → ~297k valores filtrables reales) y el ciudadano filtra
+   eligiendo, nunca escribiendo — por chips, por su propia pregunta ("públicos" →
+   `SECTOR=OFICIAL`, elegido por IA SOLO entre valores existentes) o por territorio
+   (pregunta departamental recorta el dataset nacional). Con filtro se muestra
+   también el total sin filtrar: "1.721 colegios oficiales de 2.184 en Boyacá".
+9. **Diccionario ciudadano↔institucional**: ~130 equivalencias curadas
+   ("colegios"→"establecimientos educativos", "robos"→"hurto") cierran de forma
+   determinista la brecha entre cómo pregunta la gente y cómo el Estado titula sus
+   datos.
 
 ## Interpretación
 
@@ -187,12 +197,14 @@ Presentación del proyecto:
 
 ## Roadmap (trabajo futuro)
 
-1. **Filtros de año y municipio dentro del dataset elegido** — los chips filtran el
-   catálogo, no las filas: "¿cuántos contratos ESTE AÑO en MI municipio?" necesita
-   trasladar esos filtros a la consulta. Es lo que más preguntas desbloquea según el
-   ciclo ciudadano ([`eval/ciudadano/seguimiento_50.md`](eval/ciudadano/seguimiento_50.md)).
+1. **Filtro por municipio dentro del dataset** — el recorte territorial (ADR-024 F4)
+   cubre departamentos; extender el mismo patrón de verificación contra el Parquet a
+   los 1.100+ municipios.
 2. **Respuestas compuestas** — KPI + tendencia + desglose en una sola vista, y tasas
    per cápita cruzando con población.
+3. **Filtros sobre federados en vivo** — hoy los filtros de valor aplican solo sobre
+   la copia local (el perfil describe el Parquet); los federados consultados en vivo
+   responden sin filtro, y lo dicen.
 
 ## Equipo
 

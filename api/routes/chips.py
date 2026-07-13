@@ -816,6 +816,10 @@ async def dataset_filters(dataset_id: str) -> DatasetFiltersResponse:
         cols.setdefault((r["kind"], r["col_name"]), []).append(
             FilterOption(value=r["value"], n=r["n"])
         )
+    # Años: ordenados del más reciente al más viejo (no por frecuencia).
+    for (kind, _col), vals in cols.items():
+        if kind == "anio":
+            vals.sort(key=lambda v: -int(v.value))
     filtros = [
         FilterColumn(col=col, kind=kind, values=vals)
         for (kind, col), vals in cols.items()
@@ -887,12 +891,16 @@ async def _filtros_desde_pregunta(
     """
     cols: dict[tuple[str, str], list[str]] = {}
     for r in perfil:
-        key = (r["col_name"], r["kind"])
-        vals = cols.setdefault(key, [])
-        if len(vals) < 12:
-            vals.append(r["value"])
+        cols.setdefault((r["col_name"], r["kind"]), []).append(r["value"])
     if not cols:
         return []
+    for key, vals in cols.items():
+        if key[1] == "anio":
+            # Años COMPLETOS y ordenados: recortar por frecuencia escondía
+            # el año pedido ("en 2024" no filtraba, 2026-07-13).
+            cols[key] = sorted(vals, key=lambda v: -int(v))[:25]
+        else:
+            cols[key] = vals[:12]
     lineas = "\n".join(
         f"- {col}{' (año)' if kind == 'anio' else ''}: {' | '.join(vals)}"
         for (col, kind), vals in list(cols.items())[:6]

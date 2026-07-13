@@ -1,10 +1,11 @@
 # Arquitectura DatosVivos
 
-Última actualización: **2026-07-12**. Refleja el estado tras el motor NL2SQL
+Última actualización: **2026-07-13**. Refleja el estado tras el motor NL2SQL
 generativo verificado (ADR-022), el pivote a home "panorama primero" (ADR-023),
 la integración de portales por origen, el tablero Power BI público, la bodega
-Parquet (mecanismo bodega-vs-vivo) y la migración del backend LLM a la API de
-Claude (Haiku) en producción.
+Parquet (mecanismo bodega-vs-vivo), la migración del backend LLM a la API de
+Claude (Haiku) en producción, y los filtros de valor sobre la bodega +
+diccionario ciudadano↔institucional (ADR-024).
 
 ## Arquitectura de información — 3 niveles (ADR-023)
 
@@ -186,7 +187,7 @@ elif source_type == "socrata":
 - **Cloudflare Tunnel + nginx**: expone `datosvivos.co` a internet, sin
   abrir puertos en la VM.
 
-## Bodega local Parquet (farmeo — COMPLETA: 10.279 datasets · 6,4 GB)
+## Bodega local Parquet (farmeo — COMPLETA: 10.280 datasets · 6,6 GB)
 
 ```
   ETL diario ──► regla de cola (farm_datasets --daily)
@@ -206,7 +207,33 @@ y PENALIZAN el ranking del buscador (un origen muerto no es una buena respuesta)
 **Re-ranking semántico del camino estructurado (2026-07-13):** `query_chips` toma el
 top-50 de su subset SQL y lo reordena con el índice e5/ChromaDB (el chip filtra, el
 embedding ordena). TIPOs de respuesta: 6 — Cuántos, **Total** (suma de montos),
-Comparar, Ranking, Tendencia, Mapa.
+Comparar, Ranking, Tendencia, Mapa. El **diccionario ciudadano↔institucional**
+(`ai_engine/vocabulario_ciudadano.py`, ~130 pares curados) expande de forma
+determinista las palabras del ciudadano al vocabulario oficial de los datos
+("colegios"→"establecimientos educativos") antes del word-boost y del embedding.
+
+## Filtros de valor sobre la bodega (ADR-024, 2026-07-13)
+
+Los chips eligen el dataset; los **filtros de valor** recortan sus filas — siempre
+con valores REALES del dato, nunca con SQL escrito por el LLM:
+
+```
+  profiler diario ──► dataset_filter_values (migración 028)
+     (DuckDB sobre     valores de columnas baja-cardinalidad + años
+      cada Parquet)    10.280 datasets · ~297k valores · bootstrap 7 min
+                              │
+  GET /datasets/{id}/filters ─┴─► FilterBar (chips por columna, URL compartible)
+                              │
+  /query/chips/execute ── filters validados contra el perfil (lo inexistente
+      │                    se descarta con nota) → WHERE en el template DuckDB
+      ├─ pregunta → Haiku elige filtros ENTRE los valores del perfil (máx 2)
+      └─ territorio dpto + dataset nacional → WHERE departamento=X verificado
+                                              contra el Parquet (determinista)
+```
+
+Con filtro en un conteo se responde también el total sin filtrar ("1.721 de
+2.184"). Solo rama bodega: el perfil describe columnas del Parquet, no de SODA;
+si la bodega no aplica se responde sin filtro y se dice.
 
 ## Referencias
 
@@ -216,4 +243,5 @@ Comparar, Ranking, Tendencia, Mapa.
 - ADR-020 CKAN harvest directo.
 - ADR-022 motor NL2SQL generativo verificado (3 capas).
 - ADR-023 home panorama para tomadores de decisiones.
+- ADR-024 filtros de valor sobre la bodega + diccionario ciudadano.
 - `eval/reports/data_quality_hito_q_2026-05-29.md` (audit cierre).
