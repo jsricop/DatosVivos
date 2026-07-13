@@ -56,6 +56,10 @@ def _safe_ident(name: str | None) -> str | None:
     return name
 
 
+_RATE_LIKE_RE = re.compile(
+    r"tasa|porcentaje|porc(_|$)|[ií]ndice|promedio|media|per_?capita|variaci",
+    re.IGNORECASE,
+)
 _ID_LIKE_RE = re.compile(
     r"(^|_)(id|ids|codigo|cod|nro|numero|num|consecutivo|registro|radicado)(_|$)"
     r"|identificaci|expediente",
@@ -78,6 +82,12 @@ def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | Non
         if not _safe_ident(c.get("col_name")):
             continue
         if stype == "dimension" and _ID_LIKE_RE.search(c["col_name"]):
+            fallback = fallback or c
+            continue
+        if stype == "metrica" and _RATE_LIKE_RE.search(c["col_name"]):
+            # Una TASA/porcentaje/promedio no se suma con sentido: sumar
+            # "tasa de interés" dio 67.11 como "deuda pública" (2026-07-13).
+            # Se prefiere una métrica de monto; si solo hay tasas, cae a ella.
             fallback = fallback or c
             continue
         return c
