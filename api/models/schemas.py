@@ -91,7 +91,7 @@ class HealthResponse(BaseModel):
 # ============================================================
 
 
-ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+ChipTipo = Literal["Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"]
 
 
 class ChipOption(BaseModel):

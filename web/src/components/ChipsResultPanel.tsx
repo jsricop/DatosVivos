@@ -114,6 +114,26 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
     );
   }
 
+  if (tipo === "Total") {
+    const block: KPIBlock = {
+      type: "kpi",
+      title: `Suma total · ${datasetName}`,
+      value_from: "total",
+      format: "number_es_co",
+    };
+    return (
+      <div className="flex flex-col gap-2">
+        <KPICardBlock block={block} rows={rowsTyped} stats={null} />
+        {columns_used[0] ? (
+          <span className="font-sans text-caption text-ink-muted">
+            Suma de la columna «{columns_used[0]}» sobre todas las filas.
+          </span>
+        ) : null}
+        <VerifiedNote />
+      </div>
+    );
+  }
+
   if (tipo === "Comparar" || tipo === "Ranking") {
     const yCol = columns_used.length >= 2 ? "total" : "n";
     const block: ChartBlock = {

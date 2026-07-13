@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal
 
-ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+ChipTipo = Literal["Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"]
 
 # Identificador SoQL válido — coincide con `columns_field_name` snake_case.
 _IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -56,15 +56,32 @@ def _safe_ident(name: str | None) -> str | None:
     return name
 
 
+_ID_LIKE_RE = re.compile(
+    r"(^|_)(id|ids|codigo|cod|nro|numero|num|consecutivo|registro|radicado)(_|$)"
+    r"|identificaci|expediente",
+    re.IGNORECASE,
+)
+
+
 def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | None:
     """Devuelve el primer col-dict del tipo semántico solicitado cuyo
-    `col_name` es identificador SoQL válido. Asume orden de confidence DESC."""
+    `col_name` es identificador SoQL válido. Asume orden de confidence DESC.
+
+    Para `dimension`, evita columnas con nombre de IDENTIFICADOR (id, código,
+    consecutivo…): agrupar por ellas produce una barra por registro (Saber
+    Pro agrupó por código de estudiante, ciclo ciudadano c07 2026-07-12).
+    Si solo hay dimensiones tipo ID, cae a la primera (mejor que nada)."""
+    fallback = None
     for c in columns:
         if c.get("semantic_type") != stype:
             continue
-        if _safe_ident(c.get("col_name")):
-            return c
-    return None
+        if not _safe_ident(c.get("col_name")):
+            continue
+        if stype == "dimension" and _ID_LIKE_RE.search(c["col_name"]):
+            fallback = fallback or c
+            continue
+        return c
+    return fallback
 
 
 def _fecha_expr(col: dict[str, Any]) -> str:
@@ -99,6 +116,21 @@ def build_soql(
     """
     if tipo == "Cuántos":
         return BuildResult(soql="SELECT count(*) AS n", columns_used=[])
+
+    if tipo == "Total":
+        # "¿Cuánto vale/cuesta X?" pide la SUMA del valor principal, no un
+        # conteo de filas (ciclo ciudadano c17/c20/c50, 2026-07-12).
+        metrica_col = _pick(columns, "metrica")
+        if not metrica_col:
+            return BuildResult(
+                soql="",
+                error="Total requiere ≥1 columna de tipo `metrica` (un valor sumable)",
+            )
+        met = metrica_col["col_name"]
+        return BuildResult(
+            soql=f"SELECT sum({met}) AS total",
+            columns_used=[met],
+        )
 
     if tipo in ("Comparar", "Ranking"):
         dim_col = _pick(columns, "dimension")

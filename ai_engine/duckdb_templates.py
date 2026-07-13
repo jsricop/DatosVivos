@@ -20,12 +20,20 @@ de embeberse.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal
 
 from ai_engine.duckdb_executor import _safe_ident_dbq
 
-ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+ChipTipo = Literal["Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"]
+
+_ID_LIKE_RE = re.compile(
+    r"(^|_)(id|ids|codigo|cod|nro|numero|num|consecutivo|registro|radicado)(_|\s|$)"
+    r"|identificaci|expediente",
+    re.IGNORECASE,
+)
 
 _DATE_DATATYPES = {
     "calendar_date", "date", "floating_timestamp",
@@ -42,13 +50,22 @@ class BuildResult:
 
 
 def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | None:
-    """Primera columna del tipo semántico cuyo `col_name` quote-safely."""
+    """Primera columna del tipo semántico cuyo `col_name` quote-safely.
+
+    Para `dimension`, evita columnas con nombre de IDENTIFICADOR (id,
+    código, consecutivo…): agrupar por ellas produce una barra por registro
+    (ciclo ciudadano c07, 2026-07-12). Si solo hay tipo ID, cae a la primera."""
+    fallback = None
     for c in columns:
         if c.get("semantic_type") != stype:
             continue
-        if _safe_ident_dbq(c.get("col_name") or ""):
-            return c
-    return None
+        if not _safe_ident_dbq(c.get("col_name") or ""):
+            continue
+        if stype == "dimension" and _ID_LIKE_RE.search(c["col_name"]):
+            fallback = fallback or c
+            continue
+        return c
+    return fallback
 
 
 def _from_clause(url: str) -> str:
@@ -91,6 +108,20 @@ def build_duckdb_sql(
         return BuildResult(
             sql=f"SELECT count(*) AS n FROM {src}",
             columns_used=[],
+        )
+
+    if tipo == "Total":
+        # Suma del valor principal — "cuánto vale/cuesta X" (ciclo c17/c20).
+        metrica_col = _pick(columns, "metrica")
+        if not metrica_col:
+            return BuildResult(
+                sql="",
+                error="Total requiere ≥1 columna de tipo `metrica` (un valor sumable)",
+            )
+        met_q = _safe_ident_dbq(metrica_col["col_name"])
+        return BuildResult(
+            sql=f"SELECT sum(try_cast({met_q} AS DOUBLE)) AS total FROM {src}",
+            columns_used=[metrica_col["col_name"]],
         )
 
     if tipo in ("Comparar", "Ranking"):

@@ -77,10 +77,10 @@ def test_get_chips_devuelve_4_listas():
         assert res.status_code == 200
         data = res.json()
         assert {"tema", "tipo", "territorio", "entidad"} <= set(data.keys())
-        # TIPO siempre 5 hardcoded
-        assert len(data["tipo"]) == 5
+        # TIPO siempre 6 hardcoded (Total entró el 2026-07-13)
+        assert len(data["tipo"]) == 6
         tipo_labels = {o["label"] for o in data["tipo"]}
-        assert {"Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"} == tipo_labels
+        assert {"Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"} == tipo_labels
         # TEMA vino de la query mockeada
         assert data["tema"][0]["label"] == "Salud y Protección Social"
         # TERRITORIO incluye Nacional + macro + dptos (≥33)

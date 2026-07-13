@@ -72,7 +72,7 @@ export type QueryEvent =
   | { type: "done"; elapsed_s: number };
 
 /** Hito 1 / Fase B — Motor SoQL determinista. Espejo de api/models/schemas.py. */
-export type ChipTipo = "Cuántos" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
+export type ChipTipo = "Cuántos" | "Total" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
 
 export type ChipsExecuteRequest = {
   dataset_id: string;

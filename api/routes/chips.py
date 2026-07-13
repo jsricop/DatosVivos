@@ -86,6 +86,8 @@ log = logging.getLogger(__name__)
 _TIPO_OPTIONS = [
     ChipOption(value="Cuántos", label="Cuántos",
                hint="Conteo simple: cuántos X hay"),
+    ChipOption(value="Total", label="Total",
+               hint="Suma del valor principal: cuánto vale/cuesta en total"),
     ChipOption(value="Comparar", label="Comparar",
                hint="Diferencias entre dos o más territorios/categorías"),
     ChipOption(value="Ranking", label="Ranking",
@@ -564,12 +566,21 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     # índice vectorial e5 YA rankea por significado en el camino generativo;
     # aquí re-rankea el top-50 del subset: el chip filtra, el embedding
     # ordena. Falla silenciosa → queda el orden SQL.
+    aviso_lejania: str | None = None
     if refinador_boost and rows:
         try:
             hits = {
                 h.id: h.score
                 for h in _get_vindex().search(refinador_boost, k=100)
             }
+            if not hits:
+                # Honestidad: nada del catálogo se parece semánticamente a lo
+                # pedido. Se responde igual (el más relacionado del tema) pero
+                # SIN fingir que es exactamente lo que se buscó.
+                aviso_lejania = (
+                    f"Ningún dataset del catálogo coincide de cerca con "
+                    f"«{refinador_boost}»; te muestro lo más relacionado del tema."
+                )
             if hits:
                 s_min, s_max = min(hits.values()), max(hits.values())
                 rango = (s_max - s_min) or 1.0
@@ -610,6 +621,9 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     chosen: str | None = None
     msg: str | None = None
     suggested: list[str] | None = None
+
+    if aviso_lejania:
+        msg = aviso_lejania
 
     if req.force_dataset_id:
         chosen = req.force_dataset_id
@@ -1254,6 +1268,11 @@ _TIPO_LEXICO: list[tuple[re.Pattern[str], str]] = [
                 re.IGNORECASE), "Tendencia"),
     # "en qué gasta/invierte" pide el desglose, no el total (c19).
     (re.compile(r"en qu[eé] (se )?(gasta|invierte)", re.IGNORECASE), "Comparar"),
+    # "cuánto vale/cuesta/cuánta plata" pide la SUMA del valor, no un
+    # conteo de filas (ciclo ciudadano c17/c20/c50, 2026-07-12).
+    (re.compile(r"cu[aá]nto (vale|cuesta|gana|debe|recauda|dinero)"
+                r"|cu[aá]nta plata|a cu[aá]nto asciende|valor total|monto total",
+                re.IGNORECASE), "Total"),
     # SOLO el plural es conteo: "¿cuántos contratos?" cuenta filas, pero
     # "¿cuánto vale la deuda?" pide un MONTO — forzar Cuántos ahí producía
     # conteos irrelevantes presentados como cifra verificada (c17, c20, c50).
