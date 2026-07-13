@@ -154,10 +154,24 @@ async with sse_client("http://localhost:3000/sse") as (read, write):
       <section className="flex flex-col gap-3">
         <h2 className="m-0 text-h3">Qué puede hacer un agente conectado</h2>
         <p className="m-0 max-w-[70ch] font-sans text-body-sm text-ink-2 leading-relaxed">
-          Cada tarjeta muestra el ciclo completo: lo que TÚ pides en lenguaje
-          natural, la llamada que el agente construye, y lo que la herramienta
-          devuelve (ejemplos reales del caso &quot;colegios oficiales en
-          Boyacá&quot;).
+          Importante: <strong>estas herramientas no se llaman a mano.</strong>{" "}
+          Al conectarse, el cliente las descubre automáticamente y desde ahí{" "}
+          <strong>el propio modelo decide</strong> cuál usar, con qué argumentos
+          y en qué orden, según lo que le pidas en lenguaje natural. Una sola
+          pregunta puede disparar la cadena completa:
+        </p>
+        <Code>{`Tú:        "¿Cuántos colegios oficiales hay en Boyacá?"
+
+El agente decide y encadena, solo:
+  1. search_datasets("establecimientos educativos Boyacá")  → encuentra emd6-ef7x
+  2. get_metadata("emd6-ef7x")                              → descubre la columna sector
+  3. query_data("emd6-ef7x", "SELECT count(*) WHERE sector='OFICIAL'")  → 1721
+
+Agente:    "Hay 1.721 establecimientos oficiales en Boyacá,
+            según la Gobernación de Boyacá (dataset emd6-ef7x)."`}</Code>
+        <p className="m-0 max-w-[70ch] font-sans text-body-sm text-ink-2 leading-relaxed">
+          Las 4 herramientas que el agente tiene disponibles — cada tarjeta
+          muestra un ejemplo real de petición, llamada y respuesta:
         </p>
         <ul className="m-0 flex list-none flex-col gap-4 p-0">
           {TOOLS.map((t) => (
