@@ -177,28 +177,37 @@ def _stream_download(url: str, dest: Path) -> int:
 
 
 def _csv_to_parquet(csv_path: Path, parquet_path: Path) -> int:
-    """CSV → Parquet ZSTD con DuckDB (fallback de encodings). → filas."""
+    """CSV → Parquet ZSTD con DuckDB (fallback de encodings). → filas.
+
+    Escribe en `.parquet.part` y renombra al final: si el proceso muere a
+    mitad de COPY no queda un parquet parcial con nombre definitivo en el
+    lake (huérfanos del 2026-07-13)."""
+    part = parquet_path.with_name(parquet_path.name + ".part")
     last_err: Exception | None = None
-    for enc in (None, "latin-1", "utf-16"):
-        try:
-            con = duckdb.connect(":memory:")
-            read = (
-                f"read_csv_auto('{csv_path}')" if enc is None
-                else f"read_csv('{csv_path}', auto_detect=true, encoding='{enc}')"
-            )
-            con.execute(
-                f"COPY (SELECT * FROM {read}) TO '{parquet_path}' "
-                f"(FORMAT PARQUET, COMPRESSION ZSTD)"
-            )
-            rows = con.execute(
-                f"SELECT count(*) FROM read_parquet('{parquet_path}')"
-            ).fetchone()[0]
-            con.close()
-            return int(rows)
-        except Exception as e:  # noqa: BLE001 — probar siguiente encoding
-            last_err = e
-            Path(parquet_path).unlink(missing_ok=True)
-    raise last_err  # type: ignore[misc]
+    try:
+        for enc in (None, "latin-1", "utf-16"):
+            try:
+                con = duckdb.connect(":memory:")
+                read = (
+                    f"read_csv_auto('{csv_path}')" if enc is None
+                    else f"read_csv('{csv_path}', auto_detect=true, encoding='{enc}')"
+                )
+                con.execute(
+                    f"COPY (SELECT * FROM {read}) TO '{part}' "
+                    f"(FORMAT PARQUET, COMPRESSION ZSTD)"
+                )
+                rows = con.execute(
+                    f"SELECT count(*) FROM read_parquet('{part}')"
+                ).fetchone()[0]
+                con.close()
+                part.rename(parquet_path)
+                return int(rows)
+            except Exception as e:  # noqa: BLE001 — probar siguiente encoding
+                last_err = e
+                part.unlink(missing_ok=True)
+        raise last_err  # type: ignore[misc]
+    finally:
+        part.unlink(missing_ok=True)
 
 
 def _api_headers() -> dict:
@@ -271,11 +280,9 @@ def _farm_one(conn, cand: dict) -> bool:
             # que no cabe.
             est = _live_size_estimate(ds, int(cand.get("n_cols") or 12))
             if est is not None and est > PER_DATASET_CAP:
-                _upsert(conn, ds, status="too_big",
-                        error=f"tamaño vivo ≈ {est/1024**3:.1f} GB > cap; "
-                              f"saltado sin descargar",
-                        priority_score=cand["score"],
-                        last_scored_at=datetime.now(timezone.utc))
+                _mark_undownloaded(conn, cand, parquet, "too_big",
+                                   f"tamaño vivo ≈ {est/1024**3:.1f} GB > cap; "
+                                   f"saltado sin descargar")
                 return False
             url = SOCRATA_CSV.format(id=ds)
         else:
@@ -288,11 +295,9 @@ def _farm_one(conn, cand: dict) -> bool:
                 with urllib.request.urlopen(head, timeout=10) as resp:
                     clen = int(resp.headers.get("Content-Length") or 0)
                 if clen > PER_DATASET_CAP:
-                    _upsert(conn, ds, status="too_big",
-                            error=f"Content-Length {clen/1024**3:.1f} GB > cap; "
-                                  f"saltado sin descargar",
-                            priority_score=cand["score"],
-                            last_scored_at=datetime.now(timezone.utc))
+                    _mark_undownloaded(conn, cand, parquet, "too_big",
+                                       f"Content-Length {clen/1024**3:.1f} GB "
+                                       f"> cap; saltado sin descargar")
                     return False
             except Exception:  # noqa: BLE001 — sin HEAD, el stream acotado decide
                 pass
@@ -312,17 +317,28 @@ def _farm_one(conn, cand: dict) -> bool:
         # cap por dataset (incluye UnicodeDecodeError, subclase de ValueError:
         # encodings imposibles quedan como too_big = skip permanente, correcto
         # porque reintentar es fútil)
-        _upsert(conn, ds, status="too_big", error=str(e)[:400],
-                priority_score=cand["score"],
-                last_scored_at=datetime.now(timezone.utc))
+        _mark_undownloaded(conn, cand, parquet, "too_big", str(e))
         return False
     except Exception as e:  # noqa: BLE001 — un fallo nunca tumba la corrida
-        _upsert(conn, ds, status="failed", error=str(e)[:400],
-                priority_score=cand["score"],
-                last_scored_at=datetime.now(timezone.utc))
+        _mark_undownloaded(conn, cand, parquet, "failed", str(e))
         return False
     finally:
         csv_tmp.unlink(missing_ok=True)
+
+
+def _mark_undownloaded(conn, cand: dict, parquet: Path,
+                       status: str, error: str) -> None:
+    """Marca un intento fallido Y borra el parquet previo si existía.
+
+    Si el dataset estaba `downloaded` y su refresco falla, el manifest baja a
+    failed/too_big pero el parquet viejo quedaba en disco con `parquet_path`
+    apuntándole: la bodega nunca lo sirve (status != downloaded) y era peso
+    muerto sin dueño (87 MB de huérfanos, 2026-07-13)."""
+    parquet.unlink(missing_ok=True)
+    _upsert(conn, cand["dataset_id"], status=status, error=error[:400],
+            bytes=None, rows=None, parquet_path=None,
+            priority_score=cand["score"],
+            last_scored_at=datetime.now(timezone.utc))
 
 
 def _evict(conn, snap: dict) -> None:
@@ -388,8 +404,39 @@ def bootstrap(conn, budget: int, dry: bool) -> None:
              ok, fail, skip, used / 1024**3)
 
 
+def _sweep_orphans(conn, dry: bool) -> None:
+    """Borra archivos del lake que ningún snapshot `downloaded` referencia.
+
+    Un kill del proceso (reinicio del contenedor, VPN) a mitad de descarga o
+    conversión deja `.tmp`/`.part`/parquets sin dueño que ningún try/except
+    alcanza a limpiar. Corre bajo el advisory lock (nadie más escribe en el
+    lake) y solo toca archivos con >1 h de antigüedad por prudencia."""
+    if not LAKE_DIR.is_dir():
+        return
+    vivos = set()
+    with conn.cursor() as cur:
+        cur.execute("SELECT parquet_path FROM dataset_snapshots "
+                    "WHERE status = 'downloaded' AND parquet_path IS NOT NULL")
+        vivos = {Path(r["parquet_path"]).name for r in cur.fetchall()}
+    borrados = 0
+    for f in LAKE_DIR.iterdir():
+        if not f.is_file() or f.name in vivos:
+            continue
+        if time.time() - f.stat().st_mtime < 3600:
+            continue
+        if dry:
+            log.info("[dry] barrería huérfano %s (%.1f MB)",
+                     f.name, f.stat().st_size / 1024**2)
+        else:
+            f.unlink(missing_ok=True)
+        borrados += 1
+    if borrados:
+        log.info("barrido: %d huérfanos del lake", borrados)
+
+
 def daily(conn, budget: int, max_swaps: int, max_minutes: int, dry: bool) -> None:
     t0 = time.monotonic()
+    _sweep_orphans(conn, dry)
     cands = {c["dataset_id"]: c for c in _score_candidates(conn)}
     man = _manifest(conn)
 
