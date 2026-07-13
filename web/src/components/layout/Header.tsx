@@ -34,13 +34,19 @@ export function Header() {
             href="/tablero"
             className="font-sans text-body-sm text-ink-2 focus-ring"
           >
-            Detalle entidad
+            Tablero
           </Link>
           <Link
             href="/buscar"
             className="font-sans text-body-sm text-ink-2 focus-ring"
           >
             Buscar
+          </Link>
+          <Link
+            href="/mcp"
+            className="font-sans text-body-sm text-ink-2 focus-ring"
+          >
+            MCP
           </Link>
           <Link
             href="/acerca"
