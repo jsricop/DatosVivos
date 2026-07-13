@@ -148,6 +148,31 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
   }
 
   if (tipo === "Mapa") {
+    // El choropleth casa por CÓDIGO DIVIPOLA contra el GeoJSON. Muchos
+    // datasets solo traen NOMBRES ("Bogotá D.C.") — pintarían un mapa en
+    // blanco. Si la mayoría de regiones no son códigos numéricos, degradamos
+    // a barras: misma cifra verificada, artefacto legible.
+    const numericas = rowsTyped.filter((r) =>
+      /^\d{1,5}$/.test(String(r["region"] ?? "").trim()),
+    ).length;
+    if (rowsTyped.length > 0 && numericas < rowsTyped.length / 2) {
+      const block: ChartBlock = {
+        type: "bar",
+        title: `Por región — ${datasetName}`,
+        x_column: "region",
+        y_column: "n",
+      };
+      return (
+        <div className="flex flex-col gap-2">
+          <BarChartBlock block={block} rows={rowsTyped.slice(0, 10)} />
+          <p className="m-0 font-sans text-caption text-ink-muted">
+            Este dataset registra la región por nombre (sin código DIVIPOLA),
+            así que se muestra como barras en lugar de mapa.
+          </p>
+          <VerifiedNote />
+        </div>
+      );
+    }
     const block: MapBlock = {
       type: "choropleth",
       title: `Mapa — ${datasetName}`,

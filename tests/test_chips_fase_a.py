@@ -160,9 +160,34 @@ def test_query_chips_refinador_no_filtra_y_boostea():
     # WHERE del conteo: el refinador NO filtra
     assert "refinador" not in count_sql.lower()
     assert "estudiantes" not in str(count_params)
-    # score: boost CASE con el refinador como ILIKE
-    assert "CASE WHEN" in score_sql and "ILIKE" in score_sql
+    # score: boost CASE por PALABRA, insensible a tildes (translate + LIKE)
+    assert "CASE WHEN" in score_sql and "LIKE" in score_sql
+    assert "translate" in score_sql
     assert "%estudiantes%" in score_params
+
+
+def test_refinador_boost_por_palabras():
+    """Frases multi-palabra boostean por palabra suelta, no todo-o-nada:
+    'tarifas de energía por estrato' → tarifas/energia/estrato (sin tildes,
+    sin palabras cortas como 'de'/'por')."""
+    client = _client()
+    capturas: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=3, rows=[]),
+    ):
+        client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Minas y Energía",
+                  "refinador": "tarifas de energía por estrato"},
+        )
+    score_sql, score_params = capturas[1]
+    assert "%tarifas%" in score_params
+    assert "%energia%" in score_params  # sin tilde
+    assert "%estrato%" in score_params
+    assert "%de%" not in score_params  # cortas fuera
+    # tres palabras → tres CASE sumados
+    assert score_sql.count("CASE WHEN") == 3
 
 
 # ----------------------------------------------------------------------

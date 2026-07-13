@@ -423,6 +423,34 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     # Texto del boost de ranking (None → el CASE del SQL rinde 0 para todos).
     refinador_boost = (req.refinador or "").strip() or None
 
+    # Boost POR PALABRAS, no por frase exacta: "tarifas de energía por
+    # estrato" debe premiar títulos que contengan "tarifas" y "energía"
+    # aunque la frase completa no exista en ningún nombre (con frase exacta
+    # el boost valía 0 y ganaba el dataset más popular del tema — caso
+    # "prestadores de salud" → medicamentos, 2026-07-12). Palabras de ≥4
+    # letras, máximo 5, insensibles a tildes (mismo translate del
+    # clasificador 1712); cada una aporta una fracción igual de 0.5.
+    _norm_sql = "translate(lower({col}), 'áéíóúüñ', 'aeiouun')"
+    palabras = [
+        w.lower().translate(str.maketrans("áéíóúüñ", "aeiouun"))
+        for w in re.split(r"\W+", refinador_boost or "")
+        if len(w) >= 4
+    ][:5]
+    if palabras:
+        frac = round(0.5 / len(palabras), 4)
+        boost_sql = " + ".join(
+            f"CASE WHEN {_norm_sql.format(col='s.name')} LIKE %s"
+            f" OR {_norm_sql.format(col='s.description')} LIKE %s"
+            f" THEN {frac} ELSE 0 END"
+            for _ in palabras
+        )
+        boost_params: list = []
+        for w in palabras:
+            boost_params += [f"%{w}%", f"%{w}%"]
+    else:
+        boost_sql = "0"
+        boost_params = []
+
     def _run(where_sql: str, params: list) -> tuple[int, list]:
         """Conteo + top-10 con score compuesto para un WHERE dado."""
         with _connect() as conn:
@@ -473,9 +501,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                                 (%s * 2 * 86400)
                              ))
                              +
-                             CASE WHEN %s::text IS NOT NULL
-                                   AND (s.name ILIKE %s OR s.description ILIKE %s)
-                                  THEN 0.5 ELSE 0 END
+                             ({boost_sql})
                            ) AS score
                     FROM subset s
                     ORDER BY score DESC NULLS LAST,
@@ -485,10 +511,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                     """,
                     params + [
                         _SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS,
-                        refinador_boost,
-                        f"%{refinador_boost}%" if refinador_boost else None,
-                        f"%{refinador_boost}%" if refinador_boost else None,
-                    ],
+                    ] + boost_params,
                 )
                 rows = cur.fetchall()
         return total, rows
