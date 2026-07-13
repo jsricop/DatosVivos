@@ -71,6 +71,11 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
       DATABASE_URL: ${DATABASE_URL:-postgresql://dv:${POSTGRES_PASSWORD}@postgres:5432/datosvivos}
       PYTHONPATH: /app
+      # Caché del modelo de EMBEDDINGS (e5-base, re-rank semántico) en el
+      # volumen ./data: dentro del contenedor se perdía en cada recreate y
+      # el primer query re-descargaba 1.1 GB de HF — el 2026-07-13 la
+      # descarga se estancó y /buscar quedó colgado en 504.
+      HF_HOME: /app/data/hf_cache
     ports:
       - "8000:8000"
     volumes:
