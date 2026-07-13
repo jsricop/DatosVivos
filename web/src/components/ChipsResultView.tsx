@@ -43,6 +43,8 @@ type Props = {
   filters: Record<string, string[]>;
   subtags?: string[];
   refinador?: string;
+  /** Aviso del mapper NL (p. ej. "marca tu municipio"). */
+  hint?: string;
 };
 
 const AXIS_LABEL: Record<string, string> = {
@@ -52,7 +54,7 @@ const AXIS_LABEL: Record<string, string> = {
   entidad: "Entidad",
 };
 
-export function ChipsResultView({ filters, subtags, refinador }: Props) {
+export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -239,6 +241,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
             {data.total_in_subset !== 1 ? "s" : ""}
           </span>
         </div>
+        {hint ? (
+          <p className="font-sans text-body text-warn leading-relaxed m-0">
+            {hint}
+          </p>
+        ) : null}
         {data.message ? (
           <p className="font-sans text-body text-ink-2 leading-relaxed">
             {data.message}

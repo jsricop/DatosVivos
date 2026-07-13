@@ -107,6 +107,17 @@ def build_soql(
                 soql="", error=f"{tipo} requiere ≥1 columna de tipo `dimension`"
             )
         dim = dim_col["col_name"]
+        # Sin categorías-basura como barras ("NR: 19" en Pruebas ICFES, ciclo
+        # ciudadano c07 2026-07-12). El NOT IN con upper() solo aplica a
+        # columnas de texto — sobre numéricas rompería el SoQL completo.
+        if (dim_col.get("socrata_data_type") or "").lower() == "text":
+            sin_basura = (
+                f"WHERE {dim} IS NOT NULL AND upper({dim}) NOT IN "
+                f"('', 'NR', 'N/A', 'NA', 'N.A', 'N.A.', 'NULL', 'SIN DATO', "
+                f"'SIN INFORMACION', 'SIN INFORMACIÓN', 'NO APLICA', 'NO REPORTA') "
+            )
+        else:
+            sin_basura = f"WHERE {dim} IS NOT NULL "
         if tipo == "Ranking" and use_metric:
             metrica_col = _pick(columns, "metrica")
             if metrica_col:
@@ -115,6 +126,7 @@ def build_soql(
                     soql=(
                         f"SELECT {dim} AS categoria, "
                         f"sum({metrica}) AS total "
+                        f"{sin_basura}"
                         f"GROUP BY {dim} "
                         f"ORDER BY total DESC "
                         f"LIMIT 10"
@@ -124,6 +136,7 @@ def build_soql(
         return BuildResult(
             soql=(
                 f"SELECT {dim} AS categoria, count(*) AS n "
+                f"{sin_basura}"
                 f"GROUP BY {dim} "
                 f"ORDER BY n DESC "
                 f"LIMIT 10"

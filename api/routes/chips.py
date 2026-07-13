@@ -57,6 +57,21 @@ from mcp_server.socrata.soda_client import SodaClient
 _soda_client = SodaClient(timeout=60.0)
 
 router = APIRouter()
+
+# Índice vectorial para el re-ranking semántico de candidatos (lazy: el
+# modelo e5 pesa ~280 MB y solo se carga si algún request lo necesita).
+# Umbral más permisivo que el del camino generativo: aquí NO decide si hay
+# respuesta — solo reordena un subset ya filtrado por chips.
+_vindex = None
+
+
+def _get_vindex():
+    global _vindex
+    if _vindex is None:
+        from ai_engine.vector_index import VectorIndex
+
+        _vindex = VectorIndex(min_score=float(os.getenv("CHIPS_RERANK_MIN_SCORE", "0.78")))
+    return _vindex
 log = logging.getLogger(__name__)
 
 
@@ -162,7 +177,7 @@ def _connect():
 async def list_chips() -> ChipsResponse:
     """Devuelve las 4 listas de chips construidas dinámicamente desde la DB.
 
-    - TEMA: top-12 categorías (`datasets.category`) por count.
+    - TEMA: todas las categorías canónicas (`datasets.category`) por count.
     - TIPO: 5 fijos (UI determina forma de respuesta).
     - TERRITORIO: Nacional + 32 dptos + 5 macroregiones (ordenados).
     - ENTIDAD: top-20 entities por uso real (telemetría dataset_top1_id).
@@ -180,7 +195,13 @@ async def list_chips() -> ChipsResponse:
                   AND (quality_flag IS NULL OR quality_flag = 'ok')
                 GROUP BY category
                 ORDER BY c DESC
-                LIMIT 12
+                -- 30 cubre el vocabulario completo (25 canónicas tras la
+                -- consolidación de 2026-07-12 + geospatial). El LIMIT 12
+                -- original era para el vocabulario sucio de 60+ variantes;
+                -- dejaba fuera Agricultura y Seguridad y Defensa, y el
+                -- mapper NL no podía elegirlas aunque la pregunta fuera
+                -- inequívoca ("producción agrícola" → caía en Comercio).
+                LIMIT 30
                 """
             )
             temas = [
@@ -456,7 +477,11 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     # municipio de Antioquia y el top ciego elegía uno ("Instituciones
     # Educativas de Yondó" para "¿cuántas IE hay en Antioquia?", 2026-07-12).
     # Es un boost, no un filtro: los municipales siguen como candidatos.
+    # Simétrico para las NACIONALES: "homicidios en Colombia" caía en el
+    # dataset de Cali (43 filas presentadas como cifra nacional, ciclo
+    # ciudadano c13 2026-07-12).
     es_dpto = bool(req.territorio and re.fullmatch(r"\d{2}", req.territorio))
+    es_nacional = req.territorio == "nacional"
 
     def _run(where_sql: str, params: list) -> tuple[int, list]:
         """Conteo + top-10 con score compuesto para un WHERE dado."""
@@ -513,21 +538,55 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                              CASE WHEN %s AND s.jurisdiccion_nivel IN
                                     ('departamental', 'nacional')
                                   THEN 0.3 ELSE 0 END
+                             +
+                             CASE WHEN %s AND s.jurisdiccion_nivel = 'nacional'
+                                  THEN 0.3 ELSE 0 END
                            ) AS score
                     FROM subset s
                     ORDER BY score DESC NULLS LAST,
                              s.view_count DESC NULLS LAST,
                              s.rows_updated_at DESC NULLS LAST
-                    LIMIT 10
+                    LIMIT 50
                     """,
                     params + [
                         _SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS,
-                    ] + boost_params + [es_dpto],
+                    ] + boost_params + [es_dpto, es_nacional],
                 )
                 rows = cur.fetchall()
         return total, rows
 
     total, rows = _run(where_sql, params)
+
+    # ---- Re-ranking SEMÁNTICO (ciclo ciudadano 2026-07-12) ----
+    # El score SQL (popularidad + palabras del refinador) no acota
+    # semánticamente: cuando ninguna palabra matchea, gana el dataset más
+    # popular del tema ("¿parques nacionales?" → Lotería de Santander). El
+    # índice vectorial e5 YA rankea por significado en el camino generativo;
+    # aquí re-rankea el top-50 del subset: el chip filtra, el embedding
+    # ordena. Falla silenciosa → queda el orden SQL.
+    if refinador_boost and rows:
+        try:
+            hits = {
+                h.id: h.score
+                for h in _get_vindex().search(refinador_boost, k=100)
+            }
+            if hits:
+                s_min, s_max = min(hits.values()), max(hits.values())
+                rango = (s_max - s_min) or 1.0
+
+                def _score_final(r: dict) -> float:
+                    sql_score = float(r.get("score") or 0)
+                    sem = hits.get(r["dataset_id"])
+                    if sem is None:
+                        return sql_score
+                    return sql_score + 1.2 * ((sem - s_min) / rango + 0.25)
+
+                rows = sorted(rows, key=_score_final, reverse=True)
+                for r in rows:
+                    r["score"] = round(_score_final(r), 4)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Re-rank semántico falló (%s) — orden SQL", exc)
+    rows = rows[:10]
 
     candidates = [
         ChipsCandidateDataset(
@@ -1189,7 +1248,16 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
 # Señales léxicas → TIPO. Orden = prioridad; "cuánt" es la más fuerte y
 # además la única que puede SOBREESCRIBIR al LLM (ver chips_from_nl).
 _TIPO_LEXICO: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\bcu[aá]nt[oa]s?\b", re.IGNORECASE), "Cuántos"),
+    # "cuánto ha subido/bajado" pregunta por la EVOLUCIÓN de un valor, no por
+    # un conteo — va antes que el resto (ciclo ciudadano c28, 2026-07-12).
+    (re.compile(r"cu[aá]nto han? (subido|bajado|crecido|aumentado|cambiado|variado)",
+                re.IGNORECASE), "Tendencia"),
+    # "en qué gasta/invierte" pide el desglose, no el total (c19).
+    (re.compile(r"en qu[eé] (se )?(gasta|invierte)", re.IGNORECASE), "Comparar"),
+    # SOLO el plural es conteo: "¿cuántos contratos?" cuenta filas, pero
+    # "¿cuánto vale la deuda?" pide un MONTO — forzar Cuántos ahí producía
+    # conteos irrelevantes presentados como cifra verificada (c17, c20, c50).
+    (re.compile(r"\bcu[aá]nt[oa]s\b", re.IGNORECASE), "Cuántos"),
     (re.compile(r"\b(comparar?|versus|vs\.?|frente a)\b", re.IGNORECASE), "Comparar"),
     (re.compile(r"\b(ranking|top \d+|top\b|mayores|m[aá]s alt[oa]s)\b", re.IGNORECASE), "Ranking"),
     (re.compile(r"\b(tendencia|evoluci[oó]n|hist[oó]rico|a lo largo)\b", re.IGNORECASE), "Tendencia"),
@@ -1270,6 +1338,20 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
     if tema_lexico and tema_lexico in available["tema"]:
         mapped["tema"] = tema_lexico
 
+    # "Mi ciudad / donde vivo" no es adivinable: en vez de responder con el
+    # dato de OTRO municipio como si fuera el suyo (ciclo ciudadano c01/c06,
+    # 2026-07-12), se pide el territorio explícito.
+    hint = None
+    if not mapped.get("territorio") and re.search(
+        r"\bmi (ciudad|municipio|barrio|departamento|alcald[ií]a|localidad|regi[oó]n|eps)\b"
+        r"|donde vivo|cerca de (mi casa|donde vivo)",
+        req.q, re.IGNORECASE,
+    ):
+        hint = (
+            "La pregunta habla de TU territorio y no puedo adivinarlo: "
+            "márcalo en el chip Territorio para una respuesta local."
+        )
+
     picked = sum(1 for v in mapped.values() if v is not None)
     emit_event(
         endpoint="from_nl",
@@ -1284,4 +1366,5 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         territorio=mapped.get("territorio"),
         entidad=mapped.get("entidad"),
         refinador=mapped.get("refinador"),
+        hint=hint,
     )

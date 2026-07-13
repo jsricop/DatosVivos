@@ -19,6 +19,7 @@ type SearchPageProps = {
     entidad?: string | string[];
     subtag?: string | string[];
     refinador?: string;
+    hint?: string;
   }>;
 };
 
@@ -72,6 +73,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             filters={filters}
             subtags={subtags}
             refinador={refinador || undefined}
+            hint={params.hint || undefined}
           />
         </Suspense>
       </div>

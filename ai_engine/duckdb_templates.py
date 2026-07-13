@@ -100,6 +100,15 @@ def build_duckdb_sql(
                 sql="", error=f"{tipo} requiere ≥1 columna de tipo `dimension`"
             )
         dim_q = _safe_ident_dbq(dim_col["col_name"])
+        # Sin categorías-basura: NULL, vacío y placeholders tipo "NR"/"N/A"
+        # salían como barras ("NR: 19" en Pruebas ICFES, ciclo ciudadano c07
+        # 2026-07-12). Se filtran ANTES de agrupar.
+        sin_basura = (
+            f"WHERE {dim_q} IS NOT NULL "
+            f"AND upper(trim(CAST({dim_q} AS VARCHAR))) NOT IN "
+            f"('', 'NR', 'N/A', 'NA', 'N.A', 'N.A.', 'NULL', 'SIN DATO', "
+            f"'SIN INFORMACION', 'SIN INFORMACIÓN', 'NO APLICA', 'NO REPORTA')"
+        )
         if tipo == "Ranking" and use_metric:
             metrica_col = _pick(columns, "metrica")
             if metrica_col:
@@ -108,7 +117,7 @@ def build_duckdb_sql(
                     sql=(
                         f"SELECT {dim_q} AS categoria, "
                         f"sum(try_cast({met_q} AS DOUBLE)) AS total "
-                        f"FROM {src} "
+                        f"FROM {src} {sin_basura} "
                         f"GROUP BY {dim_q} "
                         f"ORDER BY total DESC NULLS LAST "
                         f"LIMIT 10"
@@ -118,7 +127,7 @@ def build_duckdb_sql(
         return BuildResult(
             sql=(
                 f"SELECT {dim_q} AS categoria, count(*) AS n "
-                f"FROM {src} "
+                f"FROM {src} {sin_basura} "
                 f"GROUP BY {dim_q} "
                 f"ORDER BY n DESC "
                 f"LIMIT 10"

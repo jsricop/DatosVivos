@@ -1,0 +1,310 @@
+# 50 preguntas de un ciudadano a "un sistema que tiene la información del Estado".
+# Escritas SIN pensar en qué datasets existen (2026-07-12), ANTES de correrlas,
+# para no sesgar la expectativa con lo que el sistema sabe hacer.
+#
+# `espera`: forma y manera de la respuesta ideal — el valor exacto es lo de
+# menos; importa CÓMO se presenta y qué NO debería aparecer.
+
+preguntas:
+  # ---- Salud (1-5) ----
+  - id: c01
+    q: "¿Cuántas camas de UCI hay disponibles en mi ciudad?"
+    espera: >
+      Una cifra grande y clara (KPI) con la ciudad visible, la fecha del dato
+      al lado (es un dato que cambia a diario) y de dónde sale. Ideal: un
+      desglose corto por hospital debajo. NO quiero: el total nacional cuando
+      pregunté por mi ciudad, ni un número sin fecha.
+  - id: c02
+    q: "¿Qué hospitales públicos hay cerca de donde vivo?"
+    espera: >
+      Una lista con nombre, dirección y nivel de atención, idealmente sobre un
+      mapa con puntos. Si no puede saber "cerca", que me pida el municipio con
+      un selector, no que adivine. NO: un conteo seco ("hay 5.000 hospitales").
+  - id: c03
+    q: "¿Cuántos casos de dengue van este año en el país?"
+    espera: >
+      KPI del año en curso + una línea de tendencia mensual para ver si sube o
+      baja, con los años anteriores en gris para comparar. Fuente y fecha
+      visibles. NO: el acumulado histórico de todos los años como si fuera el
+      del año actual.
+  - id: c04
+    q: "¿Qué porcentaje de niños tiene el esquema de vacunación completo?"
+    espera: >
+      Un porcentaje grande con su año de referencia, y una barra por
+      departamento para ver dónde está peor. Si el dato tiene 2 años de
+      atraso, que lo diga en grande. NO: un conteo de filas de un dataset de
+      vacunas que no responde el porcentaje.
+  - id: c05
+    q: "¿Cuánto se demora en promedio una cita con especialista en la EPS?"
+    espera: >
+      Un promedio en días con el nombre de la EPS, comparado contra el
+      promedio nacional (dos barras). Si el Estado no mide esto, que me lo
+      diga honestamente y me sugiera dónde reclamar (Supersalud). NO: un
+      dataset cualquiera de salud que no habla de tiempos.
+
+  # ---- Educación (6-10) ----
+  - id: c06
+    q: "¿Cuántos cupos escolares hay en los colegios públicos de mi municipio?"
+    espera: >
+      Cifra de cupos o matrícula del municipio con el año lectivo, y la lista
+      de colegios con su matrícula debajo (tabla corta ordenada). NO: el dato
+      de otro municipio ni la matrícula nacional.
+  - id: c07
+    q: "¿Qué universidades públicas tienen los mejores resultados en las pruebas Saber Pro?"
+    espera: >
+      Un ranking de barras (top 10) con el puntaje promedio y el año de la
+      prueba. Que distinga públicas de privadas si mezcla. NO: un listado de
+      universidades sin puntaje.
+  - id: c08
+    q: "¿Cuántos estudiantes desertaron del colegio el año pasado?"
+    espera: >
+      KPI del año con la tasa (%) además del número absoluto, y una tendencia
+      de 5 años para contexto. NO: solo el número absoluto sin tasa (no sé si
+      es mucho o poco).
+  - id: c09
+    q: "¿Cuánto cuesta el programa de alimentación escolar y a cuántos niños llega?"
+    espera: >
+      Dos KPIs lado a lado: presupuesto/gasto y beneficiarios, mismo año. Un
+      costo por niño calculado sería ideal. NO: uno de los dos números sin el
+      otro.
+  - id: c10
+    q: "¿Cuántas becas o créditos del Icetex se entregaron este año?"
+    espera: >
+      KPI del año + barras por tipo (beca, crédito condonable, etc.). Fecha y
+      fuente. NO: el histórico completo sumado como si fuera el año.
+
+  # ---- Seguridad (11-15) ----
+  - id: c11
+    q: "¿Está subiendo o bajando el robo de celulares en mi ciudad?"
+    espera: >
+      Una línea mensual de 2-3 años de hurtos en mi ciudad con una lectura en
+      una frase ("bajó 12 % frente al año pasado"). NO: el total nacional ni
+      una cifra sin serie de tiempo — la pregunta ES la tendencia.
+  - id: c12
+    q: "¿Cuáles son los barrios más peligrosos de Bogotá?"
+    espera: >
+      Ranking de barras por localidad/barrio con el tipo de delito
+      seleccionable, y un mapa de calor si se puede. Advertencia de que son
+      denuncias (subregistro). NO: datos de otra ciudad.
+  - id: c13
+    q: "¿Cuántos homicidios hubo en Colombia el año pasado?"
+    espera: >
+      KPI del año cerrado + tendencia de 10 años para ver el contexto (¿mejor
+      o peor que antes?). Tasa por 100.000 habitantes al lado del absoluto.
+      NO: mezclar años ni darme un subconjunto (una sola ciudad) sin decirlo.
+  - id: c14
+    q: "¿Qué tan seguro es el barrio al que me quiero mudar?"
+    espera: >
+      Que me pida el barrio/localidad (selector) y me muestre los delitos de
+      los últimos 12 meses por tipo (barras) comparados con el promedio de la
+      ciudad. NO: una respuesta genérica de seguridad nacional.
+  - id: c15
+    q: "¿Cuántos policías hay por habitante en mi departamento?"
+    espera: >
+      Una razón (policías por 10.000 hab.) comparada con el promedio nacional,
+      dos barras. Si el dato de pie de fuerza no es público, decirlo claro.
+      NO: el número de estaciones como si fuera el de policías.
+
+  # ---- Empleo y economía (16-20) ----
+  - id: c16
+    q: "¿Cuál es la tasa de desempleo actual y cómo ha cambiado?"
+    espera: >
+      KPI del último mes disponible + línea de 5 años. Que diga el mes de
+      referencia (el desempleo es mensual). NO: un promedio histórico sin
+      fecha.
+  - id: c17
+    q: "¿Cuánto gana en promedio un colombiano?"
+    espera: >
+      Salario promedio y mediano (los dos, son muy distintos) con el año, y
+      barras por departamento o sector. NO: solo el promedio, que engaña.
+  - id: c18
+    q: "¿Cuántas empresas nuevas se crearon en mi ciudad este año?"
+    espera: >
+      KPI del año en curso con comparación contra el año pasado (flecha
+      arriba/abajo), y barras por sector económico. NO: el stock total de
+      empresas como si fueran las nuevas.
+  - id: c19
+    q: "¿En qué gasta la plata mi alcaldía?"
+    espera: >
+      Barras del presupuesto por sector (educación, salud, vías...) del año
+      vigente, con ejecutado vs. presupuestado. Que me pida el municipio. NO:
+      el presupuesto nacional cuando pregunté por mi alcaldía.
+  - id: c20
+    q: "¿Cuánto vale la deuda pública de Colombia?"
+    espera: >
+      KPI en billones con el % del PIB al lado (el número solo no dice nada) y
+      una línea de 10 años. NO: una cifra sin unidad clara ni fecha.
+
+  # ---- Transporte y movilidad (21-25) ----
+  - id: c21
+    q: "¿Cuántos accidentes de tránsito con muertos hubo este año?"
+    espera: >
+      KPI del año + tendencia mensual, con desglose por tipo de actor (peatón,
+      moto, carro) en barras. NO: todos los accidentes mezclados si pregunté
+      por los fatales.
+  - id: c22
+    q: "¿Cuál es el estado de las vías para viajar este puente?"
+    espera: >
+      Un mapa o lista de vías con estado (cerrada, paso restringido) y la
+      fuente (Invías) con hora de actualización. Si el sistema no tiene datos
+      en tiempo real, que lo diga y me lleve al canal oficial. NO: datos de
+      hace un año presentados como actuales.
+  - id: c23
+    q: "¿Cuántos vehículos hay matriculados en Colombia?"
+    espera: >
+      KPI total + barras por clase (carros, motos, camiones). Motos vs carros
+      es el dato interesante. NO: solo el total.
+  - id: c24
+    q: "¿Cuánto se demora el SITP/TransMilenio en horas pico?"
+    espera: >
+      Si hay datos de operación: tiempos o frecuencias por troncal. Si no los
+      hay, honestidad y enlace al portal de Bogotá. NO: inventar un promedio.
+  - id: c25
+    q: "¿Cuántas multas de tránsito se pusieron el año pasado y por qué?"
+    espera: >
+      KPI del año + ranking de las 10 infracciones más comunes (barras con el
+      código y su descripción legible). NO: códigos de infracción crudos sin
+      explicación (C29 no me dice nada).
+
+  # ---- Vivienda y servicios públicos (26-30) ----
+  - id: c26
+    q: "¿Cuántos subsidios de vivienda se han entregado y de qué tipo?"
+    espera: >
+      KPI total + barras por programa con el valor entregado, y la tendencia
+      anual. NO: programas duplicados con nombres distintos en la misma
+      gráfica.
+  - id: c27
+    q: "¿Qué barrios de mi ciudad no tienen acueducto?"
+    espera: >
+      Mapa o lista por barrio/comuna con % de cobertura, ordenado del peor al
+      mejor. NO: la cobertura nacional (99 %...) que esconde los huecos.
+  - id: c28
+    q: "¿Cuánto ha subido la tarifa de la energía en los últimos años?"
+    espera: >
+      Línea de la tarifa kWh por estrato en 5 años, con mi ciudad/empresa
+      seleccionable. NO: una tarifa de otra empresa sin decir cuál es.
+  - id: c29
+    q: "¿Cuántas familias viven en arriendo vs casa propia?"
+    espera: >
+      Torta o barras (arriendo / propia / familiar) con el año del censo o
+      encuesta. NO: un dato de hace 15 años sin advertirlo.
+  - id: c30
+    q: "¿Dónde hay proyectos de vivienda de interés social activos?"
+    espera: >
+      Lista/mapa por municipio con nombre del proyecto y estado. Que me deje
+      filtrar por mi departamento. NO: proyectos ya cerrados como si
+      estuvieran activos.
+
+  # ---- Ambiente (31-35) ----
+  - id: c31
+    q: "¿Qué tan contaminado está el aire hoy en mi ciudad?"
+    espera: >
+      Un semáforo o índice (bueno/regular/malo) con la hora de medición y la
+      estación más cercana. Si no hay tiempo real, el último dato con su
+      fecha en grande. NO: un promedio anual como si fuera el aire de hoy.
+  - id: c32
+    q: "¿Cuántas hectáreas de bosque perdió Colombia el último año?"
+    espera: >
+      KPI anual + tendencia de 10 años + mapa por departamento (Amazonía).
+      NO: cifras de años distintos mezcladas.
+  - id: c33
+    q: "¿Qué ríos están más contaminados?"
+    espera: >
+      Ranking con el índice de calidad del agua y el punto de medición. NO:
+      un listado de ríos sin métrica.
+  - id: c34
+    q: "¿Cuántos incendios forestales van este año?"
+    espera: >
+      KPI del año + mapa de dónde, con comparación al año pasado. NO: el
+      histórico sumado.
+  - id: c35
+    q: "¿Cuánta basura recicla mi ciudad?"
+    espera: >
+      Porcentaje de aprovechamiento con el total de toneladas, comparado con
+      otras ciudades (barras). NO: solo toneladas sin el %.
+
+  # ---- Justicia y transparencia (36-40) ----
+  - id: c36
+    q: "¿Cuántos contratos a dedo (contratación directa) hizo mi alcaldía?"
+    espera: >
+      KPI de contratos y monto por contratación directa vs licitación
+      (barras), del municipio que yo elija, con enlace a los contratos. NO:
+      el agregado nacional.
+  - id: c37
+    q: "¿Qué entidades incumplen más la ley de transparencia?"
+    espera: >
+      Ranking de entidades con su indicador de cumplimiento y qué les falta.
+      NO: nombres sin métrica.
+  - id: c38
+    q: "¿Cuántos procesos judiciales están atrasados en el país?"
+    espera: >
+      KPI del inventario atrasado con la tasa de congestión, por jurisdicción
+      (barras). NO: el total de procesos como si todos estuvieran atrasados.
+  - id: c39
+    q: "¿Cuánta plata se ha recuperado de casos de corrupción?"
+    espera: >
+      Cifra recuperada vs. cifra en investigación, con los casos grandes
+      listados. Si el dato no existe consolidado, decirlo. NO: una cifra sin
+      fuente clara.
+  - id: c40
+    q: "¿Cuántas peticiones (PQRS) responde a tiempo el Estado?"
+    espera: >
+      Porcentaje de respuesta a tiempo por entidad (ranking de mejores y
+      peores). NO: el volumen de PQRS sin la tasa de cumplimiento.
+
+  # ---- Cultura, deporte y sociedad (41-45) ----
+  - id: c41
+    q: "¿Qué eventos culturales gratuitos hay este mes?"
+    espera: >
+      Lista por fecha con lugar y cómo llegar, filtrable por ciudad. Si el
+      sistema no tiene agenda, que lo diga y enlace la secretaría de cultura.
+      NO: eventos pasados.
+  - id: c42
+    q: "¿Cuántas bibliotecas públicas hay y dónde están?"
+    espera: >
+      KPI + mapa de puntos por municipio. Lista con horarios si existe. NO:
+      solo el número.
+  - id: c43
+    q: "¿Cuánta gente visita los parques nacionales?"
+    espera: >
+      Ranking de parques por visitantes/año con tendencia (¿se recuperó
+      después de la pandemia?). NO: un total nacional sin desglose.
+  - id: c44
+    q: "¿Cuántos adultos mayores reciben subsidio del Estado?"
+    espera: >
+      KPI de beneficiarios + monto, por departamento (mapa o barras), con el
+      programa nombrado (Colombia Mayor). NO: mezclar programas sin decirlo.
+  - id: c45
+    q: "¿Cuánta población migrante hay en el país?"
+    espera: >
+      KPI con fecha de corte + barras por departamento de residencia y la
+      tendencia. NO: cifras viejas sin fecha (esto cambia rápido).
+
+  # ---- Estado y participación (46-50) ----
+  - id: c46
+    q: "¿Cuántos trámites del Estado puedo hacer 100 % en línea?"
+    espera: >
+      KPI (n de X trámites totales, con %) + buscador o lista de los más
+      usados con su enlace. NO: el número de oficinas físicas.
+  - id: c47
+    q: "¿Cómo votó mi municipio en las últimas elecciones?"
+    espera: >
+      Barras por candidato con % y participación, del municipio que elija.
+      NO: el resultado nacional cuando pedí el local.
+  - id: c48
+    q: "¿Cuántos funcionarios públicos hay y cuánto cuestan?"
+    espera: >
+      KPI de funcionarios + costo de nómina anual, con tendencia. Por entidad
+      si se puede. NO: uno de los dos datos sin el otro.
+  - id: c49
+    q: "¿Qué proyectos de ley se están discutiendo ahora en el Congreso?"
+    espera: >
+      Lista de proyectos activos con tema, estado (debate, sanción) y enlace
+      al texto. Si no hay datos del Congreso, decirlo honesto. NO: leyes ya
+      aprobadas como si estuvieran en discusión.
+  - id: c50
+    q: "¿Cuánta plata le llega a mi municipio del gobierno nacional?"
+    espera: >
+      KPI de transferencias (SGP) del año para mi municipio, con barras por
+      destino (educación, salud, agua) y comparación por habitante contra
+      municipios similares. NO: el total nacional del SGP.

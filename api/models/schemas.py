@@ -261,6 +261,9 @@ class ChipsFromNLResponse(BaseModel):
     territorio: str | None = None  # código DIVIPOLA o "macro:*"
     entidad: str | None = None     # entity_id como string
     refinador: str | None = None
+    # Aviso para el usuario cuando la pregunta necesita algo que el sistema
+    # no puede adivinar (p. ej. "mi ciudad" sin decir cuál).
+    hint: str | None = None
 
 
 class ChipsExplainResponse(BaseModel):

@@ -117,6 +117,7 @@ export function HeroSearch({
             territorio?: string | null;
             entidad?: string | null;
             refinador?: string | null;
+            hint?: string | null;
           };
           // Aceptamos el mapeo solo si hay al menos UN chip de CONTENIDO
           // (tema/territorio/entidad). TIPO solo no dice CUÁL dataset:
@@ -130,6 +131,7 @@ export function HeroSearch({
             if (j.territorio) chipsParams.set("territorio", j.territorio);
             if (j.entidad) chipsParams.set("entidad", j.entidad);
             if (j.refinador) chipsParams.set("refinador", j.refinador);
+            if (j.hint) chipsParams.set("hint", j.hint);
           }
         }
       } catch {
