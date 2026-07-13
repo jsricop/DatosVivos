@@ -13,6 +13,8 @@ import type { Axis } from "@/components/ChipGroup";
 type SearchPageProps = {
   searchParams: Promise<{
     q?: string;
+    /** Pregunta NL original cuando el mapper la convirtió a chips. */
+    pregunta?: string;
     tema?: string | string[];
     tipo?: string | string[];
     territorio?: string | string[];
@@ -27,7 +29,7 @@ export async function generateMetadata({
   searchParams,
 }: SearchPageProps): Promise<Metadata> {
   const params = await searchParams;
-  const q = (params.q ?? "").trim();
+  const q = (params.q ?? params.pregunta ?? "").trim();
   return {
     title: q ? `${q.slice(0, 60)} · Consulta` : "Buscar",
     description: q
@@ -57,15 +59,29 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   // Modo chips: filtros marcados sin texto libre — flujo determinista.
   if (!q && hasChips) {
+    const pregunta = (params.pregunta ?? "").trim();
+    // Etiquetas legibles para los chips activos: el TERRITORIO viaja como
+    // código DIVIPOLA ("15") y la ENTIDAD como id — el ciudadano debe ver
+    // "Boyacá", no el código (2026-07-13).
+    const chipsLists = await fetchChipsLists();
+    const labels: Record<string, Record<string, string>> = {
+      territorio: Object.fromEntries(
+        chipsLists.territorio.map((t) => [t.value, t.label]),
+      ),
+      entidad: Object.fromEntries(
+        chipsLists.entidad.map((e) => [e.value, e.label]),
+      ),
+    };
     return (
       <div className="container-narrow flex flex-col gap-6 py-8">
         <header className="flex flex-col gap-4 pb-2">
           <Link href="/" className="font-mono text-caption text-ink-2 focus-ring">
             ← Volver al inicio
           </Link>
+          {pregunta ? <h1 className="text-h2 m-0 text-ink">{pregunta}</h1> : null}
           {/* Buscador abierto arriba: refinar o preguntar otra cosa. */}
-          <HeroSearch size="compact" />
-          <ActiveFilters filters={filters} />
+          <HeroSearch initialValue={pregunta} size="compact" />
+          <ActiveFilters filters={filters} labels={labels} />
         </header>
 
         <Suspense fallback={<LoadingNote />}>
@@ -207,7 +223,14 @@ const AXIS_LABEL: Record<string, string> = {
   entidad: "Entidad",
 };
 
-function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
+function ActiveFilters({
+  filters,
+  labels,
+}: {
+  filters: Record<string, string[]>;
+  /** Mapa opcional eje → (valor → etiqueta legible), ej. "15" → "Boyacá". */
+  labels?: Record<string, Record<string, string>>;
+}) {
   const chips = Object.entries(filters).flatMap(([axis, values]) =>
     values.map((v) => ({ axis, value: v })),
   );
@@ -222,7 +245,8 @@ function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
           <span className="uppercase tracking-wide text-ink-muted">
             {AXIS_LABEL[axis] ?? axis}
           </span>
-          <span className="text-hairline">·</span> {value}
+          <span className="text-hairline">·</span>{" "}
+          {labels?.[axis]?.[value] ?? value}
         </li>
       ))}
     </ul>

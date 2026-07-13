@@ -454,8 +454,23 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     # letras, máximo 5, insensibles a tildes (mismo translate del
     # clasificador 1712); cada una aporta una fracción igual de 0.5.
     _norm_sql = "translate(lower({col}), 'áéíóúüñ', 'aeiouun')"
+
+    def _raiz(w: str) -> str:
+        """Raíz insensible a género/número: 'colegios'→'colegi',
+        'oficiales'→'oficial', 'educativos'→'educativ'. Sin esto el boost
+        exigía la forma exacta y 'educativos' no premiaba títulos con
+        'Educativas' (caso Boyacá, 2026-07-13)."""
+        stem = w
+        if stem.endswith("es"):
+            stem = stem[:-2]
+        elif stem.endswith("s"):
+            stem = stem[:-1]
+        if stem.endswith(("o", "a")):
+            stem = stem[:-1]
+        return stem if len(stem) >= 4 else w
+
     palabras = [
-        w.lower().translate(str.maketrans("áéíóúüñ", "aeiouun"))
+        _raiz(w.lower().translate(str.maketrans("áéíóúüñ", "aeiouun")))
         for w in re.split(r"\W+", refinador_boost or "")
         if len(w) >= 4
     ][:5]
@@ -537,12 +552,22 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
                              +
                              ({boost_sql})
                              +
-                             CASE WHEN %s AND s.jurisdiccion_nivel IN
-                                    ('departamental', 'nacional')
-                                  THEN 0.3 ELSE 0 END
+                             -- Cobertura vs alcance de la pregunta: para una
+                             -- pregunta DEPARTAMENTAL el dataset departamental
+                             -- responde exacto (+0.5); el nacional la contiene
+                             -- pero sobre-cuenta (+0.25); el municipal nunca
+                             -- puede responderla. El +0.3 anterior quedaba
+                             -- ahogado por el rango ~1.2 del re-rank semántico
+                             -- (Sogamoso ganó a Boyacá por 0.11, 2026-07-13).
+                             CASE WHEN %s THEN
+                                  CASE s.jurisdiccion_nivel
+                                       WHEN 'departamental' THEN 0.5
+                                       WHEN 'nacional' THEN 0.25
+                                       ELSE 0 END
+                                  ELSE 0 END
                              +
                              CASE WHEN %s AND s.jurisdiccion_nivel = 'nacional'
-                                  THEN 0.3 ELSE 0 END
+                                  THEN 0.5 ELSE 0 END
                              -
                              -- Origen MUERTO: el farmeo ya intentó bajarlo y
                              -- el portal respondió 403/404 (privado o

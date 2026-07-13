@@ -126,6 +126,10 @@ export function HeroSearch({
           const hasContentChip = !!(j.tema || j.territorio || j.entidad);
           if (hasContentChip) {
             chipsParams = new URLSearchParams();
+            // La pregunta original viaja en la URL: sin ella la caja de
+            // búsqueda quedaba vacía y el ciudadano perdía su pregunta al
+            // llegar al resultado (2026-07-13).
+            chipsParams.set("pregunta", trimmed);
             if (j.tema) chipsParams.set("tema", j.tema);
             if (j.tipo) chipsParams.set("tipo", j.tipo);
             if (j.territorio) chipsParams.set("territorio", j.territorio);

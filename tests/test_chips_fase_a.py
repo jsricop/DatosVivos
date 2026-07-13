@@ -161,9 +161,10 @@ def test_query_chips_refinador_no_filtra_y_boostea():
     assert "refinador" not in count_sql.lower()
     assert "estudiantes" not in str(count_params)
     # score: boost CASE por PALABRA, insensible a tildes (translate + LIKE)
+    # y por RAÍZ (género/número): 'estudiantes' → '%estudiant%'
     assert "CASE WHEN" in score_sql and "LIKE" in score_sql
     assert "translate" in score_sql
-    assert "%estudiantes%" in score_params
+    assert "%estudiant%" in score_params
 
 
 def test_refinador_boost_por_palabras():
@@ -182,12 +183,57 @@ def test_refinador_boost_por_palabras():
                   "refinador": "tarifas de energía por estrato"},
         )
     score_sql, score_params = capturas[1]
-    assert "%tarifas%" in score_params
-    assert "%energia%" in score_params  # sin tilde
-    assert "%estrato%" in score_params
+    # raíces sin tilde y sin género/número: tarifas→tarif, energía→energi,
+    # estrato→estrat ('educativos' así premia títulos con 'Educativas')
+    assert "%tarif%" in score_params
+    assert "%energi%" in score_params
+    assert "%estrat%" in score_params
     assert "%de%" not in score_params  # cortas fuera
     # tres palabras → tres CASE de boost (aparte va el CASE de jurisdicción)
     assert score_sql.count("translate(lower(s.name)") == 3
+
+
+def test_refinador_boost_raiz_genero_numero():
+    """'colegios públicos establecimientos educativos' debe premiar títulos
+    con 'Establecimientos Educativos' Y con 'Instituciones Educativas' — la
+    raíz iguala género/número (caso Boyacá 2026-07-13)."""
+    client = _client()
+    capturas: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=3, rows=[]),
+    ):
+        client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Educación",
+                  "refinador": "colegios públicos establecimientos educativos"},
+        )
+    _, score_params = capturas[1]
+    assert "%colegi%" in score_params
+    assert "%public%" in score_params
+    assert "%establecimient%" in score_params
+    assert "%educativ%" in score_params  # matchea 'Educativos' y 'Educativas'
+
+
+def test_boost_cobertura_departamental_es_nivel_consciente():
+    """Pregunta departamental (territorio '15'): el dataset departamental
+    recibe el boost EXACTO (0.5), el nacional la mitad y el municipal nada —
+    y sobrevive al re-rank semántico (Sogamoso ganó por 0.11, 2026-07-13)."""
+    client = _client()
+    capturas: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=3, rows=[]),
+    ):
+        client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Educación", "territorio": "15"},
+        )
+    score_sql, score_params = capturas[1]
+    assert "WHEN 'departamental' THEN 0.5" in score_sql
+    assert "WHEN 'nacional' THEN 0.25" in score_sql
+    # es_dpto=True, es_nacional=False viajan como parámetros
+    assert True in score_params and False in score_params
 
 
 # ----------------------------------------------------------------------
