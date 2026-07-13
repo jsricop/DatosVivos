@@ -1,0 +1,1114 @@
+ciclo: 2
+resultados:
+- id: c01
+  q: ¿Cuántas camas de UCI hay disponibles en mi ciudad?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Cuántos
+    refinador: camas UCI disponibles
+  ms_interpretacion: 3393
+  subset: 1561
+  candidatos_top3:
+  - s3n2-sqjp · ESTABLECIMIENTOS IMPORTADORES CERTIFICADOS EN CCAA DE DISPOSITIVOS MÉD
+  - vwzb-x42y · ESTABLECIMIENTOS FABRICANTES CERTIFICADOS EN CONDICIONES SANITARIAS DE
+  - kwki-6kd6 · BANCOS DE SANGRE EN FUNCIONAMIENTO EN EL PAÍS
+  dataset_elegido: s3n2-sqjp · ESTABLECIMIENTOS IMPORTADORES CERTIFICADOS EN CCAA DE DISPOSITIVOS MÉDICOS
+    Y EQU
+  ms_ejecucion: 27500
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 1714
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c02
+  q: ¿Qué hospitales públicos hay cerca de donde vivo?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Mapa
+    refinador: hospitales públicos
+  ms_interpretacion: 1800
+  subset: 1561
+  candidatos_top3:
+  - 54i9-zshx · DIRECTORIO E.S.E HOSPITALES DEPARTAMENTO DE  SANTANDER
+  - i7cb-raxc · CÓDIGO ÚNICO DE MEDICAMENTOS VIGENTES
+  - vwwf-4ftk · CÓDIGO ÚNICO DE MEDICAMENTOS VENCIDOS
+  dataset_elegido: 54i9-zshx · DIRECTORIO E.S.E HOSPITALES DEPARTAMENTO DE  SANTANDER
+  ms_ejecucion: 1769
+  consulta: SELECT municipio AS region, count(*) AS n GROUP BY municipio ORDER BY n DESC LIMIT 32
+  artefacto: 'barras por región (fallback: regiones por nombre, sin códigos)'
+  filas: 32
+  muestra:
+  - region: BUCARAMANGA
+    n: '27'
+  - region: BARRANCABERMEJA
+    n: '12'
+  - region: EL CARMEN DE CHUCURÍ
+    n: '9'
+  entregado: 'barras por región (fallback: regiones por nombre, sin códigos) · 32 fila(s) · consulta en
+    vivo · con nota ''cifra verificada'' + nombre del dataset + toggle SoQL'
+- id: c03
+  q: ¿Cuántos casos de dengue van este año en el país?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Cuántos
+    territorio: nacional
+    refinador: dengue
+  ms_interpretacion: 1569
+  subset: 1561
+  candidatos_top3:
+  - qzc7-jbg3 · 13. Dengue, Dengue grave y mortalidad por dengue municipio de Bucarama
+  - dq2k-gub9 · Registro de Casos de Dengue en el Municipio de Tuluá, Valle del Cauca
+  - tm62-e28n · Casos de dengue en la ciudad de Pereira
+  dataset_elegido: qzc7-jbg3 · 13. Dengue, Dengue grave y mortalidad por dengue municipio de Bucaramanga
+  ms_ejecucion: 1280
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 28626
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c04
+  q: ¿Qué porcentaje de niños tiene el esquema de vacunación completo?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Cuántos
+    refinador: esquema de vacunación completo
+  ms_interpretacion: 1444
+  subset: 1561
+  candidatos_top3:
+  - 8cw5-iyp3 · Puestos de vacunación de Risaralda - Puntos de vacunación y horarios d
+  - 8u7u-645t · Consolidado de Cobertura Anual Vacunación en los municipios de Antioqu
+  - 'ctct-gh6w · LISTADO DE VACUNAS CON REGISTRO SANITARIO VIGENTE CON CORTE AL ÚLTIMO '
+  dataset_elegido: 8cw5-iyp3 · Puestos de vacunación de Risaralda - Puntos de vacunación y horarios de
+    atención
+  ms_ejecucion: 1163
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 60
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c05
+  q: ¿Cuánto se demora en promedio una cita con especialista en la EPS?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Cuántos
+    refinador: tiempo promedio cita especialista
+  ms_interpretacion: 2151
+  subset: 1561
+  candidatos_top3:
+  - k5bd-cym5 · OPORTUNIDAD EN ASIGNACIÓN DE CITAS DE MEDICINA ESPECIALIZADA DE LA E.S
+  - 8cw5-iyp3 · Puestos de vacunación de Risaralda - Puntos de vacunación y horarios d
+  - dt6u-2gkm · INDICADORES RESOLUCIÓN 1522 DE 2013
+  dataset_elegido: k5bd-cym5 · OPORTUNIDAD EN ASIGNACIÓN DE CITAS DE MEDICINA ESPECIALIZADA DE LA E.S.E
+    HUS
+  ms_ejecucion: 1137
+  consulta: SELECT count(*) AS n
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: '236023'
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · consulta en vivo · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c06
+  q: ¿Cuántos cupos escolares hay en los colegios públicos de mi municipio?
+  chips:
+    tema: Educación
+    tipo: Cuántos
+    refinador: cupos escolares
+  ms_interpretacion: 1606
+  subset: 1151
+  candidatos_top3:
+  - a3jg-j674 · Estudiantes Matriculados y Graduados CEFIT
+  - y9ga-zwzy · MEN_ESTADISTICAS MATRICULA POR MUNICIPIOS_ES
+  - hk5x-635y · Pruebas ICFES
+  dataset_elegido: a3jg-j674 · Estudiantes Matriculados y Graduados CEFIT
+  ms_ejecucion: 1181
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 13461
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c07
+  q: ¿Qué universidades públicas tienen los mejores resultados en las pruebas Saber Pro?
+  chips:
+    tema: Educación
+    tipo: Ranking
+    refinador: Saber Pro
+  ms_interpretacion: 1359
+  subset: 1151
+  candidatos_top3:
+  - 6kwm-9788 · Resultados Saber Pro Competencias Especificas 2019-2
+  - 2x55-9wxm · Resultados Saber Pro Competencias Genericas 2019-2
+  - u37r-hjmu · Resultados únicos Saber Pro
+  dataset_elegido: 6kwm-9788 · Resultados Saber Pro Competencias Especificas 2019-2
+  ms_ejecucion: 3200
+  consulta: 'SELECT estu_consecutivo AS categoria, count(*) AS n WHERE estu_consecutivo IS NOT NULL AND
+    upper(estu_consecutivo) NOT IN ('''', ''NR'', ''N/A'', '
+  artefacto: barras horizontales (categoria × valor)
+  filas: 10
+  muestra:
+  - categoria: EK201950234799
+    n: '3'
+  - categoria: EK201950225014
+    n: '3'
+  - categoria: EK201950334785
+    n: '3'
+  entregado: barras horizontales (categoria × valor) · 10 fila(s) · consulta en vivo · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c08
+  q: ¿Cuántos estudiantes desertaron del colegio el año pasado?
+  chips:
+    tema: Educación
+    tipo: Cuántos
+    refinador: deserción escolar
+  ms_interpretacion: 2267
+  subset: 1151
+  candidatos_top3:
+  - 3iew-7wpx · DESERCION ACADEMICA PREGRADO Y POSGRADO
+  - 25rq-9y2s · DESERCION NO ACADEMICA UPTC
+  - sras-4t5p · MEN_ESTADISTICAS_EN_EDUCACION_EN_PREESCOLAR, BÁSICA Y MEDIA_POR_ETC
+  dataset_elegido: 3iew-7wpx · DESERCION ACADEMICA PREGRADO Y POSGRADO
+  ms_ejecucion: 1105
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 3372
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c09
+  q: ¿Cuánto cuesta el programa de alimentación escolar y a cuántos niños llega?
+  chips:
+    tema: Educación
+    tipo: Cuántos
+    refinador: alimentación escolar
+  ms_interpretacion: 1557
+  subset: 1151
+  candidatos_top3:
+  - qpf2-j35h · REPORTE DE ESTUDIANTES BENEFICIADOS POR EL PROGRAMA DE ALIMENTACIÓN ES
+  - 7y7n-8wu6 · Estudiantes Beneficiados con el Programa de Alimentación Escolar PAE e
+  - 68ut-ip9i · COBERTURA DEL PROGRAMA DE ALIMENTACIÓN ESCOLAR (PAE) EN EL DEPARTAMENT
+  dataset_elegido: qpf2-j35h · REPORTE DE ESTUDIANTES BENEFICIADOS POR EL PROGRAMA DE ALIMENTACIÓN ESCOLAR
+  ms_ejecucion: 1123
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 2208
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c10
+  q: ¿Cuántas becas o créditos del Icetex se entregaron este año?
+  chips:
+    tema: Educación
+    tipo: Cuántos
+    refinador: becas créditos Icetex
+  ms_interpretacion: 1744
+  subset: 1151
+  candidatos_top3:
+  - f673-3gn8 · Nuevos beneficiarios propios.
+  - 26bn-e42j · Créditos Otorgados.
+  - nvcf-b8a3 · Créditos Renovados.
+  dataset_elegido: f673-3gn8 · Nuevos beneficiarios propios.
+  ms_ejecucion: 1279
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 29187
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c11
+  q: ¿Está subiendo o bajando el robo de celulares en mi ciudad?
+  chips:
+    tema: Seguridad y Defensa
+    tipo: Tendencia
+    refinador: robo de celulares
+  ms_interpretacion: 1382
+  subset: 256
+  candidatos_top3:
+  - 9vha-vh9n · Reporte Hurto por Modalidades Policía Nacional
+  - sutf-7dyz · PIRATERÍA TERRESTRE
+  - d4fr-sbn2 · Reporte Hurto por Modalidades Policía Nacional
+  dataset_elegido: 9vha-vh9n · Reporte Hurto por Modalidades Policía Nacional
+  ms_ejecucion: 1327
+  consulta: SELECT date_trunc('month', "FECHA HECHO") AS periodo, count(*) AS n FROM {src} GROUP BY periodo
+    ORDER BY periodo LIMIT 60
+  artefacto: línea (periodo × n)
+  filas: 60
+  muestra:
+  - periodo: '2010-01-01 00:00:00'
+    n: 1916
+  - periodo: '2010-02-01 00:00:00'
+    n: 1771
+  - periodo: '2010-03-01 00:00:00'
+    n: 1990
+  entregado: línea (periodo × n) · 60 fila(s) · bodega Parquet local · con nota 'cifra verificada' + nombre
+    del dataset + toggle SoQL
+- id: c12
+  q: ¿Cuáles son los barrios más peligrosos de Bogotá?
+  chips:
+    tema: Seguridad y Defensa
+    tipo: Ranking
+    territorio: '11'
+    refinador: delincuencia
+  ms_interpretacion: 1520
+  subset: 43
+  candidatos_top3:
+  - a8z2-gygz · Cifras de mujeres víctimas de violencia intrafamiliar en Bogotá D.C. p
+  - b96w-a4b7 · Cifras de mujeres víctimas de lesiones personales en Bogotá D.C. por l
+  - 8r2k-pmi3 · Cifras de asesinatos a mujeres en Bogotá D.C. por localidad (Total, Po
+  dataset_elegido: u8vy-4dkb · Subsidios de Vivienda de la Caja Promotora de Vivienda Militar y de Policía
+  ms_ejecucion: 1108
+  consulta: ''
+  entregado: 'ERROR HONESTO: Ranking requiere ≥1 columna de tipo `dimension`'
+- id: c13
+  q: ¿Cuántos homicidios hubo en Colombia el año pasado?
+  chips:
+    tema: Seguridad y Defensa
+    tipo: Cuántos
+    territorio: nacional
+    refinador: homicidios
+  ms_interpretacion: 1334
+  subset: 256
+  candidatos_top3:
+  - u8eq-92tb · MASACRES
+  - ha6j-pa2r · Homicidios accidente de tránsito Policía Nacional
+  - uav5-b85g · HOMICIDIO EN ACCIDENTE DE TRÁNSITO
+  dataset_elegido: u8eq-92tb · MASACRES
+  ms_ejecucion: 1268
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 420
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c14
+  q: ¿Qué tan seguro es el barrio al que me quiero mudar?
+  chips:
+    tema: Seguridad y Defensa
+    tipo: Mapa
+    refinador: seguridad barrial
+  ms_interpretacion: 1637
+  subset: 256
+  candidatos_top3:
+  - 3v3b-sbwj · Cuadrantes de Seguridad
+  - 4brm-f6xb · Cámaras de seguridad en Palmira
+  - 59m2-qank · Histórico Actuaciones Policivas San Pedro
+  dataset_elegido: 59m2-qank · Histórico Actuaciones Policivas San Pedro
+  ms_ejecucion: 1739
+  consulta: SELECT zona AS region, count(*) AS n GROUP BY zona ORDER BY n DESC LIMIT 32
+  artefacto: 'barras por región (fallback: regiones por nombre, sin códigos)'
+  filas: 2
+  muestra:
+  - region: Urbana
+    n: '240'
+  - region: Rural
+    n: '24'
+  entregado: 'barras por región (fallback: regiones por nombre, sin códigos) · 2 fila(s) · consulta en
+    vivo · con nota ''cifra verificada'' + nombre del dataset + toggle SoQL'
+- id: c15
+  q: ¿Cuántos policías hay por habitante en mi departamento?
+  chips:
+    tema: Seguridad y Defensa
+    tipo: Cuántos
+    refinador: policías por habitante
+  ms_interpretacion: 1789
+  subset: 256
+  candidatos_top3:
+  - meew-mguv · Amenazas Policía Nacional de Colombia
+  - 37p5-impc · Reporte Delito Terrorismo Policía Nacional
+  - ha6j-pa2r · Homicidios accidente de tránsito Policía Nacional
+  dataset_elegido: meew-mguv · Amenazas Policía Nacional de Colombia
+  ms_ejecucion: 1252
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 650347
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c16
+  q: ¿Cuál es la tasa de desempleo actual y cómo ha cambiado?
+  chips:
+    tema: Trabajo
+    tipo: Tendencia
+    refinador: desempleo
+  ms_interpretacion: 1367
+  subset: 75
+  candidatos_top3:
+  - u4ze-bi7k · DESERCION DE LA FORMACIÓN PROFESIONAL INTEGRAL
+  - 28vu-5tx7 · CERTIFICACIÓN DE LA FORMACIÓN PROFESIONAL INTEGRAL
+  - hf6d-emrx · Disparidad Salarial Hombres Mujeres
+  dataset_elegido: u4ze-bi7k · DESERCION DE LA FORMACIÓN PROFESIONAL INTEGRAL
+  ms_ejecucion: 1894
+  consulta: SELECT fecha_inicio_ficha AS periodo, count(*) AS n GROUP BY periodo ORDER BY periodo LIMIT
+    60
+  artefacto: línea (periodo × n)
+  filas: 60
+  muestra:
+  - periodo: '"01/02/2022"'
+    n: '30'
+  - periodo: '"01/02/2023"'
+    n: '950'
+  - periodo: '"01/02/2024"'
+    n: '502'
+  entregado: línea (periodo × n) · 60 fila(s) · consulta en vivo · con nota 'cifra verificada' + nombre
+    del dataset + toggle SoQL
+- id: c17
+  q: ¿Cuánto gana en promedio un colombiano?
+  chips:
+    tema: Trabajo
+    tipo: Cuántos
+    territorio: nacional
+    refinador: salario promedio
+  ms_interpretacion: 2910
+  subset: 75
+  candidatos_top3:
+  - hf6d-emrx · Disparidad Salarial Hombres Mujeres
+  - bee9-sdwx · Disparidad de Horas Trabajadas Hombres y Mujeres
+  - yjvt-9cab · Pensionados en Colombia
+  dataset_elegido: hf6d-emrx · Disparidad Salarial Hombres Mujeres
+  ms_ejecucion: 1095
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 325
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c18
+  q: ¿Cuántas empresas nuevas se crearon en mi ciudad este año?
+  chips:
+    tema: Comercio, Industria y Turismo
+    tipo: Cuántos
+    refinador: empresas nuevas
+  ms_interpretacion: 1445
+  subset: 472
+  candidatos_top3:
+  - nkze-evrk · EMPRESAS RENOVADAS BUGA 2025
+  - 6mjz-32mx · EMPRESAS ESTABLECIDAS EN MADRID CUNDINAMARCA
+  - i9az-da2x · BD PYMES CCP
+  dataset_elegido: nkze-evrk · EMPRESAS RENOVADAS BUGA 2025
+  ms_ejecucion: 1148
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 4598
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c19
+  q: ¿En qué gasta la plata mi alcaldía?
+  chips:
+    tema: Gastos Gubernamentales
+    tipo: Cuántos
+    refinador: presupuesto
+  ms_interpretacion: 1538
+  subset: 347
+  candidatos_top3:
+  - 22ah-ddsj · OVCF - CUIPO - Programación de Ingresos
+  - efrw-bijb · PRESUPUESTO AIM-2020
+  - 5i8s-mjwr · Presupuesto general del Municipio de Fusagasugá 2020
+  dataset_elegido: 22ah-ddsj · OVCF - CUIPO - Programación de Ingresos
+  ms_ejecucion: 1526
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 2775714
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c20
+  q: ¿Cuánto vale la deuda pública de Colombia?
+  chips:
+    tema: Hacienda y Crédito Público
+    tipo: Cuántos
+    territorio: nacional
+    refinador: deuda pública
+  ms_interpretacion: 1381
+  subset: 280
+  candidatos_top3:
+  - d8pq-kxa7 · DEUDA PUBLICA MUNICIPIO DE PEREIRA.
+  - 5phs-yqfw · Información de Gastos del Presupuesto General de la Nación
+  - xjxk-qhsc · Ejecución Presupuestal del Presupuesto General de la Nación
+  dataset_elegido: d8pq-kxa7 · DEUDA PUBLICA MUNICIPIO DE PEREIRA.
+  ms_ejecucion: 1279
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 53
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c21
+  q: ¿Cuántos accidentes de tránsito con muertos hubo este año?
+  chips:
+    tema: Transporte
+    tipo: Cuántos
+    refinador: accidentes de tránsito con muertes
+  ms_interpretacion: 2962
+  subset: 520
+  candidatos_top3:
+  - yu3i-jau4 · Accidentes Viales
+  - 6jmc-vaxk · VEHICULOS INVOLUCRADOS EN UN ACCIDENTE DE TRANSITO LEY 2251-2022
+  - yb9r-2dsi · Accidentalidad en Barranquilla
+  dataset_elegido: yu3i-jau4 · Accidentes Viales
+  ms_ejecucion: 1249
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 660
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c22
+  q: ¿Cuál es el estado de las vías para viajar este puente?
+  chips:
+    tema: Transporte
+    tipo: Mapa
+    refinador: estado de vías
+  ms_interpretacion: 1687
+  subset: 520
+  candidatos_top3:
+  - 7i66-rps2 · Estado de Vías
+  - ie7y-asdn · Red Vial
+  - a38m-8egz · Tramites y Servicios de los Registros Nacionales de Tránsito Liquidado
+  dataset_elegido: 7i66-rps2 · Estado de Vías
+  ms_ejecucion: 1491
+  consulta: SELECT departamento AS region, count(*) AS n GROUP BY departamento ORDER BY n DESC LIMIT 32
+  artefacto: 'barras por región (fallback: regiones por nombre, sin códigos)'
+  filas: 26
+  muestra:
+  - region: Cundinamarca
+    n: '60'
+  - region: Valle del Cauca
+    n: '44'
+  - region: Santander
+    n: '42'
+  entregado: 'barras por región (fallback: regiones por nombre, sin códigos) · 26 fila(s) · consulta en
+    vivo · con nota ''cifra verificada'' + nombre del dataset + toggle SoQL'
+- id: c23
+  q: ¿Cuántos vehículos hay matriculados en Colombia?
+  chips:
+    tema: Transporte
+    tipo: Cuántos
+    territorio: nacional
+    refinador: vehículos matriculados
+  ms_interpretacion: 1462
+  subset: 520
+  candidatos_top3:
+  - u3vn-bdcy · CRECIMIENTO DEL PARQUE AUTOMOTOR RUNT2.0
+  - bj7e-xc9g · Vehículos matriculados desde enero de 2020 hasta mayo del 2022 por cla
+  - g4h5-prph · Parque Automotor Activo de Barranquilla Acumulado Mensual
+  dataset_elegido: u3vn-bdcy · CRECIMIENTO DEL PARQUE AUTOMOTOR RUNT2.0
+  ms_ejecucion: 1053
+  consulta: SELECT count(*) AS n
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: '190588'
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · consulta en vivo · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c24
+  q: ¿Cuánto se demora el SITP/TransMilenio en horas pico?
+  chips:
+    tema: Transporte
+    tipo: Cuántos
+    entidad: '1448'
+    refinador: tiempo de demora horas pico
+  ms_interpretacion: 1470
+  subset: 155
+  candidatos_top3:
+  - njnz-p9se · Rutas Troncales de Transmilenio
+  - g463-zwuf · Estaciones Troncales de TRANSMILENIO
+  - m245-kwtq · Estaciones Troncales de Transmilenio
+  dataset_elegido: du92-6y56 · Flota Vinculada del SITP
+  ms_ejecucion: 1233
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 145
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c25
+  q: ¿Cuántas multas de tránsito se pusieron el año pasado y por qué?
+  chips:
+    tema: Transporte
+    tipo: Cuántos
+    refinador: multas de tránsito
+  ms_interpretacion: 1887
+  subset: 520
+  candidatos_top3:
+  - bx9v-nvfz · Comparendos de tránsito en el Municipio de Acacías
+  - epfm-5fhb · ACTORES RUNT POR MUNICIPIO Y DEPARTAMENTO RUNT2.0
+  - dz6d-5x2w · Infracciones de Transito por Tipo y Zona - Departamento de Sucre
+  dataset_elegido: bx9v-nvfz · Comparendos de tránsito en el Municipio de Acacías
+  ms_ejecucion: 1052
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 47647
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c26
+  q: ¿Cuántos subsidios de vivienda se han entregado y de qué tipo?
+  chips:
+    tema: Vivienda, Ciudad y Territorio
+    tipo: Cuántos
+    refinador: subsidios de vivienda
+  ms_interpretacion: 2853
+  subset: 564
+  candidatos_top3:
+  - h2yr-zfb2 · Subsidios De Vivienda Asignados
+  - bnmy-mpts · Subsidios de Vivienda Rural Asignados
+  - fky2-9rg4 · Subsidios Mejoramientos Programas CMC-MCY
+  dataset_elegido: h2yr-zfb2 · Subsidios De Vivienda Asignados
+  ms_ejecucion: 1023
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 86603
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c27
+  q: ¿Qué barrios de mi ciudad no tienen acueducto?
+  chips:
+    tema: Vivienda, Ciudad y Territorio
+    tipo: Mapa
+    refinador: acueducto
+  ms_interpretacion: 1490
+  subset: 564
+  candidatos_top3:
+  - d4t4-daja · Tarifas de acueducto
+  - cuit-be64 · HISTORICO CONSUMO POR ESTRATO
+  - vyqy-8ah6 · Analítico de facturación por cargo acueducto
+  dataset_elegido: d4t4-daja · Tarifas de acueducto
+  ms_ejecucion: 1686
+  consulta: SELECT consumo_basico AS region, count(*) AS n GROUP BY consumo_basico ORDER BY n DESC LIMIT
+    32
+  artefacto: mapa choropleth por departamento
+  filas: 1
+  muestra:
+  - region: '11'
+    n: '1628'
+  entregado: mapa choropleth por departamento · 1 fila(s) · consulta en vivo · con nota 'cifra verificada'
+    + nombre del dataset + toggle SoQL
+- id: c28
+  q: ¿Cuánto ha subido la tarifa de la energía en los últimos años?
+  chips:
+    tema: Minas y Energía
+    tipo: Tendencia
+    refinador: tarifa de energía
+  ms_interpretacion: 1580
+  subset: 539
+  candidatos_top3:
+  - c698-wqig · Información Costo unitario de tarifas de energía CHEC
+  - ekup-y869 · Tarifas de gas natural para hogares - EPM
+  - ptj2-kj7i · Costos de Racionamiento de Energía Eléctrica
+  dataset_elegido: c698-wqig · Información Costo unitario de tarifas de energía CHEC
+  ms_ejecucion: 1161
+  consulta: SELECT "costounitariotarifa_ano" AS periodo, count(*) AS n FROM {src} GROUP BY periodo ORDER
+    BY periodo LIMIT 60
+  artefacto: línea (periodo × n)
+  filas: 19
+  muestra:
+  - periodo: 2008
+    n: 2251
+  - periodo: 2009
+    n: 2509
+  - periodo: 2010
+    n: 1417
+  entregado: línea (periodo × n) · 19 fila(s) · bodega Parquet local · con nota 'cifra verificada' + nombre
+    del dataset + toggle SoQL
+- id: c29
+  q: ¿Cuántas familias viven en arriendo vs casa propia?
+  chips:
+    tema: Vivienda, Ciudad y Territorio
+    tipo: Cuántos
+    refinador: tenencia de vivienda
+  ms_interpretacion: 1864
+  subset: 564
+  candidatos_top3:
+  - h2yr-zfb2 · Subsidios De Vivienda Asignados
+  - fky2-9rg4 · Subsidios Mejoramientos Programas CMC-MCY
+  - qe7t-rpjt · Viviendas ICFE
+  dataset_elegido: h2yr-zfb2 · Subsidios De Vivienda Asignados
+  ms_ejecucion: 1080
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 86603
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c30
+  q: ¿Dónde hay proyectos de vivienda de interés social activos?
+  chips:
+    tema: Vivienda, Ciudad y Territorio
+    tipo: Mapa
+    refinador: vivienda de interés social activos
+  ms_interpretacion: 1629
+  subset: 564
+  candidatos_top3:
+  - 49da-69ff · Viviendas Construidas En Macroproyectos
+  - qe7t-rpjt · Viviendas ICFE
+  - h2yr-zfb2 · Subsidios De Vivienda Asignados
+  dataset_elegido: 49da-69ff · Viviendas Construidas En Macroproyectos
+  ms_ejecucion: 1585
+  consulta: SELECT ciudad AS region, count(*) AS n GROUP BY ciudad ORDER BY n DESC LIMIT 32
+  artefacto: 'barras por región (fallback: regiones por nombre, sin códigos)'
+  filas: 12
+  muestra:
+  - region: CALI
+    n: '2'
+  - region: CANDELARIA
+    n: '1'
+  - region: BARRANQUILLA
+    n: '1'
+  entregado: 'barras por región (fallback: regiones por nombre, sin códigos) · 12 fila(s) · consulta en
+    vivo · con nota ''cifra verificada'' + nombre del dataset + toggle SoQL'
+- id: c31
+  q: ¿Qué tan contaminado está el aire hoy en mi ciudad?
+  chips:
+    tema: Ambiente y Desarrollo Sostenible
+    tipo: Mapa
+    refinador: calidad del aire
+  ms_interpretacion: 1500
+  subset: 1510
+  candidatos_top3:
+  - g4t8-zkc3 · Calidad del Aire en Colombia
+  - dgnf-6h7v · Monitoreo Calidad de Aire departamento del Magdalena
+  - 53gx-j5pc · Calidad del Aire
+  dataset_elegido: g4t8-zkc3 · Calidad del Aire en Colombia
+  ms_ejecucion: 54301
+  consulta: SELECT codigo_departamento AS region, count(*) AS n GROUP BY codigo_departamento ORDER BY
+    n DESC LIMIT 32
+  artefacto: mapa choropleth por departamento
+  filas: 20
+  muestra:
+  - region: '11'
+    n: '8011058'
+  - region: '5'
+    n: '7583956'
+  - region: '76'
+    n: '3829785'
+  entregado: mapa choropleth por departamento · 20 fila(s) · consulta en vivo · con nota 'cifra verificada'
+    + nombre del dataset + toggle SoQL
+- id: c32
+  q: ¿Cuántas hectáreas de bosque perdió Colombia el último año?
+  chips:
+    tema: Ambiente y Desarrollo Sostenible
+    tipo: Cuántos
+    territorio: nacional
+    refinador: pérdida de bosque
+  ms_interpretacion: 1786
+  subset: 1510
+  candidatos_top3:
+  - t7t3-vijg · Trámites de árbol aislado en la jurisdicción de Corantioquia
+  - pc6b-hx2u · Permisos de aprovechamiento forestal bosque natural Corantioquia
+  - hp9r-jxuu · Catálogo Nacional de Estaciones del IDEAM
+  dataset_elegido: t7t3-vijg · Trámites de árbol aislado en la jurisdicción de Corantioquia
+  ms_ejecucion: 1275
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 7206
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c33
+  q: ¿Qué ríos están más contaminados?
+  chips:
+    tema: Ambiente y Desarrollo Sostenible
+    tipo: Ranking
+    refinador: contaminación de ríos
+  ms_interpretacion: 1381
+  subset: 1510
+  candidatos_top3:
+  - w53e-3c28 · CORPOBOYACA CALIDAD DEL RECURSO HIDRICO POR CUENCA Y TRAMO POR VERTIMI
+  - d3ft-wu2b · Calidad del agua del Rio Cauca
+  - m2ng-du82 · CORPOBOYACA TASAS RETRIBUTIVAS POR VERTIMIENTOS PUNTUALES - REPORTE-RE
+  dataset_elegido: w53e-3c28 · CORPOBOYACA CALIDAD DEL RECURSO HIDRICO POR CUENCA Y TRAMO POR VERTIMIENTOS
+    PUNT
+  ms_ejecucion: 2049
+  consulta: SELECT caudal_de_la_corriente_m3 AS categoria, count(*) AS n WHERE caudal_de_la_corriente_m3
+    IS NOT NULL AND upper(caudal_de_la_corriente_m3
+  artefacto: barras horizontales (categoria × valor)
+  filas: 10
+  muestra:
+  - categoria: '23449'
+    n: '2'
+  - categoria: '0.267067'
+    n: '2'
+  - categoria: '0.23449'
+    n: '2'
+  entregado: barras horizontales (categoria × valor) · 10 fila(s) · consulta en vivo · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c34
+  q: ¿Cuántos incendios forestales van este año?
+  chips:
+    tema: Ambiente y Desarrollo Sostenible
+    tipo: Cuántos
+    refinador: incendios forestales
+  ms_interpretacion: 1667
+  subset: 1510
+  candidatos_top3:
+  - a4bc-a9tq · REPORTE DE EVENTOS POR DESASTRES NATURALES Y ANTRÓPICOS (Histórico)
+  - 7h9i-7gun · CORPOBOYACA REGISTRO DE PLANTACIONES FORESTALES PROTECTORAS Y PROTECTO
+  - ess2-dxwg · CORPOBOYACA HISTORICO EXPEDIENTES MISIONALES
+  dataset_elegido: a4bc-a9tq · REPORTE DE EVENTOS POR DESASTRES NATURALES Y ANTRÓPICOS (Histórico)
+  ms_ejecucion: 1029
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 970
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c35
+  q: ¿Cuánta basura recicla mi ciudad?
+  chips:
+    tema: Ambiente y Desarrollo Sostenible
+    tipo: Cuántos
+    refinador: reciclaje
+  ms_interpretacion: 1389
+  subset: 1510
+  candidatos_top3:
+  - weq5-ryjx · 7. Caracterización Estaciones de Clasificación y Aprovechamiento (ECA)
+  - rs7t-axgn · PT - PGIRS - Bodegas de Reciclaje
+  - hp9r-jxuu · Catálogo Nacional de Estaciones del IDEAM
+  dataset_elegido: weq5-ryjx · 7. Caracterización Estaciones de Clasificación y Aprovechamiento (ECA),
+    Unidades
+  ms_ejecucion: 1252
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 102
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c36
+  q: ¿Cuántos contratos a dedo (contratación directa) hizo mi alcaldía?
+  chips:
+    tema: Gastos Gubernamentales
+    tipo: Cuántos
+    refinador: contratación directa
+  ms_interpretacion: 1707
+  subset: 347
+  candidatos_top3:
+  - 37hf-6yc2 · Contratacion Emserchia E.S.P.
+  - 7c3m-nsd5 · Contratación vigencia 2020 Tausa
+  - 4f7r-epif · OVCF - CUIPO - Ejecución de Gastos
+  dataset_elegido: 37hf-6yc2 · Contratacion Emserchia E.S.P.
+  ms_ejecucion: 1168
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 146
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c37
+  q: ¿Qué entidades incumplen más la ley de transparencia?
+  chips:
+    tema: Organismos de Control
+    tipo: Ranking
+    refinador: incumplimiento transparencia
+  ms_interpretacion: 1534
+  subset: 213
+  candidatos_top3:
+  - 6umk-ay53 · Esquemas de Publicidad de Información
+  - sakh-2puh · Registro de Publicaciones Contraloría Departamental del Guaviare
+  - im79-n45d · ITA (Índice de Transparencia y Acceso a la Información)
+  dataset_elegido: 6umk-ay53 · Esquemas de Publicidad de Información
+  ms_ejecucion: 1269
+  consulta: SELECT "IDIOMA" AS categoria, count(*) AS n FROM {src} WHERE "IDIOMA" IS NOT NULL AND upper(trim(CAST("IDIOMA"
+    AS VARCHAR))) NOT IN ('', 'NR
+  artefacto: barras horizontales (categoria × valor)
+  filas: 2
+  muestra:
+  - categoria: Español
+    n: 119
+  - categoria: docuemento pdf
+    n: 1
+  entregado: barras horizontales (categoria × valor) · 2 fila(s) · bodega Parquet local · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c38
+  q: ¿Cuántos procesos judiciales están atrasados en el país?
+  chips:
+    tema: Justicia y Derecho
+    tipo: Cuántos
+    territorio: nacional
+    refinador: procesos judiciales atrasados
+  ms_interpretacion: 2115
+  subset: 219
+  candidatos_top3:
+  - fuyf-sb4r · Procesos en Casas de Justicia
+  - 6d52-qyqg · Conteo de Procesos V2
+  - 52tq-ag6c · Actividad Jurídica Nacional en Procesos Judiciales   - ANDJE
+  dataset_elegido: fuyf-sb4r · Procesos en Casas de Justicia
+  ms_ejecucion: 1254
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 5196555
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c39
+  q: ¿Cuánta plata se ha recuperado de casos de corrupción?
+  chips:
+    tema: Justicia y Derecho
+    tipo: Cuántos
+    refinador: recuperación corrupción
+  ms_interpretacion: 1528
+  subset: 219
+  candidatos_top3:
+  - 7p9a-zd9k · Directorio de Centros de Conciliación, Arbitraje, Amigable Composición
+  - acs4-3wgp · Detección de Cultivos de Coca (hectáreas)
+  - v2k4-2t8s · Sentencias proferidas por la Corte Constitucional
+  dataset_elegido: 7p9a-zd9k · Directorio de Centros de Conciliación, Arbitraje, Amigable Composición
+    e Insolve
+  ms_ejecucion: 1054
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 435
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c40
+  q: ¿Cuántas peticiones (PQRS) responde a tiempo el Estado?
+  chips:
+    tema: Función pública
+    tipo: Cuántos
+    refinador: PQRS tiempo respuesta
+  ms_interpretacion: 1450
+  subset: 934
+  candidatos_top3:
+  - 939i-rj4g · PQRS ALCALDIA NEIVA
+  - 7ahq-fh48 · Atención al Ciudadano - PQRS
+  - fs36-azrv · Registro de Sanciones Contadores
+  dataset_elegido: 939i-rj4g · PQRS ALCALDIA NEIVA
+  ms_ejecucion: 1163
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 23375
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c41
+  q: ¿Qué eventos culturales gratuitos hay este mes?
+  chips:
+    tema: Cultura
+    refinador: eventos culturales gratuitos
+  ms_interpretacion: 1300
+  subset: 397
+  candidatos_top3:
+  - hny3-mxfc · ACTIVIDADES DE LA BIBLIOTECA HOQABIGA DEL MUNICIPIO DE CHÍA
+  - te39-v28f · Espacios de las Artes, las Culturas y los Saberes
+  - sfpk-jthu · Ejecución Presupuestal Regionalizada del Ministerio de las Culturas, l
+  entregado: 'SIN RESPUESTA EJECUTADA — mensaje del sistema: Hay 397 datasets que coinciden. Marca otro
+    chip para verlos más específicos.'
+- id: c42
+  q: ¿Cuántas bibliotecas públicas hay y dónde están?
+  chips:
+    tema: Cultura
+    tipo: Cuántos
+    refinador: bibliotecas públicas
+  ms_interpretacion: 1394
+  subset: 397
+  candidatos_top3:
+  - xcks-wmvu · Bibliotecas Públicas Urbanas y Rurales del Municipio de Palmira 2021
+  - hx8b-s96z · Red Departamental de Bibliotecas Publicas de Bolivar
+  - jpr9-4ew8 · Casas de la Cultura y Bibliotecas
+  dataset_elegido: xcks-wmvu · Bibliotecas Públicas Urbanas y Rurales del Municipio de Palmira 2021
+  ms_ejecucion: 1258
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 13
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c43
+  q: ¿Cuánta gente visita los parques nacionales?
+  chips:
+    tema: Comercio, Industria y Turismo
+    tipo: Cuántos
+    territorio: nacional
+    refinador: visitantes parques nacionales
+  ms_interpretacion: 1544
+  subset: 472
+  candidatos_top3:
+  - thwd-ivmp · Registro Nacional de Turismo - RNT
+  - 9z8f-npmd · Base de Datos en RNBD
+  - 4vvt-vbpv · Patentes presentadas
+  dataset_elegido: thwd-ivmp · Registro Nacional de Turismo - RNT
+  ms_ejecucion: 1025
+  consulta: SELECT count(*) AS n
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: '679548'
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · consulta en vivo · con nota 'cifra
+    verificada' + nombre del dataset + toggle SoQL
+- id: c44
+  q: ¿Cuántos adultos mayores reciben subsidio del Estado?
+  chips:
+    tema: Salud y Protección Social
+    tipo: Cuántos
+    refinador: subsidio adultos mayores
+  ms_interpretacion: 2134
+  subset: 1561
+  candidatos_top3:
+  - d7a5-cnra · Población Base de Datos Única de Afiliados BDUA del régimen subsidiado
+  - i7cb-raxc · CÓDIGO ÚNICO DE MEDICAMENTOS VIGENTES
+  - vwwf-4ftk · CÓDIGO ÚNICO DE MEDICAMENTOS VENCIDOS
+  dataset_elegido: d7a5-cnra · Población Base de Datos Única de Afiliados BDUA del régimen subsidiado
+  ms_ejecucion: 1035
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 1314469
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c45
+  q: ¿Cuánta población migrante hay en el país?
+  chips:
+    tema: Inclusión Social y Reconciliación
+    tipo: Cuántos
+    territorio: nacional
+    refinador: población migrante
+  ms_interpretacion: 1557
+  subset: 717
+  candidatos_top3:
+  - 9kvn-3qq8 · Informacion centro de atención integral a victimas - Declaraciones - S
+  - jkke-9rpj · POBLACIÓN QUE INGRESÓ AL PROCESO DE REINTEGRACIÓN DE ACUERDO A SU OCUP
+  - kx29-2pfn · Informacion centro de atencion integral a victimas - Auxilios Economic
+  dataset_elegido: '9kvn-3qq8 · Informacion centro de atención integral a victimas - Declaraciones - Serie
+    1 de '
+  ms_ejecucion: 1044
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 9831
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c46
+  q: ¿Cuántos trámites del Estado puedo hacer 100 % en línea?
+  chips:
+    tema: Función pública
+    tipo: Cuántos
+    refinador: trámites en línea
+  ms_interpretacion: 1558
+  subset: 934
+  candidatos_top3:
+  - w734-989f · Costos, trámites u otros procedimientos administrativos – OPAs (inscri
+  - cnh8-i5yd · Oficinas de expedición de trámites de Cancillería - Ministerio de Rela
+  - k7xp-z2d2 · Oferta de Trámites, Otros Procedimientos Administrativos (OPA) y Consu
+  dataset_elegido: 'w734-989f · Costos, trámites u otros procedimientos administrativos – OPAs (inscritos
+    en el '
+  ms_ejecucion: 1057
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 47
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c47
+  q: ¿Cómo votó mi municipio en las últimas elecciones?
+  chips:
+    tema: Participación ciudadana
+    tipo: Mapa
+    refinador: elecciones
+  ms_interpretacion: 1392
+  subset: 323
+  candidatos_top3:
+  - gpj3-fh8y · Resultados de elecciones para Concejo Municipal de Sabaneta según movi
+  - mv2e-prx5 · Divipole Elecciones Territoritoriales 2023 con georreferenciación
+  - i246-qt7t · Resultados de elecciones para Asamblea Departamental de Antioquia segú
+  dataset_elegido: mv2e-prx5 · Divipole Elecciones Territoritoriales 2023 con georreferenciación
+  ms_ejecucion: 1838
+  consulta: SELECT comuna AS region, count(*) AS n GROUP BY comuna ORDER BY n DESC LIMIT 32
+  artefacto: 'barras por región (fallback: regiones por nombre, sin códigos)'
+  filas: 32
+  muestra:
+  - n: '8825'
+  - region: 02COMUNA 2
+    n: '126'
+  - region: 01COMUNA 1
+    n: '122'
+  entregado: 'barras por región (fallback: regiones por nombre, sin códigos) · 32 fila(s) · consulta en
+    vivo · con nota ''cifra verificada'' + nombre del dataset + toggle SoQL'
+- id: c48
+  q: ¿Cuántos funcionarios públicos hay y cuánto cuestan?
+  chips:
+    tema: Función pública
+    tipo: Cuántos
+    refinador: funcionarios públicos y costos
+  ms_interpretacion: 1389
+  subset: 934
+  candidatos_top3:
+  - ri3x-4pu5 · Tarifas Para Servicios De Aseo - Aguas Nacionales EPM
+  - 29ba-ken5 · Tarifas Para Servicios De Acueducto - Aguas Nacionales EPM
+  - sqeg-ns6a · Tarifas para Servicios de Aguas Residuales - Aguas Nacionales EPM
+  dataset_elegido: ri3x-4pu5 · Tarifas Para Servicios De Aseo - Aguas Nacionales EPM
+  ms_ejecucion: 1162
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 2904
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
+- id: c49
+  q: ¿Qué proyectos de ley se están discutiendo ahora en el Congreso?
+  chips:
+    tema: Justicia y Derecho
+    refinador: proyectos de ley en discusión
+  ms_interpretacion: 1429
+  subset: 219
+  candidatos_top3:
+  - 6d52-qyqg · Conteo de Procesos V2
+  - 9m2f-pdxx · Licencias de Cannabis otorgadas por el Ministerio de Justicia y del De
+  - 9pc4-8nib · Conteo de Actuaciones V2
+  entregado: 'SIN RESPUESTA EJECUTADA — mensaje del sistema: Hay 219 datasets que coinciden. Marca otro
+    chip para verlos más específicos.'
+- id: c50
+  q: ¿Cuánta plata le llega a mi municipio del gobierno nacional?
+  chips:
+    tema: Hacienda y Crédito Público
+    tipo: Cuántos
+    refinador: transferencias municipales
+  ms_interpretacion: 1385
+  subset: 280
+  candidatos_top3:
+  - usa4-yg4a · Transferencias del juego de Lotería Tradicional
+  - ue3m-vfr7 · Informe de Ejecución de Gastos del Municipio de Yopal
+  - xcga-ji4i · Reporte de movilización mensual por municipio y departamento
+  dataset_elegido: usa4-yg4a · Transferencias del juego de Lotería Tradicional
+  ms_ejecucion: 1264
+  consulta: SELECT count(*) AS n FROM {src}
+  artefacto: KPI grande + nota 'cuenta registros, no suma'
+  filas: 1
+  muestra:
+  - n: 56327
+  entregado: KPI grande + nota 'cuenta registros, no suma' · 1 fila(s) · bodega Parquet local · con nota
+    'cifra verificada' + nombre del dataset + toggle SoQL
