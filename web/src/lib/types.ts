@@ -74,10 +74,18 @@ export type QueryEvent =
 /** Hito 1 / Fase B — Motor SoQL determinista. Espejo de api/models/schemas.py. */
 export type ChipTipo = "Cuántos" | "Total" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
 
+/** Un filtro de valor sobre el dataset elegido (ADR-024). */
+export type FilterSpec = {
+  col: string;
+  value: string;
+};
+
 export type ChipsExecuteRequest = {
   dataset_id: string;
   tipo: ChipTipo;
   territorio?: string | null;
+  filters?: FilterSpec[] | null;
+  pregunta?: string | null;
 };
 
 export type ChipsExecuteResponse = {
@@ -88,6 +96,17 @@ export type ChipsExecuteResponse = {
   rows: Row[];
   row_count: number;
   error?: string | null;
+  filters_applied?: FilterSpec[] | null;
+  filter_note?: string | null;
+  unfiltered_total?: number | null;
+};
+
+/** GET /api/datasets/{id}/filters — perfil de filtrables (ADR-024). */
+export type FilterOption = { value: string; n?: number | null };
+export type FilterColumn = { col: string; kind: string; values: FilterOption[] };
+export type DatasetFiltersResponse = {
+  dataset_id: string;
+  filtros: FilterColumn[];
 };
 
 /** Hito 1 / Fase D — narrativa LLM "Explicar" (ADR-017). */

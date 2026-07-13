@@ -22,6 +22,8 @@ type SearchPageProps = {
     subtag?: string | string[];
     refinador?: string;
     hint?: string;
+    /** Filtros de valor sobre el dataset elegido: "col:valor" (ADR-024). */
+    filtro?: string | string[];
   }>;
 };
 
@@ -90,6 +92,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             subtags={subtags}
             refinador={refinador || undefined}
             hint={params.hint || undefined}
+            initialValueFilters={parseValueFilters(params.filtro)}
           />
         </Suspense>
       </div>
@@ -280,4 +283,17 @@ function normalizeFilters(
 function normalizeSubtags(raw: string | string[] | undefined): string[] {
   if (!raw) return [];
   return Array.isArray(raw) ? raw : [raw];
+}
+
+/** "?filtro=sector:OFICIAL" → [{col:"sector", value:"OFICIAL"}]. El valor
+ * puede contener ':' — solo el primer separador parte. */
+function parseValueFilters(
+  raw: string | string[] | undefined,
+): Array<{ col: string; value: string }> {
+  const items = !raw ? [] : Array.isArray(raw) ? raw : [raw];
+  return items.flatMap((s) => {
+    const i = s.indexOf(":");
+    if (i <= 0 || i === s.length - 1) return [];
+    return [{ col: s.slice(0, i), value: s.slice(i + 1) }];
+  });
 }

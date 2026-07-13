@@ -48,6 +48,10 @@ from api.models.schemas import (
     ChipsQueryResponse,
     ChipsRefineResponse,
     ChipsResponse,
+    DatasetFiltersResponse,
+    FilterColumn,
+    FilterOption,
+    FilterSpec,
 )
 from mcp_server.socrata.soda_client import SodaClient
 
@@ -772,6 +776,79 @@ def _merge_categorias_duplicadas(resp: ChipsExecuteResponse) -> ChipsExecuteResp
     return resp
 
 
+@router.get("/datasets/{dataset_id}/filters", response_model=DatasetFiltersResponse)
+async def dataset_filters(dataset_id: str) -> DatasetFiltersResponse:
+    """Columnas filtrables del dataset con sus VALORES reales (ADR-024).
+
+    Sale del perfil de la bodega (`dataset_filter_values`, lo escribe el
+    profiler diario). Vacío si el dataset no está farmeado o no tiene
+    columnas de baja cardinalidad. La UI pinta chips con esto; execute
+    solo acepta filtros que existan aquí.
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT col_name, kind, value, n
+                FROM dataset_filter_values
+                WHERE dataset_id = %s AND kind IN ('valor', 'anio')
+                ORDER BY kind, col_name, n DESC NULLS LAST
+                """,
+                (dataset_id,),
+            )
+            rows = cur.fetchall()
+    cols: dict[tuple[str, str], list[FilterOption]] = {}
+    for r in rows:
+        cols.setdefault((r["kind"], r["col_name"]), []).append(
+            FilterOption(value=r["value"], n=r["n"])
+        )
+    filtros = [
+        FilterColumn(col=col, kind=kind, values=vals)
+        for (kind, col), vals in cols.items()
+    ]
+    # 'valor' primero (sector, zona…), luego años; dentro, menos valores
+    # primero (chips más legibles).
+    filtros.sort(key=lambda f: (f.kind != "valor", len(f.values)))
+    return DatasetFiltersResponse(dataset_id=dataset_id, filtros=filtros)
+
+
+def _validate_filters(
+    conn, dataset_id: str, filters: list[FilterSpec] | None
+) -> tuple[list[dict], str | None]:
+    """Filtros pedidos → filtros VALIDADOS contra el perfil de la bodega.
+
+    Devuelve (filtros con kind resuelto, nota sobre los descartados). Un
+    (col, value) que no exista EXACTO en `dataset_filter_values` se
+    descarta con nota honesta — nunca se inventa un WHERE.
+    """
+    if not filters:
+        return [], None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT col_name, kind, value FROM dataset_filter_values
+            WHERE dataset_id = %s AND kind IN ('valor', 'anio')
+            """,
+            (dataset_id,),
+        )
+        perfil = {(r["col_name"], r["value"]): r["kind"] for r in cur.fetchall()}
+    validos: list[dict] = []
+    descartados: list[str] = []
+    for f in filters:
+        kind = perfil.get((f.col, f.value))
+        if kind:
+            validos.append({"col": f.col, "kind": kind, "value": f.value})
+        else:
+            descartados.append(f"{f.col}={f.value}")
+    note = None
+    if descartados:
+        note = (
+            "Filtros ignorados (el valor no existe en los datos): "
+            + ", ".join(descartados)
+        )
+    return validos, note
+
+
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     resp = _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
@@ -781,6 +858,13 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     # sin re-interpretar el formato de la fecha.
     if req.tipo == "Tendencia" and resp.rows:
         resp.rows = list(reversed(resp.rows))
+    # Honestidad transversal: si pidieron filtros y NINGUNO se aplicó (rama
+    # viva, Mapa, snapshot desactualizado), decirlo — nunca fingir filtro.
+    if req.filters and not resp.filters_applied and not resp.filter_note:
+        resp.filter_note = (
+            "Los filtros no se aplicaron en esta consulta (solo están "
+            "disponibles sobre la copia local del dataset)."
+        )
     return resp
 
 
@@ -843,8 +927,17 @@ async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteRes
             # El camino vivo (columnas curadas SODA) sí produce códigos.
             if row["snapshot_fresco"] and req.tipo != "Mapa":
                 try:
+                    # Filtros de valor (ADR-024): solo los que EXISTEN en el
+                    # perfil de la bodega. Solo en esta rama — el perfil
+                    # describe las columnas del Parquet, no las de SODA.
+                    filtros, filter_note = _validate_filters(
+                        conn, req.dataset_id, req.filters
+                    )
                     lake_cols = describe_parquet(row["parquet_path"])
-                    built = build_duckdb_sql(req.tipo, lake_cols, row["parquet_path"])
+                    built = build_duckdb_sql(
+                        req.tipo, lake_cols, row["parquet_path"],
+                        filters=filtros or None,
+                    )
                     if not built.error:
                         rows_out = execute_parquet(row["parquet_path"], built.sql)
                         rows_norm = [
@@ -852,6 +945,18 @@ async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteRes
                              for k, v in r.items()}
                             for r in rows_out
                         ]
+                        # Honestidad: con filtro en un conteo, también el
+                        # total SIN filtro para dar escala.
+                        unfiltered_total = None
+                        if filtros and req.tipo in ("Cuántos", "Total"):
+                            try:
+                                base = execute_parquet(
+                                    row["parquet_path"],
+                                    "SELECT count(*) AS n FROM {src}",
+                                )
+                                unfiltered_total = int(base[0]["n"])
+                            except Exception:  # noqa: BLE001 — opcional
+                                pass
                         emit_event(
                             endpoint="execute", dataset_id=req.dataset_id,
                             tipo=req.tipo, source_type="lake",
@@ -865,12 +970,24 @@ async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteRes
                             columns_used=built.columns_used,
                             rows=rows_norm,
                             row_count=len(rows_norm),
+                            filters_applied=[
+                                FilterSpec(col=f["col"], value=f["value"])
+                                for f in filtros
+                            ] or None,
+                            filter_note=filter_note,
+                            unfiltered_total=unfiltered_total,
                         )
                 except Exception as exc:  # noqa: BLE001 — degradar a vivo
                     log.warning(
                         "Bodega falló para %s (%s) — degradando a vivo",
                         req.dataset_id, exc,
                     )
+            elif req.filters:
+                # Filtros pedidos pero la bodega no aplica (Mapa, snapshot
+                # desactualizado o dataset sin farmear): se responde SIN
+                # filtro y se dice — nunca se finge que se filtró.
+                log.info("filtros pedidos sin bodega para %s — sin filtro",
+                         req.dataset_id)
 
             # ---- Rama FEDERADO (Reto F.4 — DuckDB sobre CSV externo) ----
             if source_type == "federated":

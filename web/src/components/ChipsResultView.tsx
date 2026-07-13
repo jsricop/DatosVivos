@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChipsResultPanel } from "@/components/ChipsResultPanel";
+import { FilterBar } from "@/components/FilterBar";
 import { Icon } from "@/components/Icon";
 import type {
   ChipTipo,
   ChipsExecuteResponse,
   ChipsExplainResponse,
+  DatasetFiltersResponse,
+  FilterColumn,
+  FilterSpec,
 } from "@/lib/types";
 
 /** Espejo de api/models/schemas.py::ChipsCandidateDataset */
@@ -45,6 +49,8 @@ type Props = {
   refinador?: string;
   /** Aviso del mapper NL (p. ej. "marca tu municipio"). */
   hint?: string;
+  /** Filtros de valor iniciales desde la URL (?filtro=col:valor). */
+  initialValueFilters?: FilterSpec[];
 };
 
 const AXIS_LABEL: Record<string, string> = {
@@ -54,7 +60,13 @@ const AXIS_LABEL: Record<string, string> = {
   entidad: "Entidad",
 };
 
-export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
+export function ChipsResultView({
+  filters,
+  subtags,
+  refinador,
+  hint,
+  initialValueFilters,
+}: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +77,15 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
   const [execError, setExecError] = useState<string | null>(null);
   const [execLoading, setExecLoading] = useState(false);
   const [showSoql, setShowSoql] = useState(false);
+
+  // Filtros de VALOR sobre el dataset elegido (ADR-024, Fase 2). Los
+  // disponibles salen del perfil de la bodega; los activos viven aquí y
+  // se reflejan en la URL (?filtro=col:valor) para que el enlace comparta
+  // el resultado filtrado.
+  const [availableFilters, setAvailableFilters] = useState<FilterColumn[]>([]);
+  const [valueFilters, setValueFilters] = useState<FilterSpec[]>(
+    initialValueFilters ?? [],
+  );
 
   // Fase D — narrativa LLM "Explicar" (opt-in por botón).
   const [explain, setExplain] = useState<ChipsExplainResponse | null>(null);
@@ -120,6 +141,53 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
     }
   }
 
+  // Filtros disponibles del dataset elegido (perfil de la bodega). Al
+  // cambiar de dataset se limpian los filtros activos: los valores son
+  // específicos de CADA dataset.
+  const lastDatasetRef = useRef<string | null>(null);
+  useEffect(() => {
+    const dsId = data?.chosen_dataset_id;
+    if (!dsId) {
+      setAvailableFilters([]);
+      return;
+    }
+    if (lastDatasetRef.current && lastDatasetRef.current !== dsId) {
+      setValueFilters([]);
+    }
+    lastDatasetRef.current = dsId;
+    let cancelled = false;
+    fetch(`/api/datasets/${encodeURIComponent(dsId)}/filters`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: DatasetFiltersResponse | null) => {
+        if (!cancelled) setAvailableFilters(j?.filtros ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableFilters([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.chosen_dataset_id]);
+
+  // Toggle de filtro: uno por columna; click en el activo lo quita. La URL
+  // se actualiza sin navegación (replaceState) para compartir el enlace.
+  function toggleFilter(col: string, value: string) {
+    setValueFilters((prev) => {
+      const existing = prev.find((f) => f.col === col);
+      let next: FilterSpec[];
+      if (existing?.value === value) {
+        next = prev.filter((f) => f.col !== col);
+      } else {
+        next = [...prev.filter((f) => f.col !== col), { col, value }];
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("filtro");
+      for (const f of next) url.searchParams.append("filtro", `${f.col}:${f.value}`);
+      window.history.replaceState(null, "", url.toString());
+      return next;
+    });
+  }
+
   // Auto-execute cuando hay dataset elegido; sin TIPO marcado degrada a
   // "Cuántos" (tipoEfectivo) para que siempre haya cifra, no tarjetas mudas.
   useEffect(() => {
@@ -137,7 +205,11 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
         const res = await fetch("/api/chips/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataset_id: dsId, tipo: tipoEfectivo }),
+          body: JSON.stringify({
+            dataset_id: dsId,
+            tipo: tipoEfectivo,
+            filters: valueFilters.length > 0 ? valueFilters : null,
+          }),
         });
         if (!res.ok) {
           const txt = await res.text();
@@ -157,7 +229,7 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [data?.chosen_dataset_id, tipoEfectivo]);
+  }, [data?.chosen_dataset_id, tipoEfectivo, valueFilters]);
 
   // (Se eliminó el scrollIntoView automático: movía el viewport sin acción del
   // usuario — anti-patrón de accesibilidad WCAG 2.4.3. El orden del DOM ya pone
@@ -271,6 +343,13 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
           aria-label="Resultado de la consulta"
           className="flex flex-col gap-3"
         >
+          {availableFilters.length > 0 ? (
+            <FilterBar
+              filtros={availableFilters}
+              active={valueFilters}
+              onToggle={toggleFilter}
+            />
+          ) : null}
           {execLoading ? (
             <div
               role="status"
@@ -315,6 +394,28 @@ export function ChipsResultView({ filters, subtags, refinador, hint }: Props) {
                   )?.name ?? exec.dataset_id
                 }
               />
+              {exec.filters_applied && exec.filters_applied.length > 0 ? (
+                <p className="font-sans text-body text-ink-2 m-0">
+                  Filtrado:{" "}
+                  <strong className="text-ink">
+                    {exec.filters_applied
+                      .map((f) => `${f.col.replace(/_/g, " ")} = ${f.value}`)
+                      .join(" · ")}
+                  </strong>
+                  {exec.unfiltered_total != null ? (
+                    <span className="text-ink-muted">
+                      {" "}
+                      (de {exec.unfiltered_total.toLocaleString("es-CO")}{" "}
+                      registros sin filtro)
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              {exec.filter_note ? (
+                <p className="font-sans text-caption text-warn m-0">
+                  {exec.filter_note}
+                </p>
+              ) : null}
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="font-mono text-caption text-ink-muted">
                   {exec.row_count} fila{exec.row_count !== 1 ? "s" : ""} ·

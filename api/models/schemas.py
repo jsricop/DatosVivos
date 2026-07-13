@@ -204,6 +204,15 @@ class DatasetCuratedColumns(BaseModel):
     by_type: dict[SemanticType, list[str]]
 
 
+class FilterSpec(BaseModel):
+    """Un filtro de valor sobre el dataset elegido (ADR-024). El par
+    (col, value) debe EXISTIR en `dataset_filter_values` — el endpoint
+    valida contra el perfil de la bodega antes de aplicar."""
+
+    col: str
+    value: str
+
+
 class ChipsExecuteRequest(BaseModel):
     """POST /api/v1/query/chips/execute — ejecutar la consulta SoQL sobre
     el dataset elegido + TIPO. Sin LLM: build_soql + SodaClient."""
@@ -212,6 +221,10 @@ class ChipsExecuteRequest(BaseModel):
     tipo: ChipTipo
     # Territorio opcional como filtro adicional (DIVIPOLA code o "macro:*").
     territorio: str | None = None
+    # Filtros de valor (ADR-024) — solo aplican en la rama bodega.
+    filters: list[FilterSpec] | None = None
+    # Pregunta NL original: habilita el filtro automático (Fase 3).
+    pregunta: str | None = None
 
 
 class ChipsExecuteResponse(BaseModel):
@@ -224,6 +237,32 @@ class ChipsExecuteResponse(BaseModel):
     rows: list[dict]            # filas crudas de SODA
     row_count: int              # len(rows), por conveniencia del cliente
     error: str | None = None    # mensaje si no se pudo construir o ejecutar
+    # ---- Filtros de valor (ADR-024) ----
+    filters_applied: list[FilterSpec] | None = None  # los que SÍ se aplicaron
+    filter_note: str | None = None       # filtros ignorados / no disponibles
+    unfiltered_total: int | None = None  # total sin filtros (honestidad, Cuántos)
+
+
+class FilterOption(BaseModel):
+    """Un valor filtrable con su conteo (del perfil de la bodega)."""
+
+    value: str
+    n: int | None = None
+
+
+class FilterColumn(BaseModel):
+    """Columna filtrable del dataset con sus valores reales."""
+
+    col: str
+    kind: str                   # 'valor' | 'anio'
+    values: list[FilterOption]
+
+
+class DatasetFiltersResponse(BaseModel):
+    """GET /api/v1/datasets/{id}/filters — qué se puede filtrar (ADR-024)."""
+
+    dataset_id: str
+    filtros: list[FilterColumn]
 
 
 # ============================================================

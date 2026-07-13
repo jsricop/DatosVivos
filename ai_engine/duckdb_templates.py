@@ -85,6 +85,41 @@ def _from_clause(url: str) -> str:
     return "{src}"
 
 
+def filter_conditions(filters: list[dict[str, Any]] | None) -> list[str]:
+    """Condiciones WHERE de filtros de VALOR (ADR-024).
+
+    Cada filtro es {"col", "kind" ('valor'|'anio'), "value"} YA VALIDADO
+    contra `dataset_filter_values` por el caller (el valor EXISTE en el
+    dato — el LLM/la UI solo eligen entre valores reales). Aquí solo se
+    arma SQL seguro: identificador via `_safe_ident_dbq`, valor con
+    comilla simple doblada. Filtros con columna insegura se omiten.
+    """
+    conds: list[str] = []
+    for f in filters or []:
+        q = _safe_ident_dbq(str(f.get("col") or ""))
+        if not q:
+            continue
+        value = str(f.get("value") or "")
+        if f.get("kind") == "anio":
+            if not value.isdigit():
+                continue
+            conds.append(f"EXTRACT(YEAR FROM {q}) = {int(value)}")
+        else:
+            escaped = value.replace("'", "''")
+            conds.append(f"{q} = '{escaped}'")
+    return conds
+
+
+def _and_where(base_where: str, conds: list[str]) -> str:
+    """Combina el WHERE propio del template con las condiciones de filtro."""
+    if not conds:
+        return base_where
+    extra = " AND ".join(conds)
+    if base_where.strip():
+        return f"{base_where} AND {extra}"
+    return f"WHERE {extra}"
+
+
 def _fecha_expr(col: dict[str, Any]) -> str:
     name = col["col_name"]
     quoted = _safe_ident_dbq(name)
@@ -106,18 +141,24 @@ def build_duckdb_sql(
     url: str,
     *,
     use_metric: bool = True,
+    filters: list[dict[str, Any]] | None = None,
 ) -> BuildResult:
     """Construye SQL DuckDB para `tipo` sobre el CSV en `url`.
 
     Emite `{src}` como placeholder del FROM — el executor lo sustituye
     con `read_csv(...)` con encoding apropiado.
+
+    `filters`: filtros de valor YA validados contra el perfil de la bodega
+    (ADR-024); se AND-ean al WHERE de cada plantilla.
     """
     src = _from_clause(url)  # = "{src}", placeholder
+    fconds = filter_conditions(filters)
+    fcols = [str(f["col"]) for f in filters or [] if f.get("col")]
 
     if tipo == "Cuántos":
         return BuildResult(
-            sql=f"SELECT count(*) AS n FROM {src}",
-            columns_used=[],
+            sql=f"SELECT count(*) AS n FROM {src} {_and_where('', fconds)}".strip(),
+            columns_used=fcols,
         )
 
     if tipo == "Total":
@@ -130,8 +171,11 @@ def build_duckdb_sql(
             )
         met_q = _safe_ident_dbq(metrica_col["col_name"])
         return BuildResult(
-            sql=f"SELECT sum(try_cast({met_q} AS DOUBLE)) AS total FROM {src}",
-            columns_used=[metrica_col["col_name"]],
+            sql=(
+                f"SELECT sum(try_cast({met_q} AS DOUBLE)) AS total "
+                f"FROM {src} {_and_where('', fconds)}"
+            ).strip(),
+            columns_used=[metrica_col["col_name"], *fcols],
         )
 
     if tipo in ("Comparar", "Ranking"):
@@ -150,6 +194,7 @@ def build_duckdb_sql(
             f"('', 'NR', 'N/A', 'NA', 'N.A', 'N.A.', 'NULL', 'SIN DATO', "
             f"'SIN INFORMACION', 'SIN INFORMACIÓN', 'NO APLICA', 'NO REPORTA')"
         )
+        sin_basura = _and_where(sin_basura, fconds)
         if tipo == "Ranking" and use_metric:
             metrica_col = _pick(columns, "metrica")
             if metrica_col:
@@ -163,7 +208,7 @@ def build_duckdb_sql(
                         f"ORDER BY total DESC NULLS LAST "
                         f"LIMIT 10"
                     ),
-                    columns_used=[dim_col["col_name"], metrica_col["col_name"]],
+                    columns_used=[dim_col["col_name"], metrica_col["col_name"], *fcols],
                 )
         return BuildResult(
             sql=(
@@ -173,7 +218,7 @@ def build_duckdb_sql(
                 f"ORDER BY n DESC "
                 f"LIMIT 10"
             ),
-            columns_used=[dim_col["col_name"]],
+            columns_used=[dim_col["col_name"], *fcols],
         )
 
     if tipo == "Tendencia":
@@ -187,12 +232,12 @@ def build_duckdb_sql(
         return BuildResult(
             sql=(
                 f"SELECT {expr} AS periodo, count(*) AS n "
-                f"FROM {src} "
+                f"FROM {src} {_and_where('', fconds)} "
                 f"GROUP BY periodo "
                 f"ORDER BY periodo DESC "
                 f"LIMIT 60"
             ),
-            columns_used=[fecha_col["col_name"]],
+            columns_used=[fecha_col["col_name"], *fcols],
         )
 
     if tipo == "Mapa":
@@ -205,12 +250,12 @@ def build_duckdb_sql(
         return BuildResult(
             sql=(
                 f"SELECT {geo_q} AS region, count(*) AS n "
-                f"FROM {src} "
+                f"FROM {src} {_and_where('', fconds)} "
                 f"GROUP BY {geo_q} "
                 f"ORDER BY n DESC "
                 f"LIMIT 32"
             ),
-            columns_used=[geo_col["col_name"]],
+            columns_used=[geo_col["col_name"], *fcols],
         )
 
     return BuildResult(sql="", error=f"TIPO desconocido: {tipo!r}")

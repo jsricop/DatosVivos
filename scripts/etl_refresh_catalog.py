@@ -704,6 +704,10 @@ async def main(args: argparse.Namespace) -> int:
     if not args.no_farm:
         from scripts.farm_datasets import run_daily
         run_daily()
+        # Perfil de filtrables (ADR-024): tras el farmeo, re-perfila los
+        # parquets nuevos/refrescados. Incremental, acotado, nunca lanza.
+        from scripts.profile_filter_values import run_daily as profile_daily
+        profile_daily()
     return 0
 
 
