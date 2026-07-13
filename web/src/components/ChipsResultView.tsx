@@ -51,6 +51,8 @@ type Props = {
   hint?: string;
   /** Filtros de valor iniciales desde la URL (?filtro=col:valor). */
   initialValueFilters?: FilterSpec[];
+  /** Pregunta NL original — habilita el filtro automático (ADR-024 F3). */
+  pregunta?: string;
 };
 
 const AXIS_LABEL: Record<string, string> = {
@@ -66,6 +68,7 @@ export function ChipsResultView({
   refinador,
   hint,
   initialValueFilters,
+  pregunta,
 }: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +89,9 @@ export function ChipsResultView({
   const [valueFilters, setValueFilters] = useState<FilterSpec[]>(
     initialValueFilters ?? [],
   );
+  // true cuando el usuario ya interactuó con los filtros (o el auto-filtro
+  // se sembró): a partir de ahí manda el estado explícito, no la pregunta.
+  const filtersTouchedRef = useRef((initialValueFilters?.length ?? 0) > 0);
 
   // Fase D — narrativa LLM "Explicar" (opt-in por botón).
   const [explain, setExplain] = useState<ChipsExplainResponse | null>(null);
@@ -153,6 +159,7 @@ export function ChipsResultView({
     }
     if (lastDatasetRef.current && lastDatasetRef.current !== dsId) {
       setValueFilters([]);
+      filtersTouchedRef.current = false; // dataset nuevo, auto-filtro permitido
     }
     lastDatasetRef.current = dsId;
     let cancelled = false;
@@ -172,6 +179,7 @@ export function ChipsResultView({
   // Toggle de filtro: uno por columna; click en el activo lo quita. La URL
   // se actualiza sin navegación (replaceState) para compartir el enlace.
   function toggleFilter(col: string, value: string) {
+    filtersTouchedRef.current = true;
     setValueFilters((prev) => {
       const existing = prev.find((f) => f.col === col);
       let next: FilterSpec[];
@@ -209,6 +217,14 @@ export function ChipsResultView({
             dataset_id: dsId,
             tipo: tipoEfectivo,
             filters: valueFilters.length > 0 ? valueFilters : null,
+            territorio: filters.territorio?.[0] ?? null,
+            // La pregunta habilita el auto-filtro (F3) SOLO mientras el
+            // usuario no haya tocado los filtros: al quitar un filtro no
+            // debe re-aplicarse solo.
+            pregunta:
+              !filtersTouchedRef.current && valueFilters.length === 0
+                ? pregunta ?? null
+                : null,
           }),
         });
         if (!res.ok) {
@@ -216,7 +232,20 @@ export function ChipsResultView({
           throw new Error(`Backend ${res.status}: ${txt}`);
         }
         const json: ChipsExecuteResponse = await res.json();
-        if (!cancelled) setExec(json);
+        if (!cancelled) {
+          setExec(json);
+          // Auto-filtro aplicado por el backend → se refleja como chips
+          // activos para que el ciudadano lo VEA y pueda quitarlo.
+          if (
+            json.filters_applied &&
+            json.filters_applied.length > 0 &&
+            !filtersTouchedRef.current &&
+            valueFilters.length === 0
+          ) {
+            filtersTouchedRef.current = true;
+            setValueFilters(json.filters_applied);
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           setExecError(e instanceof Error ? e.message : "Error desconocido");

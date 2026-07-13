@@ -14,6 +14,7 @@ para que el eval harness y dashboards midan adopción.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -26,6 +27,7 @@ from psycopg.rows import dict_row
 
 from ai_engine.chips_telemetry import emit_event
 from ai_engine.duckdb_executor import (
+    _safe_ident_dbq,
     describe_csv,
     describe_parquet,
     execute_csv,
@@ -35,6 +37,7 @@ from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.llm_backend import get_backend, model_for_task
 from ai_engine.nl_to_chips import map_nl_to_chips
 from ai_engine.soql_templates import build_soql
+from ai_engine.vocabulario_ciudadano import expandir as vocab_expandir
 from api.models.schemas import (
     ChipOption,
     ChipsCandidateDataset,
@@ -450,6 +453,17 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     # Texto del boost de ranking (None → el CASE del SQL rinde 0 para todos).
     refinador_boost = (req.refinador or "").strip() or None
 
+    # Diccionario ciudadano↔institucional (transversal, 2026-07-13): las
+    # palabras del ciudadano se complementan con el término OFICIAL con que
+    # los datos las nombran ("colegios"→"establecimientos educativos") de
+    # forma determinista — el prompt del mapper también lo intenta, esto lo
+    # garantiza. Solo mejora el ORDEN: ni filtra ni inventa.
+    refinador_expandido = refinador_boost
+    if refinador_boost:
+        extra = vocab_expandir(refinador_boost)
+        if extra:
+            refinador_expandido = f"{refinador_boost} {extra}"
+
     # Boost POR PALABRAS, no por frase exacta: "tarifas de energía por
     # estrato" debe premiar títulos que contengan "tarifas" y "energía"
     # aunque la frase completa no exista en ningún nombre (con frase exacta
@@ -473,11 +487,11 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
             stem = stem[:-1]
         return stem if len(stem) >= 4 else w
 
-    palabras = [
+    palabras = list(dict.fromkeys(
         _raiz(w.lower().translate(str.maketrans("áéíóúüñ", "aeiouun")))
-        for w in re.split(r"\W+", refinador_boost or "")
+        for w in re.split(r"\W+", refinador_expandido or "")
         if len(w) >= 4
-    ][:5]
+    ))[:6]
     if palabras:
         frac = round(0.5 / len(palabras), 4)
         boost_sql = " + ".join(
@@ -611,7 +625,7 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
         try:
             hits = {
                 h.id: h.score
-                for h in _get_vindex().search(refinador_boost, k=100)
+                for h in _get_vindex().search(refinador_expandido, k=100)
             }
             if not hits:
                 # Honestidad: nada del catálogo se parece semánticamente a lo
@@ -849,6 +863,113 @@ def _validate_filters(
     return validos, note
 
 
+def _load_perfil(conn, dataset_id: str) -> list[dict]:
+    """Perfil de filtrables del dataset (para el filtro automático)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT col_name, kind, value, n FROM dataset_filter_values "
+            "WHERE dataset_id = %s AND kind IN ('valor', 'anio') "
+            "ORDER BY col_name, n DESC NULLS LAST",
+            (dataset_id,),
+        )
+        return cur.fetchall()
+
+
+async def _filtros_desde_pregunta(
+    pregunta: str, perfil: list[dict]
+) -> list[dict]:
+    """Fase 3 (ADR-024): la pregunta elige filtros ENTRE los valores reales.
+
+    El LLM recibe las columnas filtrables con sus valores exactos y solo
+    puede señalar pares de esa lista; todo lo demás se descarta. La
+    garantía anti-alucinación se mantiene: el SQL lo arma el template y el
+    valor existe en el dato. Falla silenciosa → sin filtro.
+    """
+    cols: dict[tuple[str, str], list[str]] = {}
+    for r in perfil:
+        key = (r["col_name"], r["kind"])
+        vals = cols.setdefault(key, [])
+        if len(vals) < 12:
+            vals.append(r["value"])
+    if not cols:
+        return []
+    lineas = "\n".join(
+        f"- {col}{' (año)' if kind == 'anio' else ''}: {' | '.join(vals)}"
+        for (col, kind), vals in list(cols.items())[:6]
+    )
+    prompt = f"""La pregunta de un ciudadano y las columnas filtrables del dataset elegido, con sus valores REALES.
+
+Pregunta: "{pregunta}"
+
+Columnas y valores disponibles:
+{lineas}
+
+¿La pregunta pide explícitamente alguno de esos recortes? (ej. "públicos" → sector OFICIAL; "en 2024" → año 2024). Devuelve SOLO JSON, máximo 2 filtros, con el valor EXACTO de la lista. Si la pregunta no pide ningún recorte: lista vacía.
+
+{{"filtros": [{{"col": "<columna>", "value": "<valor exacto>"}}]}}
+
+JSON:"""
+    raw = await get_backend().generate(
+        prompt, max_tokens=150, model=model_for_task("fast")
+    )
+    m = re.search(r"\{[\s\S]*\}", raw or "")
+    if not m:
+        return []
+    try:
+        propuestos = json.loads(m.group(0)).get("filtros") or []
+    except (json.JSONDecodeError, AttributeError):
+        return []
+    validos_set = {(r["col_name"], r["value"]): r["kind"] for r in perfil}
+    out = []
+    for f in propuestos[:2]:
+        kind = validos_set.get((str(f.get("col")), str(f.get("value"))))
+        if kind:
+            out.append({"col": str(f["col"]), "kind": kind,
+                        "value": str(f["value"])})
+    return out
+
+
+_GEO_NORM_SQL = "translate(upper(trim({col})), 'ÁÉÍÓÚÜÑ', 'AEIOUUN')"
+
+
+def _filtro_territorial(
+    parquet_path: str, lake_cols: list[dict], territorio: str | None
+) -> dict | None:
+    """Fase 4 (ADR-024): pregunta departamental sobre dataset NACIONAL →
+    WHERE departamento = X, verificado contra el Parquet (determinista).
+
+    Busca el nombre canónico del departamento entre los valores de las
+    columnas geo del Parquet; si existe, filtra por el valor TAL CUAL está
+    almacenado. Sin match → None (nunca se adivina)."""
+    if not territorio or not re.fullmatch(r"\d{2}", territorio):
+        return None
+    from ai_engine.geo_resolver import DEPARTAMENTOS
+    canon = next((c for c, code, *_ in DEPARTAMENTOS if code == territorio), None)
+    if not canon:
+        return None
+    objetivo = canon.upper().translate(str.maketrans("ÁÉÍÓÚÜÑ", "AEIOUUN"))
+    for col in lake_cols:
+        if col.get("semantic_type") != "geo":
+            continue
+        if not str(col.get("socrata_data_type", "")).upper().startswith("VARCHAR"):
+            continue
+        q = _safe_ident_dbq(col["col_name"])
+        if not q:
+            continue
+        try:
+            rows = execute_parquet(
+                parquet_path,
+                f"SELECT {q} AS v FROM {{src}} "
+                f"WHERE {_GEO_NORM_SQL.format(col=q)} = '{objetivo}' LIMIT 1",
+            )
+        except Exception:  # noqa: BLE001 — columna rara, probar la siguiente
+            continue
+        if rows:
+            return {"col": col["col_name"], "kind": "valor",
+                    "value": str(rows[0]["v"])}
+    return None
+
+
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     resp = _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
@@ -891,6 +1012,7 @@ async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteRes
             cur.execute(
                 """
                 SELECT d.source_type, d.row_count, d.data_url, d.federated_status,
+                       d.jurisdiccion_nivel,
                        s.parquet_path,
                        (s.status = 'downloaded'
                         AND s.parquet_path IS NOT NULL
@@ -933,7 +1055,27 @@ async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteRes
                     filtros, filter_note = _validate_filters(
                         conn, req.dataset_id, req.filters
                     )
+                    # Fase 3: sin filtros explícitos y con la pregunta a mano,
+                    # el LLM elige filtros ENTRE los valores reales del perfil
+                    # ("públicos" → SECTOR=OFICIAL). Falla → sin filtro.
+                    if not filtros and req.pregunta:
+                        try:
+                            perfil = _load_perfil(conn, req.dataset_id)
+                            if perfil:
+                                filtros = await _filtros_desde_pregunta(
+                                    req.pregunta, perfil
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            log.warning("auto-filtro falló (%s) — sin filtro", exc)
                     lake_cols = describe_parquet(row["parquet_path"])
+                    # Fase 4: pregunta departamental sobre dataset NACIONAL →
+                    # recorte territorial determinista contra el Parquet.
+                    if row.get("jurisdiccion_nivel") == "nacional":
+                        terr = _filtro_territorial(
+                            row["parquet_path"], lake_cols, req.territorio
+                        )
+                        if terr and terr["col"] not in {f["col"] for f in filtros}:
+                            filtros = [*filtros, terr]
                     built = build_duckdb_sql(
                         req.tipo, lake_cols, row["parquet_path"],
                         filters=filtros or None,

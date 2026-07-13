@@ -189,8 +189,10 @@ def test_refinador_boost_por_palabras():
     assert "%energi%" in score_params
     assert "%estrat%" in score_params
     assert "%de%" not in score_params  # cortas fuera
-    # tres palabras → tres CASE de boost (aparte va el CASE de jurisdicción)
-    assert score_sql.count("translate(lower(s.name)") == 3
+    # 3 palabras ciudadanas + la expansión del diccionario ("estrato" →
+    # "estratificacion socioeconomica") = 5 CASE de boost
+    assert "%estratificacion%" in score_params
+    assert score_sql.count("translate(lower(s.name)") == 5
 
 
 def test_refinador_boost_raiz_genero_numero():

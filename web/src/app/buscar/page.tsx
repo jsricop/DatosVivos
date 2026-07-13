@@ -93,6 +93,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             refinador={refinador || undefined}
             hint={params.hint || undefined}
             initialValueFilters={parseValueFilters(params.filtro)}
+            pregunta={pregunta || undefined}
           />
         </Suspense>
       </div>

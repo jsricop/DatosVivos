@@ -130,10 +130,12 @@ def profile_one(path: str) -> list[tuple[str, str, str, int]]:
         # 3) Años de columnas fecha nativas.
         for col in date_cols:
             q = _ident(col)
+            # GROUP BY posicional: el alias 'y' puede chocar con una columna
+            # real llamada 'y' (Binder Error, bootstrap 2026-07-13).
             rows = con.execute(
-                f"SELECT EXTRACT(YEAR FROM {q})::INT AS y, count(*) AS n "
+                f"SELECT EXTRACT(YEAR FROM {q})::INT AS anio_v, count(*) AS n "
                 f"FROM {src} WHERE {q} IS NOT NULL "
-                f"GROUP BY y ORDER BY y DESC LIMIT {MAX_YEARS}"
+                f"GROUP BY 1 ORDER BY 1 DESC LIMIT {MAX_YEARS}"
             ).fetchall()
             vals = [
                 (col, "anio", str(int(y)), int(n)) for y, n in rows
