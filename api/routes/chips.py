@@ -930,10 +930,13 @@ JSON:"""
     validos_set = {(r["col_name"], r["value"]): r["kind"] for r in perfil}
     out = []
     for f in propuestos[:2]:
-        kind = validos_set.get((str(f.get("col")), str(f.get("value"))))
+        # El LLM copia la anotación "(año)" del prompt dentro del nombre de
+        # la columna ("FECHA HECHO (año)", 2026-07-13) — se limpia antes de
+        # validar; la validación exacta contra el perfil sigue intacta.
+        col = re.sub(r"\s*\(año\)\s*$", "", str(f.get("col") or "").strip())
+        kind = validos_set.get((col, str(f.get("value"))))
         if kind:
-            out.append({"col": str(f["col"]), "kind": kind,
-                        "value": str(f["value"])})
+            out.append({"col": col, "kind": kind, "value": str(f["value"])})
     return out
 
 

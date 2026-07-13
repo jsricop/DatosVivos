@@ -35,6 +35,19 @@ async def test_auto_filtro_acepta_solo_valores_del_perfil():
 
 
 @pytest.mark.asyncio
+async def test_auto_filtro_limpia_anotacion_de_anio():
+    """Haiku copia la anotación '(año)' del prompt en el nombre de la
+    columna — debe limpiarse y validar contra el nombre real."""
+    backend = AsyncMock()
+    backend.generate.return_value = (
+        '{"filtros": [{"col": "FECHA CORTE (año)", "value": "2024"}]}'
+    )
+    with patch("api.routes.chips.get_backend", return_value=backend):
+        out = await _filtros_desde_pregunta("¿cuántos en 2024?", PERFIL)
+    assert out == [{"col": "FECHA CORTE", "kind": "anio", "value": "2024"}]
+
+
+@pytest.mark.asyncio
 async def test_auto_filtro_json_invalido_devuelve_vacio():
     backend = AsyncMock()
     backend.generate.return_value = "no soy json"
