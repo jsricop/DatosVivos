@@ -314,7 +314,7 @@ function MapSVG({
             y={INSET.y + INSET.hTop + INSET.hBot + INSET.label - 5}
             textAnchor="middle"
             fontFamily="var(--font-mono)"
-            fontSize={8}
+            fontSize={9.5}
             fill="var(--ink-muted)"
           >
             San Andrés y Prov.
@@ -327,18 +327,18 @@ function MapSVG({
             hover.value !== undefined
               ? `${hover.name}: ${fmt(hover.value)} datasets`
               : `${hover.name} — sin datos`;
-          const tw = texto.length * 6.6 + 14;
+          const tw = texto.length * 8.6 + 18;
           const tx = Math.min(Math.max(hover.x - tw / 2, 2), BASE_WIDTH - tw - 2);
-          const ty = Math.max(hover.y - 36, 2);
+          const ty = Math.max(hover.y - 44, 2);
           return (
             <g pointerEvents="none" transform={`translate(${tx}, ${ty})`}>
-              <rect width={tw} height={22} rx={3} fill="var(--ink)" opacity="0.92" />
+              <rect width={tw} height={28} rx={4} fill="var(--ink)" opacity="0.92" />
               <text
                 x={tw / 2}
-                y={15}
+                y={19}
                 textAnchor="middle"
                 fontFamily="var(--font-mono)"
-                fontSize={11}
+                fontSize={14.5}
                 fill="var(--bg)"
               >
                 {texto}
