@@ -198,11 +198,18 @@ async def list_chips() -> ChipsResponse:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT category, COUNT(*) AS c
+                -- Agrupa por grafía NORMALIZADA (case/tildes): el harvest
+                -- semanal reintroduce variantes ("Función Pública") horas
+                -- después de la normalización del ETL y el mapper elegía la
+                -- variante — su subset eran solo los 4 datasets de esa
+                -- grafía (ciclo 4, 2026-07-13). La etiqueta visible es la
+                -- grafía dominante.
+                SELECT mode() WITHIN GROUP (ORDER BY category) AS category,
+                       COUNT(*) AS c
                 FROM datasets
                 WHERE category IS NOT NULL AND category != ''
                   AND (quality_flag IS NULL OR quality_flag = 'ok')
-                GROUP BY category
+                GROUP BY translate(lower(category), 'áéíóúüñ', 'aeiouun')
                 ORDER BY c DESC
                 -- 30 cubre el vocabulario completo (25 canónicas tras la
                 -- consolidación de 2026-07-12 + geospatial). El LIMIT 12
@@ -312,7 +319,14 @@ def _build_chips_where(
         where.append("(d.quality_flag IS NULL OR d.quality_flag = 'ok')")
 
     if tema:
-        where.append("category = %s")
+        # Insensible a mayúsculas/tildes: "Función Pública" (variante que
+        # el harvest reintroduce) debe caer al MISMO subset que "Función
+        # pública" — con match exacto el subset eran solo los datasets de
+        # esa grafía (ciclo 4, 2026-07-13).
+        where.append(
+            "translate(lower(category), 'áéíóúüñ', 'aeiouun') = "
+            "translate(lower(%s), 'áéíóúüñ', 'aeiouun')"
+        )
         params.append(tema)
 
     if entidad:

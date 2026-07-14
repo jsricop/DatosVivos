@@ -362,6 +362,13 @@ def main(portal_key: str, limit: int | None, dry_run: bool) -> None:
                     log.warning("UPSERT falló para %s: %s", row["dataset_id"], exc)
             conn.commit()
 
+            # Higiene: idéntico a harvest_dcat — las variantes de grafía de
+            # category parten el filtro TEMA (ciclo 4, 2026-07-13).
+            from scripts.classify_quality_flag import normalize_categories
+            n_norm = normalize_categories(conn)
+            if n_norm:
+                log.info("Categorías re-normalizadas tras harvest: %d", n_norm)
+
     log.info("Insertados/actualizados: %d datasets (de %d CSV candidatos)", n_inserted, n_csv)
 
 
