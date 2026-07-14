@@ -198,4 +198,6 @@ export type PanoramaStats = {
   last_etl_at?: string | null;
   /** Acumulado de datasets por año de creación en su portal de origen. */
   crecimiento?: YearCumulative[];
+  /** Uso e interacción ciudadana (descargas_totales, consultados_mes, con_comentarios). */
+  interaccion?: Record<string, number> | null;
 };

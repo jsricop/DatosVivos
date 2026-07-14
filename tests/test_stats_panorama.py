@@ -59,6 +59,8 @@ _PORTALES = [
     {"portal": "datosabiertos.bogota.gov.co", "n_datasets": 20},
 ]
 _LAST_ETL = {"t": datetime(2026, 7, 12, 5, 15, 9, tzinfo=timezone.utc)}
+_INTERACCION = {"descargas_totales": 10761102, "consultados_mes": 20000,
+                "con_comentarios": 68}
 _CRECIMIENTO = [
     {"anio": 2015, "n": 10},
     {"anio": 2020, "n": 30},
@@ -68,7 +70,7 @@ _CRECIMIENTO = [
 
 def _mock_conn():
     cur = MagicMock()
-    cur.fetchone.side_effect = [_TOTALS, _SIN_GEO, _LAST_ETL]
+    cur.fetchone.side_effect = [_TOTALS, _SIN_GEO, _LAST_ETL, _INTERACCION]
     cur.fetchall.side_effect = [_SECTORES, _DPTOS, _PORTALES, _CRECIMIENTO]
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
