@@ -268,6 +268,7 @@ function MapSVG({
     : null;
 
   return (
+    <div className="relative h-full w-full">
     <svg
       viewBox={`0 0 ${BASE_WIDTH} ${BASE_HEIGHT}`}
       role="img"
@@ -321,33 +322,33 @@ function MapSVG({
           </text>
         </g>
       ) : null}
-      {hover ? (
-        (() => {
-          const texto =
-            hover.value !== undefined
-              ? `${hover.name}: ${fmt(hover.value)} datasets`
-              : `${hover.name} — sin datos`;
-          const tw = texto.length * 8.6 + 18;
-          const tx = Math.min(Math.max(hover.x - tw / 2, 2), BASE_WIDTH - tw - 2);
-          const ty = Math.max(hover.y - 44, 2);
-          return (
-            <g pointerEvents="none" transform={`translate(${tx}, ${ty})`}>
-              <rect width={tw} height={28} rx={4} fill="var(--ink)" opacity="0.92" />
-              <text
-                x={tw / 2}
-                y={19}
-                textAnchor="middle"
-                fontFamily="var(--font-mono)"
-                fontSize={14.5}
-                fill="var(--bg)"
-              >
-                {texto}
-              </text>
-            </g>
-          );
-        })()
-      ) : null}
     </svg>
+      {/* Tooltip en HTML, no en el SVG: así su tipografía es EXACTAMENTE la
+          de la lista (font-sans text-body-sm) y no escala con el mapa
+          (2026-07-13). Posicionado en % del viewBox. */}
+      {hover ? (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[var(--radius-1)] bg-ink px-3 py-1.5 font-sans text-body-sm text-bg shadow"
+          style={{
+            left: `${(hover.x / BASE_WIDTH) * 100}%`,
+            top: `${(hover.y / BASE_HEIGHT) * 100 - 3}%`,
+          }}
+        >
+          {hover.value !== undefined ? (
+            <>
+              {hover.name}{" "}
+              <span className="font-mono [font-variant-numeric:tabular-nums]">
+                {fmt(hover.value)}
+              </span>{" "}
+              datasets
+            </>
+          ) : (
+            `${hover.name} — sin datos`
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
