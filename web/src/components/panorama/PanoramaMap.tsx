@@ -74,7 +74,7 @@ export function PanoramaMap({
   const top10 = departamentos.slice(0, 10);
 
   return (
-    <div ref={ref} className="grid gap-6 md:grid-cols-[5fr_2fr] items-center">
+    <div ref={ref} className="grid gap-4 md:grid-cols-[5fr_3fr] items-center">
       <div
         className={`reveal-fade${revealed ? "" : " is-pending"}`}
         style={{ aspectRatio: `${BASE_WIDTH} / ${BASE_HEIGHT}` }}
@@ -150,10 +150,16 @@ function MapSVG({
       ) ?? null,
     [geo],
   );
+  // fitExtent pegado a la derecha del inset: con fitSize el continente se
+  // centraba dejando margen muerto a la derecha y la lista quedaba lejos
+  // (2026-07-13).
   const projection = useMemo(
     () =>
-      geoMercator().fitSize(
-        [BASE_WIDTH, BASE_HEIGHT],
+      geoMercator().fitExtent(
+        [
+          [112, 8],
+          [BASE_WIDTH - 4, BASE_HEIGHT - 8],
+        ],
         continente as unknown as GeoPermissibleObjects,
       ),
     [continente],
