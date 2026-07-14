@@ -118,31 +118,36 @@ Organizado por nivel del producto (nivel avanzado del TDR):
    Colombia en un catálogo comparable.
 2. **El hallazgo**: 71 % del catálogo "en rojo" (desactualizado frente a su propia
    promesa de frecuencia). Solo 9 % al día.
-3. **Actualización diaria automática**: el panorama se cura solo (ETL nocturno +
+3. **El segundo hallazgo — se usa mucho, se dialoga nada**: 10,76 millones de
+   descargas acumuladas y 3,26 millones de vistas de página al mes, pero solo
+   **68 de 25.234 datasets (0,3 %) tienen algún comentario ciudadano** — el canal
+   formal de participación del portal está muerto. Visible en vivo en la home
+   ("Cuánto se usan y cuánto se dialoga").
+4. **Actualización diaria automática**: el panorama se cura solo (ETL nocturno +
    harvesting semanal + clasificación continua). Ninguna cifra del sitio está quemada.
-4. **Cero cifras inventadas**: verificación determinista + citación de fuente en cada
+5. **Cero cifras inventadas**: verificación determinista + citación de fuente en cada
    respuesta del buscador.
-5. **Calidad medida**: 17/18 columnas al 100 % de fidelidad contra la fuente; ~89 % de
+6. **Calidad medida**: 17/18 columnas al 100 % de fidelidad contra la fuente; ~89 % de
    cobertura territorial inferida; **100 % de cobertura de categoría temática** (2.504
    huecos cerrados con clasificación semántica + curación revisada; vocabulario
    consolidado de 60+ etiquetas redundantes a 25 canónicas).
-6. **Bodega local en Parquet — completa**: **10.280 datasets** (6,6 GB comprimidos,
+7. **Bodega local en Parquet — completa**: **10.280 datasets** (6,6 GB comprimidos,
    todos los tabulares viables del catálogo) viven como copia local en la
    infraestructura y **el buscador responde desde ellos en milisegundos** cuando el
    snapshot está fresco; si la fuente cambió, cae al dato vivo. Una regla diaria de
    cola la mantiene sola, y los orígenes muertos (403/404) penalizan el ranking.
-7. **Evaluación centrada en el ciudadano**: 50 preguntas reales con respuesta
+8. **Evaluación centrada en el ciudadano**: 50 preguntas reales con respuesta
    esperada escrita ANTES de correrlas ([`eval/ciudadano/`](eval/ciudadano/)),
    corridas en ciclos contra producción; los patrones detectados se convirtieron en
    mejoras estructurales (re-ranking semántico, TIPO Total para montos, honestidad
    de lejanía) y el ciclo se repite con seguimiento versionado.
-8. **Filtros de valor dentro del dataset** (ADR-024): la bodega se perfila sola
+9. **Filtros de valor dentro del dataset** (ADR-024): la bodega se perfila sola
    (10.280 datasets → ~297k valores filtrables reales) y el ciudadano filtra
    eligiendo, nunca escribiendo — por chips, por su propia pregunta ("públicos" →
    `SECTOR=OFICIAL`, elegido por IA SOLO entre valores existentes) o por territorio
    (pregunta departamental recorta el dataset nacional). Con filtro se muestra
    también el total sin filtrar: "1.721 colegios oficiales de 2.184 en Boyacá".
-9. **Diccionario ciudadano↔institucional**: ~130 equivalencias curadas
+10. **Diccionario ciudadano↔institucional**: ~130 equivalencias curadas
    ("colegios"→"establecimientos educativos", "robos"→"hurto") cierran de forma
    determinista la brecha entre cómo pregunta la gente y cómo el Estado titula sus
    datos.
@@ -173,6 +178,7 @@ Para ver y probar la solución funcionando en tiempo real:
 **Aplicación Web / Producción:** [https://datosvivos.co](https://datosvivos.co)
 · [Tablero del decisor](https://datosvivos.co/tablero)
 · [Buscador en lenguaje natural](https://datosvivos.co/buscar)
+· [Servidor MCP para agentes de IA](https://datosvivos.co/mcp)
 
 **Registro oficial de uso:** el proyecto está postulado en el portal de usos de
 datos.gov.co como *"DatosVivos - El panorama de los datos abiertos de Colombia"*
