@@ -160,17 +160,46 @@ function MapSVG({
   );
   const path: GeoPath = useMemo(() => geoPath(projection), [projection]);
 
-  const INSET = { x: 6, y: 6, w: 88, h: 88, pad: 12 };
-  const insetPath: GeoPath | null = useMemo(() => {
-    if (!sanAndres) return null;
-    const proj = geoMercator().fitExtent(
-      [
-        [INSET.x + INSET.pad, INSET.y + INSET.pad],
-        [INSET.x + INSET.w - INSET.pad, INSET.y + INSET.h - INSET.pad],
-      ],
-      sanAndres as unknown as GeoPermissibleObjects,
-    );
-    return geoPath(proj);
+  // Cada isla AMPLIADA a su propia celda (patrón del mapa oficial): a
+  // escala real las dos islas del inset seguían siendo puntos — están tan
+  // separadas entre sí como anchas son (2026-07-13). Celda superior:
+  // Providencia + Santa Catalina (contiguas); inferior: San Andrés.
+  const INSET = { x: 6, y: 6, w: 92, hTop: 62, hBot: 84, label: 16, pad: 10 };
+  const insetCells = useMemo(() => {
+    if (!sanAndres || sanAndres.geometry == null) return null;
+    const geom = sanAndres.geometry as {
+      type: string;
+      coordinates: unknown[];
+    };
+    if (geom.type !== "MultiPolygon" || geom.coordinates.length < 3) {
+      return null;
+    }
+    const polyFeature = (coords: unknown[]) =>
+      ({
+        type: "Feature",
+        properties: sanAndres.properties,
+        geometry: { type: "MultiPolygon", coordinates: coords },
+      }) as unknown as GeoFeature;
+    // poly 0 = San Andrés; polys 1+2 = Providencia y Santa Catalina.
+    const providencia = polyFeature(geom.coordinates.slice(1));
+    const sanAndresIsla = polyFeature([geom.coordinates[0]]);
+    const fitCell = (f: GeoFeature, y0: number, h: number): GeoPath =>
+      geoPath(
+        geoMercator().fitExtent(
+          [
+            [INSET.x + INSET.pad, y0 + INSET.pad],
+            [INSET.x + INSET.w - INSET.pad, y0 + h - INSET.pad],
+          ],
+          f as unknown as GeoPermissibleObjects,
+        ),
+      );
+    return [
+      { f: providencia, path: fitCell(providencia, INSET.y, INSET.hTop) },
+      {
+        f: sanAndresIsla,
+        path: fitCell(sanAndresIsla, INSET.y + INSET.hTop, INSET.hBot),
+      },
+    ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sanAndres]);
   // Departamento bajo el cursor: crece un poco (feedback vivo) y muestra
@@ -247,25 +276,36 @@ function MapSVG({
         ? renderPath(hoveredFeature, -1, true)
         : null}
 
-      {/* Inset San Andrés y Providencia (cartografía DANE). */}
-      {sanAndres && insetPath ? (
+      {/* Inset San Andrés y Providencia (cartografía oficial): cada isla
+          ampliada a su celda. */}
+      {sanAndres && insetCells ? (
         <g>
           <rect
             x={INSET.x}
             y={INSET.y}
             width={INSET.w}
-            height={INSET.h}
+            height={INSET.hTop + INSET.hBot + INSET.label}
             fill="var(--bg)"
             stroke="var(--hairline-strong)"
             strokeWidth={0.75}
           />
-          {renderPath(sanAndres, -2, false, insetPath, [
-            INSET.x + INSET.w / 2,
-            INSET.y + INSET.h + 30,
-          ])}
+          <line
+            x1={INSET.x}
+            x2={INSET.x + INSET.w}
+            y1={INSET.y + INSET.hTop}
+            y2={INSET.y + INSET.hTop}
+            stroke="var(--hairline)"
+            strokeWidth={0.5}
+          />
+          {insetCells.map((cell, i) =>
+            renderPath(cell.f, -2 - i, false, cell.path, [
+              INSET.x + INSET.w / 2,
+              INSET.y + INSET.hTop + INSET.hBot + INSET.label + 28,
+            ]),
+          )}
           <text
             x={INSET.x + INSET.w / 2}
-            y={INSET.y + INSET.h - 5}
+            y={INSET.y + INSET.hTop + INSET.hBot + INSET.label - 5}
             textAnchor="middle"
             fontFamily="var(--font-mono)"
             fontSize={8}
