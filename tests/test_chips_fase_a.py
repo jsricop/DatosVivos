@@ -217,6 +217,25 @@ def test_refinador_boost_raiz_genero_numero():
     assert "%educativ%" in score_params  # matchea 'Educativos' y 'Educativas'
 
 
+def test_tema_matchea_insensible_a_grafia():
+    """'Función Pública' (variante que el harvest reintroduce) debe caer al
+    MISMO subset que 'Función pública' — con match exacto el subset eran
+    solo los 4 datasets MEDATA de esa grafía (ciclo 4, 2026-07-13)."""
+    client = _client()
+    capturas: list = []
+    with patch(
+        "api.routes.chips._connect",
+        side_effect=lambda: _fake_connect_capturando(capturas, total=3, rows=[]),
+    ):
+        client.post(
+            "/api/v1/query/chips",
+            json={"tema": "Función Pública", "tipo": "Cuántos"},
+        )
+    count_sql, count_params = capturas[0]
+    assert "translate(lower(category)" in count_sql
+    assert "Función Pública" in count_params
+
+
 def test_boost_cobertura_departamental_es_nivel_consciente():
     """Pregunta departamental (territorio '15'): el dataset departamental
     recibe el boost EXACTO (0.5), el nacional la mitad y el municipal nada —

@@ -78,7 +78,13 @@ def correr(pregunta: str) -> dict:
         reg["dataset_elegido"] = f"{chosen} · {nombre[:80]}"
 
         tipo = reg["chips"].get("tipo") or "Cuántos"
-        ex = post("/query/chips/execute", {"dataset_id": chosen, "tipo": tipo})
+        # Espejo del frontend (ADR-024): la pregunta habilita el auto-filtro
+        # y el territorio el recorte territorial sobre datasets nacionales.
+        ex = post("/query/chips/execute", {
+            "dataset_id": chosen, "tipo": tipo,
+            "territorio": reg["chips"].get("territorio"),
+            "pregunta": pregunta,
+        })
         reg["ms_ejecucion"] = round((time.time() - t1) * 1000)
         rows = ex.get("rows") or []
         reg["consulta"] = (ex.get("soql") or "")[:140]
@@ -92,9 +98,18 @@ def correr(pregunta: str) -> dict:
         ]
         origen = "bodega Parquet local" if "{src}" in (ex.get("soql") or "") \
             else "consulta en vivo"
+        extras = []
+        if ex.get("filters_applied"):
+            extras.append("filtrado: " + ", ".join(
+                f"{f['col']}={f['value']}" for f in ex["filters_applied"]))
+        if ex.get("unfiltered_total") is not None:
+            extras.append(f"de {ex['unfiltered_total']} sin filtro")
+        if ex.get("row_unit"):
+            extras.append(f"unidad: {ex['row_unit']}")
         reg["entregado"] = (
             f"{reg['artefacto']} · {len(rows)} fila(s) · {origen} · "
-            f"con nota 'cifra verificada' + nombre del dataset + toggle SoQL"
+            + (" · ".join(extras) + " · " if extras else "")
+            + "con nota 'cifra verificada' + nombre del dataset + toggle SoQL"
         )
     except Exception as exc:  # noqa: BLE001
         reg["entregado"] = f"EXCEPCIÓN DE TRANSPORTE: {exc}"
