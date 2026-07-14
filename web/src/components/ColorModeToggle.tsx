@@ -73,7 +73,7 @@ export function ColorModeToggle() {
               className={`${stateClass} inline-flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[length:var(--type-kicker)] font-medium uppercase tracking-[0.08em] transition-colors focus-ring`}
             >
               <Icon name={opt.icon} size={14} />
-              <span>{opt.label}</span>
+              <span className="hidden md:inline">{opt.label}</span>
             </button>
           );
         })}

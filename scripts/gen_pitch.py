@@ -264,33 +264,39 @@ para(tf, "Y si no medimos, no podemos mejorar.”", 40, color=AZUL, bold=True, s
 para(tf, "El dato bien gobernado es infraestructura — tan estratégica como las vías.", 18, color=INK)
 footer(s)
 
-# 4 · La solución: 3 niveles con flujo
+# 4 · La solución: 4 puertas, 4 audiencias
 s = slide()
-kicker_title(s, "La solución", "Tres niveles, una sola fuente de verdad")
+kicker_title(s, "La solución", "Cuatro puertas, una por audiencia")
 levels = [
-    ("1", "INICIO", "datosvivos.co", "El panorama nacional en vivo.\nPara decidir en segundos."),
-    ("2", "DETALLE ENTIDAD", "/tablero · Power BI", "Filtros por sector, entidad\ny territorio. Para gestionar."),
-    ("3", "BUSCAR", "/buscar · lenguaje natural", "Pregunta en tus palabras;\ncifra verificada con fuente."),
+    ("1", "PANORAMA", "datosvivos.co", "DECISORES Y PRENSA",
+     "El estado nacional en vivo.\nPara decidir en segundos."),
+    ("2", "TABLERO", "/tablero · Power BI", "GERENTES Y ENTIDADES",
+     "Detalle por sector, entidad\ny territorio. Para gestionar."),
+    ("3", "BUSCADOR", "/buscar · lenguaje natural", "CIUDADANÍA",
+     "Pregunta en tus palabras;\ncifra verificada con fuente."),
+    ("4", "MCP", "/mcp · agentes de IA", "DESARROLLADORES",
+     "El motor como herramientas\npara Claude, OpenAI y más."),
 ]
-x = Inches(0.6)
-cw, gap = Inches(3.85), Inches(0.35)
-for num, kick, ruta, desc in levels:
+x = Inches(0.5)
+cw, gap = Inches(2.95), Inches(0.22)
+for num, kick, ruta, quien, desc in levels:
     # círculo numerado
-    circ = shape(s, MSO_SHAPE.OVAL, Emu(int(x + cw / 2 - Inches(0.42))),
-                 Inches(1.95), Inches(0.84), Inches(0.84), AZUL)
+    circ = shape(s, MSO_SHAPE.OVAL, Emu(int(x + cw / 2 - Inches(0.38))),
+                 Inches(1.85), Inches(0.76), Inches(0.76), AZUL)
     tfc = circ.text_frame
     tfc.vertical_anchor = MSO_ANCHOR.MIDDLE
-    para(tfc, num, 30, color=BLANCO, bold=True, font=MONO,
+    para(tfc, num, 26, color=BLANCO, bold=True, font=MONO,
          align=PP_ALIGN.CENTER, first=True, space_after=0)
-    tf = card(s, x, Inches(2.55), cw, Inches(2.9), accent=AZUL2)
+    tf = card(s, x, Inches(2.4), cw, Inches(3.15), accent=AZUL2)
     para(tf, "", 6, first=True, space_after=8)  # aire bajo el círculo
-    para(tf, kick, 17, color=AZUL, bold=True, align=PP_ALIGN.CENTER, space_after=2)
-    para(tf, ruta, 13, color=AZUL2, font=MONO, align=PP_ALIGN.CENTER, space_after=8)
+    para(tf, kick, 16, color=AZUL, bold=True, align=PP_ALIGN.CENTER, space_after=2)
+    para(tf, ruta, 11, color=AZUL2, font=MONO, align=PP_ALIGN.CENTER, space_after=6)
+    para(tf, quien, 11, color=MUTED, font=MONO, align=PP_ALIGN.CENTER, space_after=6)
     for linea in desc.split("\n"):
-        para(tf, linea, 13, color=INK, align=PP_ALIGN.CENTER, space_after=1)
+        para(tf, linea, 12, color=INK, align=PP_ALIGN.CENTER, space_after=1)
     x = Emu(int(x + cw + gap))
-tf = box(s, Inches(0.65), Inches(5.8), Inches(12), Inches(0.6))
-para(tf, "De lo general a lo puntual: panorama → detalle → dato exacto. Cada nivel dirige al siguiente.",
+tf = box(s, Inches(0.65), Inches(5.85), Inches(12), Inches(0.6))
+para(tf, "Con accesibilidad en toda la página: voz, narración y alto contraste (Ley 1618 de 2013).",
      14, color=MUTED, first=True, align=PP_ALIGN.CENTER)
 footer(s)
 

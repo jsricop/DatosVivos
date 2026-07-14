@@ -37,7 +37,7 @@ export function Wordmark({ asHeading = false, size = "header" }: WordmarkProps) 
           Vivos
         </Tag>
       </Link>
-      <span className="font-mono text-[length:var(--type-kicker)] font-medium text-ink-2 tracking-[0.04em]">
+      <span className="whitespace-nowrap font-mono text-[length:var(--type-kicker)] font-medium text-ink-2 tracking-[0.04em] max-[420px]:hidden">
         ── panorama de datos abiertos
       </span>
     </div>

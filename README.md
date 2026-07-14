@@ -32,7 +32,6 @@ gerente sectorial con N entidades adscritas no puede hacer control; el propio Mi
 carece de una vista consolidada (los portales federados viven separados); y el
 ciudadano que quiere una cifra necesita saber de APIs y SQL. **Si no conocemos, no
 podemos medir — y si no medimos, no podemos mejorar.**
-→ Detalle: [docs/planteamiento_problema.md](docs/planteamiento_problema.md)
 
 ## Justificación (valor público)
 
@@ -65,7 +64,6 @@ Portales integrados por harvesting directo y atribución de origen:
 **IGAC / Colombia en Mapas** (6.626) · **Datos Abiertos Bogotá** (4.323, CKAN) ·
 **Datos Abiertos Cali** (1.236, CKAN) · **MEDATA Medellín** (823, DCAT) ·
 **Datos Abiertos Valle del Cauca** (106, CKAN).
-→ Detalle y mecanismos: [docs/fuentes_datos.md](docs/fuentes_datos.md)
 
 ## Variables seleccionadas
 
@@ -74,7 +72,6 @@ Portales integrados por harvesting directo y atribución de origen:
 (`status`, calculado contra la frecuencia declarada), uso (descargas/vistas), acceso
 (`directo` / `requiere_herramienta` / `solo_metadatos`), procedencia, territorio
 (DIVIPOLA) y calidad (`quality_flag`).
-→ Diccionario completo: [docs/diccionario_datos.md](docs/diccionario_datos.md)
 
 ## Tipo de análisis
 
@@ -101,7 +98,6 @@ Organizado por nivel del producto (nivel avanzado del TDR):
   tendencia, mapa), narrativa anti-alucinación (cero cifras inventadas) y **MCP
   server** que expone las herramientas a cualquier agente de IA.
 - Backend LLM conectable: **producción con la API de Claude (Haiku)** desde 2026-07-11 — interpretación NL en ~1.5 s (antes 31-45 s con modelo local); `LLM_BACKEND=ollama` queda para réplicas sin API key.
-→ Metodología CRISP-ML adaptada: [docs/marco_metodologico.md](docs/marco_metodologico.md)
 
 ## Por qué Nivel Avanzado (con la letra del TDR)
 
@@ -156,7 +152,7 @@ Organizado por nivel del producto (nivel avanzado del TDR):
 La brecha del dato abierto colombiano no es de cantidad sino de **gobernanza y
 acceso**: los datos existen, pero no se mantienen frescos y consultarlos exige
 capacidades técnicas. Medir contra la promesa de cada entidad convierte la percepción
-en indicador gestionable. → [docs/conclusiones.md](docs/conclusiones.md)
+en indicador gestionable.
 
 ## Impacto potencial
 
@@ -197,16 +193,11 @@ Presentación del proyecto:
 
 ## Documentación
 
-| Documento | Contenido |
-|---|---|
-| [Planteamiento del problema](docs/planteamiento_problema.md) | El dolor del decisor y la pregunta problema |
-| [Marco metodológico](docs/marco_metodologico.md) | CRISP-ML(Q) adaptado, fase a fase |
-| [Fuentes de datos](docs/fuentes_datos.md) | Los 6 portales integrados, mecanismos y licencias |
-| [Diccionario de datos](docs/diccionario_datos.md) | Las 29 variables + contratos de la API |
-| [Arquitectura](docs/architecture.md) | El sistema completo (3 capas) |
-| [Conclusiones](docs/conclusiones.md) | Resultados, interpretación, impacto, límites |
-| [Guía de validación](docs/validation_guide.md) | Cómo replicar y auditar (jurado) |
-| [Decisiones de arquitectura (ADRs)](docs/adr/) | Trazabilidad de cada decisión técnica |
+Este README concentra la documentación del proyecto: problema, fuentes,
+variables, modelo, metodología y resultados. El sistema de diseño vive en
+[docs/BRAND.md](docs/BRAND.md); la evaluación reproducible en [`eval/`](eval/)
+(goldens + runners + las 50 preguntas del ciclo ciudadano); y la guía para
+conectar agentes de IA en [datosvivos.co/mcp](https://datosvivos.co/mcp).
 
 ## Roadmap (trabajo futuro)
 

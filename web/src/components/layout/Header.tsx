@@ -17,11 +17,13 @@ export function Header() {
           </span>
         </div>
       </div>
-      <div className="container-narrow flex items-center justify-between gap-6 py-4">
+      {/* flex-wrap: en pantallas medias la navegación baja a su propia
+          línea en vez de desbordar (revisión responsive 2026-07-13). */}
+      <div className="container-narrow flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
         <Wordmark size="header" />
         <nav
           aria-label="Navegación primaria"
-          className="flex items-center gap-1.5"
+          className="flex flex-wrap items-center gap-1.5"
         >
           <NavLink href="/">Inicio</NavLink>
           <NavLink href="/tablero">Tablero</NavLink>

@@ -53,6 +53,11 @@ docs/powerbi/HANDOFF_*.md
 docs/powerbi/guia_powerbi.html
 eval/ciudadano/entregado_ciclo*.yaml
 eval/reports/*
-!eval/reports/data_quality_hito_q_2026-05-29.md
-!eval/reports/chips_2026-07-13T22-07-35.md
-!eval/reports/queries_2026-07-13T21-55-41.md
+
+# === Poda documental máxima (2026-07-13): el repo público lleva código,
+# README, BRAND e insumos del concurso. El resto de docs/ es material de
+# trabajo interno — se conserva LOCALMENTE, no se publica.
+docs/*
+!docs/BRAND.md
+eval/ciudadano/seguimiento_50.md
+eval/ciudadano/analisis_ciclos.md

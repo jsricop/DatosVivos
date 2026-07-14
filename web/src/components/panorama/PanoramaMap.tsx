@@ -32,7 +32,7 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
  * mismo GeoJSON DIVIPOLA local (`/geo/co_dptos.geojson`) y la técnica de
  * buckets por cuantiles con opacidad creciente sobre --accent.
  *
- * Fade-in del SVG al entrar al viewport (.reveal-fade). El top-5 en lista
+ * Fade-in del SVG al entrar al viewport (.reveal-fade). El top-10 en lista
  * al lado es la lectura accesible primaria; el mapa es refuerzo visual.
  */
 export function PanoramaMap({
@@ -71,7 +71,7 @@ export function PanoramaMap({
     () => computeBuckets(departamentos.map((d) => d.n_datasets)),
     [departamentos],
   );
-  const top5 = departamentos.slice(0, 5);
+  const top10 = departamentos.slice(0, 10);
 
   return (
     <div ref={ref} className="grid gap-4 md:grid-cols-[3fr_2fr] items-start">
@@ -92,9 +92,9 @@ export function PanoramaMap({
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-kicker">Top 5 departamentos</span>
+        <span className="text-kicker">Top 10 departamentos</span>
         <ol className="list-none m-0 p-0 flex flex-col gap-1.5">
-          {top5.map((d, i) => (
+          {top10.map((d, i) => (
             <li
               key={d.codigo}
               className="grid grid-cols-[2ch_1fr_auto] gap-2 items-baseline font-sans text-body-sm text-ink-2"
@@ -139,6 +139,58 @@ function MapSVG({
     [geo],
   );
   const path: GeoPath = useMemo(() => geoPath(projection), [projection]);
+  // Departamento bajo el cursor: crece un poco (feedback vivo) y muestra
+  // su cifra en un tooltip propio — el <title> nativo tardaba (2026-07-13).
+  const [hover, setHover] = useState<{
+    code: string;
+    name: string;
+    value: number | undefined;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const renderPath = (feature: GeoFeature, i: number, elevated: boolean) => {
+    const code = String(feature.properties?.DPTO ?? "").padStart(2, "0");
+    const name = String(feature.properties?.NOMBRE_DPT ?? code);
+    const value = valueByCode.get(code);
+    const idx = value !== undefined ? bucketIndex(value, buckets) : -1;
+    const fill =
+      idx < 0
+        ? "var(--bg-elev)"
+        : `color-mix(in srgb, var(--accent) ${15 + idx * 20}%, var(--bg))`;
+    const isHovered = hover?.code === code;
+    return (
+      <path
+        key={`${elevated ? "top-" : ""}${code}-${i}`}
+        d={path(feature as unknown as GeoPermissibleObjects) ?? ""}
+        fill={fill}
+        stroke="var(--ink)"
+        strokeWidth={isHovered ? 1.2 : 0.5}
+        strokeLinejoin="miter"
+        style={{
+          transform: isHovered ? "scale(1.05)" : "scale(1)",
+          transformOrigin: "center",
+          transformBox: "fill-box",
+          transition: "transform 160ms ease-out",
+          cursor: value !== undefined ? "pointer" : "default",
+        }}
+        onMouseEnter={() => {
+          const [cx, cy] = path.centroid(
+            feature as unknown as GeoPermissibleObjects,
+          );
+          setHover({ code, name, value, x: cx, y: cy });
+        }}
+        onMouseLeave={() => setHover(null)}
+      />
+    );
+  };
+
+  const hoveredFeature = hover
+    ? geo.features.find(
+        (f) =>
+          String(f.properties?.DPTO ?? "").padStart(2, "0") === hover.code,
+      )
+    : null;
 
   return (
     <svg
@@ -148,31 +200,36 @@ function MapSVG({
       preserveAspectRatio="xMidYMid meet"
       className="w-full h-full"
     >
-      {geo.features.map((feature, i) => {
-        const code = String(feature.properties?.DPTO ?? "").padStart(2, "0");
-        const name = feature.properties?.NOMBRE_DPT ?? code;
-        const value = valueByCode.get(code);
-        const idx = value !== undefined ? bucketIndex(value, buckets) : -1;
-        const fill =
-          idx < 0
-            ? "var(--bg-elev)"
-            : `color-mix(in srgb, var(--accent) ${15 + idx * 20}%, var(--bg))`;
-        return (
-          <path
-            key={`${code}-${i}`}
-            d={path(feature as unknown as GeoPermissibleObjects) ?? ""}
-            fill={fill}
-            stroke="var(--ink)"
-            strokeWidth={0.5}
-            strokeLinejoin="miter"
-          >
-            <title>
-              {String(name)}
-              {value !== undefined ? `: ${fmt(value)} datasets` : " — sin datos"}
-            </title>
-          </path>
-        );
-      })}
+      {geo.features.map((f, i) => renderPath(f, i, false))}
+      {/* El departamento activo se re-dibuja ENCIMA: al crecer no queda
+          tapado por los bordes de sus vecinos. */}
+      {hoveredFeature ? renderPath(hoveredFeature, -1, true) : null}
+      {hover ? (
+        (() => {
+          const texto =
+            hover.value !== undefined
+              ? `${hover.name}: ${fmt(hover.value)} datasets`
+              : `${hover.name} — sin datos`;
+          const tw = texto.length * 6.6 + 14;
+          const tx = Math.min(Math.max(hover.x - tw / 2, 2), BASE_WIDTH - tw - 2);
+          const ty = Math.max(hover.y - 36, 2);
+          return (
+            <g pointerEvents="none" transform={`translate(${tx}, ${ty})`}>
+              <rect width={tw} height={22} rx={3} fill="var(--ink)" opacity="0.92" />
+              <text
+                x={tw / 2}
+                y={15}
+                textAnchor="middle"
+                fontFamily="var(--font-mono)"
+                fontSize={11}
+                fill="var(--bg)"
+              >
+                {texto}
+              </text>
+            </g>
+          );
+        })()
+      ) : null}
     </svg>
   );
 }
