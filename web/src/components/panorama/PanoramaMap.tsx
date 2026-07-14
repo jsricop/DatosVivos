@@ -130,15 +130,49 @@ function MapSVG({
   valueByCode: Map<string, number>;
   buckets: number[];
 }) {
+  // San Andrés y Providencia ('88') está a ~700 km del continente: si el
+  // fitSize los incluye, el continente se encoge y deja una franja vacía a
+  // la izquierda (2026-07-13). Encuadre al continente + INSET para las
+  // islas, como en la cartografía oficial del DANE.
+  const continente = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: geo.features.filter(
+        (f) => String(f.properties?.DPTO ?? "").padStart(2, "0") !== "88",
+      ),
+    }),
+    [geo],
+  );
+  const sanAndres = useMemo(
+    () =>
+      geo.features.find(
+        (f) => String(f.properties?.DPTO ?? "").padStart(2, "0") === "88",
+      ) ?? null,
+    [geo],
+  );
   const projection = useMemo(
     () =>
       geoMercator().fitSize(
         [BASE_WIDTH, BASE_HEIGHT],
-        geo as unknown as GeoPermissibleObjects,
+        continente as unknown as GeoPermissibleObjects,
       ),
-    [geo],
+    [continente],
   );
   const path: GeoPath = useMemo(() => geoPath(projection), [projection]);
+
+  const INSET = { x: 6, y: 6, w: 88, h: 88, pad: 12 };
+  const insetPath: GeoPath | null = useMemo(() => {
+    if (!sanAndres) return null;
+    const proj = geoMercator().fitExtent(
+      [
+        [INSET.x + INSET.pad, INSET.y + INSET.pad],
+        [INSET.x + INSET.w - INSET.pad, INSET.y + INSET.h - INSET.pad],
+      ],
+      sanAndres as unknown as GeoPermissibleObjects,
+    );
+    return geoPath(proj);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sanAndres]);
   // Departamento bajo el cursor: crece un poco (feedback vivo) y muestra
   // su cifra en un tooltip propio — el <title> nativo tardaba (2026-07-13).
   const [hover, setHover] = useState<{
@@ -149,7 +183,13 @@ function MapSVG({
     y: number;
   } | null>(null);
 
-  const renderPath = (feature: GeoFeature, i: number, elevated: boolean) => {
+  const renderPath = (
+    feature: GeoFeature,
+    i: number,
+    elevated: boolean,
+    pathFn: GeoPath = path,
+    tooltipXY?: [number, number],
+  ) => {
     const code = String(feature.properties?.DPTO ?? "").padStart(2, "0");
     const name = String(feature.properties?.NOMBRE_DPT ?? code);
     const value = valueByCode.get(code);
@@ -162,7 +202,7 @@ function MapSVG({
     return (
       <path
         key={`${elevated ? "top-" : ""}${code}-${i}`}
-        d={path(feature as unknown as GeoPermissibleObjects) ?? ""}
+        d={pathFn(feature as unknown as GeoPermissibleObjects) ?? ""}
         fill={fill}
         stroke="var(--ink)"
         strokeWidth={isHovered ? 1.2 : 0.5}
@@ -175,9 +215,9 @@ function MapSVG({
           cursor: value !== undefined ? "pointer" : "default",
         }}
         onMouseEnter={() => {
-          const [cx, cy] = path.centroid(
-            feature as unknown as GeoPermissibleObjects,
-          );
+          const [cx, cy] =
+            tooltipXY ??
+            pathFn.centroid(feature as unknown as GeoPermissibleObjects);
           setHover({ code, name, value, x: cx, y: cy });
         }}
         onMouseLeave={() => setHover(null)}
@@ -200,10 +240,41 @@ function MapSVG({
       preserveAspectRatio="xMidYMid meet"
       className="w-full h-full"
     >
-      {geo.features.map((f, i) => renderPath(f, i, false))}
+      {continente.features.map((f, i) => renderPath(f, i, false))}
       {/* El departamento activo se re-dibuja ENCIMA: al crecer no queda
           tapado por los bordes de sus vecinos. */}
-      {hoveredFeature ? renderPath(hoveredFeature, -1, true) : null}
+      {hoveredFeature && hover?.code !== "88"
+        ? renderPath(hoveredFeature, -1, true)
+        : null}
+
+      {/* Inset San Andrés y Providencia (cartografía DANE). */}
+      {sanAndres && insetPath ? (
+        <g>
+          <rect
+            x={INSET.x}
+            y={INSET.y}
+            width={INSET.w}
+            height={INSET.h}
+            fill="var(--bg)"
+            stroke="var(--hairline-strong)"
+            strokeWidth={0.75}
+          />
+          {renderPath(sanAndres, -2, false, insetPath, [
+            INSET.x + INSET.w / 2,
+            INSET.y + INSET.h + 30,
+          ])}
+          <text
+            x={INSET.x + INSET.w / 2}
+            y={INSET.y + INSET.h - 5}
+            textAnchor="middle"
+            fontFamily="var(--font-mono)"
+            fontSize={8}
+            fill="var(--ink-muted)"
+          >
+            San Andrés y Prov.
+          </text>
+        </g>
+      ) : null}
       {hover ? (
         (() => {
           const texto =
