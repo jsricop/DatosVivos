@@ -222,7 +222,10 @@ def _compute_panorama() -> PanoramaStats:
             """
             SELECT
               COALESCE(sum(download_count), 0)::bigint AS descargas_totales,
-              count(*) FILTER (WHERE page_views_last_month > 0) AS consultados_mes,
+              -- Volumen, no conteo: "datasets con ≥1 vista" era tautológico
+              -- (la métrica solo existe para el portal nacional y ahí nadie
+              -- está en cero — 2026-07-13). Las VISTAS del mes sí miden uso.
+              COALESCE(sum(page_views_last_month), 0)::bigint AS vistas_mes,
               count(*) FILTER (WHERE number_of_comments > 0) AS con_comentarios
             FROM datasets
             """
@@ -272,7 +275,7 @@ def _compute_panorama() -> PanoramaStats:
         crecimiento=crecimiento,
         interaccion={
             "descargas_totales": int(interaccion_row.get("descargas_totales") or 0),
-            "consultados_mes": int(interaccion_row.get("consultados_mes") or 0),
+            "vistas_mes": int(interaccion_row.get("vistas_mes") or 0),
             "con_comentarios": int(interaccion_row.get("con_comentarios") or 0),
         },
     )

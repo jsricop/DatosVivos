@@ -73,8 +73,8 @@ export default async function HomePage() {
                   etiqueta="descargas acumuladas"
                 />
                 <Cifra
-                  valor={stats.interaccion.consultados_mes ?? 0}
-                  etiqueta="datasets consultados el último mes"
+                  valor={stats.interaccion.vistas_mes ?? 0}
+                  etiqueta="vistas de página en el último mes (portal nacional)"
                 />
                 <Cifra
                   valor={stats.interaccion.con_comentarios ?? 0}

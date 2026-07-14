@@ -59,7 +59,7 @@ _PORTALES = [
     {"portal": "datosabiertos.bogota.gov.co", "n_datasets": 20},
 ]
 _LAST_ETL = {"t": datetime(2026, 7, 12, 5, 15, 9, tzinfo=timezone.utc)}
-_INTERACCION = {"descargas_totales": 10761102, "consultados_mes": 20000,
+_INTERACCION = {"descargas_totales": 10761102, "vistas_mes": 3256601,
                 "con_comentarios": 68}
 _CRECIMIENTO = [
     {"anio": 2015, "n": 10},
