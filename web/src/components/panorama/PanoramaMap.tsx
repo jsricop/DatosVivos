@@ -74,7 +74,7 @@ export function PanoramaMap({
   const top10 = departamentos.slice(0, 10);
 
   return (
-    <div ref={ref} className="grid gap-4 md:grid-cols-[3fr_2fr] items-start">
+    <div ref={ref} className="grid gap-6 md:grid-cols-[5fr_2fr] items-center">
       <div
         className={`reveal-fade${revealed ? "" : " is-pending"}`}
         style={{ aspectRatio: `${BASE_WIDTH} / ${BASE_HEIGHT}` }}
