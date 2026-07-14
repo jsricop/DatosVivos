@@ -215,6 +215,20 @@ def _compute_panorama() -> PanoramaStats:
         cur.execute("SELECT max(finished_at) AS t FROM etl_runs")
         last_etl = (cur.fetchone() or {}).get("t")
 
+        # Uso e interacción ciudadana: el contraste ES el hallazgo — se
+        # descarga masivamente, no se dialoga (68 datasets con comentarios
+        # de 25k, medido 2026-07-13).
+        cur.execute(
+            """
+            SELECT
+              COALESCE(sum(download_count), 0)::bigint AS descargas_totales,
+              count(*) FILTER (WHERE page_views_last_month > 0) AS consultados_mes,
+              count(*) FILTER (WHERE number_of_comments > 0) AS con_comentarios
+            FROM datasets
+            """
+        )
+        interaccion_row = cur.fetchone() or {}
+
         cur.execute(_PANORAMA_CRECIMIENTO_SQL)
         acumulado = 0
         crecimiento = []
@@ -256,6 +270,11 @@ def _compute_panorama() -> PanoramaStats:
         generated_at=datetime.now(timezone.utc).isoformat(),
         last_etl_at=last_etl.isoformat() if last_etl else None,
         crecimiento=crecimiento,
+        interaccion={
+            "descargas_totales": int(interaccion_row.get("descargas_totales") or 0),
+            "consultados_mes": int(interaccion_row.get("consultados_mes") or 0),
+            "con_comentarios": int(interaccion_row.get("con_comentarios") or 0),
+        },
     )
 
 

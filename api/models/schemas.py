@@ -398,3 +398,7 @@ class PanoramaStats(BaseModel):
     # de origen (para los anteriores al registro de DatosVivos es un estimado;
     # los años ≤2015 se agrupan en el primer punto).
     crecimiento: list[YearCumulative] = []
+    # Uso e interacción ciudadana: descargas acumuladas, datasets vistos el
+    # último mes y datasets con ≥1 comentario (el CONTRASTE es el hallazgo:
+    # se usa masivamente, no se dialoga — 2026-07-13).
+    interaccion: dict[str, int] | None = None

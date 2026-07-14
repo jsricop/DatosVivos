@@ -59,6 +59,32 @@ export default async function HomePage() {
             </PanelCard>
           ) : null}
 
+          {/* Uso e interacción ciudadana: el CONTRASTE es el hallazgo —
+              los datos se descargan masivamente, pero nadie dialoga sobre
+              ellos (68 datasets con comentarios de 25k, 2026-07-13). */}
+          {stats.interaccion ? (
+            <PanelCard
+              title="Cuánto se usan (y cuánto se dialoga)"
+              note={`Los datos se consultan masivamente, pero la conversación formal es casi nula: solo ${(stats.interaccion.con_comentarios ?? 0).toLocaleString("es-CO")} datasets (${(((stats.interaccion.con_comentarios ?? 0) / (stats.total || 1)) * 100).toFixed(1).replace(".", ",")} %) tienen algún comentario ciudadano en el portal.`}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Cifra
+                  valor={stats.interaccion.descargas_totales ?? 0}
+                  etiqueta="descargas acumuladas"
+                />
+                <Cifra
+                  valor={stats.interaccion.consultados_mes ?? 0}
+                  etiqueta="datasets consultados el último mes"
+                />
+                <Cifra
+                  valor={stats.interaccion.con_comentarios ?? 0}
+                  etiqueta="datasets con comentarios ciudadanos"
+                  advertencia
+                />
+              </div>
+            </PanelCard>
+          ) : null}
+
           {/* Gráficas de panorama: agregados nacionales, sin filtros — el
               corte interactivo por entidad/sector vive en /tablero. */}
           <div className="grid gap-8 md:grid-cols-2">
@@ -346,4 +372,27 @@ function etlTimestamp(iso: string | null | undefined): string {
     hour12: true,
   }).format(new Date(then));
   return `actualizado el ${fecha} (hora de Colombia)`;
+}
+
+function Cifra({
+  valor,
+  etiqueta,
+  advertencia = false,
+}: {
+  valor: number;
+  etiqueta: string;
+  advertencia?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className={`font-mono text-h2 font-medium leading-none [font-variant-numeric:tabular-nums] ${
+          advertencia ? "text-warn" : "text-accent"
+        }`}
+      >
+        {valor.toLocaleString("es-CO")}
+      </span>
+      <span className="font-sans text-caption text-ink-2">{etiqueta}</span>
+    </div>
+  );
 }
