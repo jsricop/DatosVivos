@@ -27,12 +27,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from typing import AsyncIterator, Literal
 
+from ai_engine.curated_columns import load_curated_columns
+from ai_engine.query_constraints import QueryConstraints, extract_constraints
+from ai_engine.soql_templates import build_soql
+from ai_engine.soql_verifier import verify_execution, verify_static
 from ai_engine.geo_attribution import validate_geographic_attribution
 from ai_engine.geo_resolver import GeoContext, GeoResolver, build_comparison_soql
 from ai_engine.intent_classifier import IntentClassifier
@@ -176,6 +181,19 @@ class AnalysisResult:
     # emitir tokens al cliente conforme llegan. Si `narrative` está vacío y
     # `top_hit` no es None, el caller debe invocar el stream para generarla.
     top_hit: SearchResult | None = None
+    # Score del top hit del retrieval (post-boost). Lo usa el refusal (ADR-022 §3)
+    # para rehusar cuando la confianza de recuperación es baja, y la telemetría.
+    top_hit_score: float | None = None
+    # Verificación de la consulta generada (ADR-022 Fase 3). `soql_verified=True`
+    # por defecto para los caminos que no generan SoQL (search/metadata).
+    soql_verified: bool = True
+    soql_repairs: int = 0
+    soql_layer_failed: str | None = None  # 'syntax'|'execution'|'semantic' si no verificó
+    soql_fallback: str | None = None  # "template" si se degradó al motor determinista
+    columns_used: list[str] = field(default_factory=list)
+    # Refusal (ADR-022 Fase 4): el sistema rehúsa afirmar una cifra no verificable.
+    refusal: bool = False
+    refusal_reason: str | None = None
 
     def __getitem__(self, key: str):
         # Soporte dict-like para tests que usan result["intent"], etc.
@@ -284,6 +302,38 @@ def _number_in_whitelist(
     return any(c in whitelist or c in derived for c in candidates if c)
 
 
+_REFUSAL_MESSAGE = (
+    "No puedo darte una cifra confiable para esta pregunta con los datos "
+    "disponibles. Encontré datasets relacionados, pero no logré construir una "
+    "consulta verificada que la responda con precisión. DatosVivos prefiere "
+    "decir esto a darte un número que podría estar respondiendo otra cosa. "
+    "Probá reformular (por ejemplo, especificando el periodo, el territorio o la "
+    "medida exacta) o revisá los datasets citados abajo."
+)
+
+
+@dataclass
+class SoqlOutcome:
+    """Resultado del bucle de generación+verificación de SoQL (ADR-022 Fase 3-5).
+
+    Lo produce `_execute_soql`; lo consumen la construcción del `AnalysisResult`,
+    el evento `interpretation` ("esto entendí", Fase 5) y la decisión de
+    refusal/degradación (Fase 4).
+    """
+
+    soql: str
+    rows: list[dict[str, Any]]
+    verified: bool
+    repairs: int = 0
+    layer_failed: str | None = None
+    fallback: str | None = None  # "template" cuando se degradó al motor determinista
+    refused: bool = False  # True si se rehúsa afirmar cifra (no verificable)
+    refusal_reason: str | None = None  # "unverifiable" | "missing_columns" | ...
+    columns_used: list[str] = field(default_factory=list)
+    constraints: QueryConstraints | None = None
+    curated_columns: list[dict[str, Any]] = field(default_factory=list)
+
+
 class Analyzer:
     """Orquesta el motor de IA: intent → recuperación → re-ranking → SoQL → narrativa."""
 
@@ -320,6 +370,13 @@ class Analyzer:
         self.enable_rerank = enable_rerank
         self.enable_soql_execution = enable_soql_execution
         self.enable_geo_context = enable_geo_context
+
+        # Reparaciones máximas del bucle de verificación (ADR-022 Fase 3).
+        # 1 intento inicial + N reparaciones = hasta N+1 llamadas LLM peor caso.
+        self._max_query_repairs = int(os.getenv("QUERY_MAX_REPAIRS", "4"))
+        # Rehusar (no afirmar cifra) cuando la consulta no se verifica ni se puede
+        # degradar a template (ADR-022 Fase 4, "precisión sobre cobertura").
+        self._refuse_unverified = os.getenv("QUERY_REFUSE_UNVERIFIED", "1") not in ("0", "false", "False")
 
     async def analyze(
         self, question: str, *, defer_narrative: bool = False
@@ -408,8 +465,25 @@ class Analyzer:
         # 4) Si intent requiere DATOS (no solo catálogo), ejecutar SoQL.
         if intent in INTENTS_REQUIRING_DATA and self.enable_soql_execution:
             soql_result = await self._execute_soql(question, hits[0], geo_ctx)
+            if soql_result is not None and soql_result.refused:
+                # ADR-022 Fase 4: rehusar es preferible a afirmar una cifra que
+                # responde otra pregunta. No se ejecuta ni se narra una cifra.
+                return AnalysisResult(
+                    question=question,
+                    intent=intent,
+                    datasets_used=datasets_used,
+                    dataset_references=dataset_references,
+                    narrative=_REFUSAL_MESSAGE,
+                    geo_context=geo_ctx,
+                    top_hit=hits[0],
+                    top_hit_score=hits[0].score,
+                    soql_verified=False,
+                    soql_layer_failed=soql_result.layer_failed,
+                    refusal=True,
+                    refusal_reason=soql_result.refusal_reason,
+                )
             if soql_result is not None:
-                soql, rows = soql_result
+                soql, rows = soql_result.soql, soql_result.rows
                 if defer_narrative:
                     # Modo streaming: el caller invoca `_narrate_with_data_stream`.
                     # No llamamos al LLM acá — solo computamos stats con pandas
@@ -427,6 +501,12 @@ class Analyzer:
                         statistics=stats,
                         geo_context=geo_ctx,
                         top_hit=hits[0],
+                        top_hit_score=hits[0].score,
+                        soql_verified=soql_result.verified,
+                        soql_repairs=soql_result.repairs,
+                        soql_layer_failed=soql_result.layer_failed,
+                        soql_fallback=soql_result.fallback,
+                        columns_used=soql_result.columns_used,
                     )
                 narrative, stats = await self._narrate_with_data(
                     question, hits[0], soql, rows, geo_ctx=geo_ctx
@@ -442,6 +522,12 @@ class Analyzer:
                     statistics=stats,
                     geo_context=geo_ctx,
                     top_hit=hits[0],
+                    top_hit_score=hits[0].score,
+                    soql_verified=soql_result.verified,
+                    soql_repairs=soql_result.repairs,
+                    soql_layer_failed=soql_result.layer_failed,
+                    soql_fallback=soql_result.fallback,
+                    columns_used=soql_result.columns_used,
                 )
             # Si SoQL falló, caemos al placeholder constreñido.
             narrative = await self._narrate_metadata_only(question, intent, hits)
@@ -691,8 +777,8 @@ class Analyzer:
 
     async def _execute_soql(
         self, question: str, top: SearchResult, geo_ctx: GeoContext | None = None
-    ) -> tuple[str, list[dict[str, Any]]] | None:
-        """Para intents no-search: obtener schema, generar SoQL, ejecutar.
+    ) -> "SoqlOutcome | None":
+        """Para intents no-search: obtener schema, generar SoQL, verificar, ejecutar.
 
         Si `geo_ctx` resolvió un territorio, agregamos al prompt una pista
         explícita con el código DIVIPOLA para que el LLM use ese filtro
@@ -721,6 +807,12 @@ class Analyzer:
             log.warning("Schema vacío para %s; no se puede generar SoQL.", top.id)
             return None
 
+        # Columnas con tipo semántico (ADR-022 Fase 1): fuente de verdad
+        # `dataset_columns_curated`; si el dataset no está curado, se clasifica
+        # al vuelo desde la Metadata API. Las consume el verificador de 3 capas
+        # (Fase 2) y la degradación a template determinista (Fase 4).
+        schema["curated_columns"] = load_curated_columns(top.id, schema["columns"])
+
         col_names = {
             (c.get("field_name") or c.get("fieldName") or c.get("name") or "").lower()
             for c in schema["columns"]
@@ -736,16 +828,45 @@ class Analyzer:
                     geo_ctx.comparison_mode,
                     templated_soql,
                 )
-                try:
-                    rows = await self.soda.query(
-                        dataset_id=top.id, soql_query=templated_soql
-                    )
-                    return templated_soql, rows[:50]
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "SoQL determinista falló (%s): %s — caigo a query_gen LLM",
-                        templated_soql,
-                        exc,
+                # La plantilla garantiza SQL bien formado, NO que el dataset sea el
+                # correcto ni que responda la pregunta (ej. retrieval eligió DIVIPOLA
+                # para una pregunta de contratos). Por eso NO se auto-confía: pasa por
+                # el verificador semántico igual que el camino generativo. Si no
+                # verifica (ej. falta el filtro geo), se cae al generativo/refusal.
+                cmp_constraints = extract_constraints(
+                    question,
+                    has_geo_filter=bool(
+                        geo_ctx and (geo_ctx.dpto_code or geo_ctx.mpio_code)
+                    ),
+                )
+                cmp_curated = schema.get("curated_columns", [])
+                cmp_vr = verify_static(
+                    templated_soql, valid_cols=col_names,
+                    curated_columns=cmp_curated, constraints=cmp_constraints,
+                )
+                if cmp_vr.ok:
+                    try:
+                        rows = await self.soda.query(
+                            dataset_id=top.id, soql_query=templated_soql
+                        )
+                        return SoqlOutcome(
+                            soql=templated_soql,
+                            rows=rows[:50],
+                            verified=True,
+                            fallback="template",
+                            constraints=cmp_constraints,
+                            curated_columns=cmp_curated,
+                            columns_used=sorted(cmp_vr.columns_referenced),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning(
+                            "SoQL determinista falló (%s): %s — caigo a query_gen LLM",
+                            templated_soql, exc,
+                        )
+                else:
+                    log.info(
+                        "Plantilla comparativa NO verifica [%s]: %s — caigo a generativo",
+                        cmp_vr.layer_failed, templated_soql,
                     )
 
         # --- (2) Fallback: query_gen LLM con hints de geo si aplican ---
@@ -814,14 +935,146 @@ class Analyzer:
             log.info("SoQL fallback vacío para %s; usando narrativa de metadata.", top.id)
             return None
 
+        # --- Bucle de verificación + reparación (ADR-022 Fase 2-3) ---
+        # Verifica que el SoQL responde la pregunta (capa 1 sintaxis + capa 3
+        # restricciones semánticas) y, si no, lo repara de forma dirigida (sin
+        # regenerar desde cero) hasta `_max_query_repairs` veces.
+        curated = schema.get("curated_columns", [])
+        constraints = extract_constraints(
+            question,
+            has_geo_filter=bool(geo_ctx and (geo_ctx.dpto_code or geo_ctx.mpio_code)),
+        )
+        verified = False
+        repairs = 0
+        layer_failed: str | None = None
+        columns_used: list[str] = []
+        for attempt in range(self._max_query_repairs + 1):
+            vr = verify_static(
+                soql, valid_cols=col_names, curated_columns=curated,
+                constraints=constraints,
+            )
+            columns_used = sorted(vr.columns_referenced)
+            if vr.ok:
+                verified = True
+                break
+            layer_failed = vr.layer_failed
+            if attempt >= self._max_query_repairs:
+                break
+            try:
+                repaired = await self.query_gen.repair(
+                    question_for_gen, schema, soql, vr.error_message
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Reparación LLM falló (%s): %s", top.id, exc)
+                break
+            if not repaired or repaired == soql or repaired == "SELECT * LIMIT 1":
+                break
+            soql = repaired
+            repairs += 1
+
+        # Capa 2 (ejecución barata, LIMIT 0) solo si pasó la estática: detecta
+        # SoQL semánticamente OK pero que Socrata rechaza, y permite una reparación.
+        if verified:
+            ev = await verify_execution(soql, soda_client=self.soda, dataset_id=top.id)
+            if not ev.ok and repairs < self._max_query_repairs:
+                layer_failed = ev.layer_failed
+                try:
+                    repaired = await self.query_gen.repair(
+                        question_for_gen, schema, soql, ev.error_message
+                    )
+                    if repaired and repaired != soql:
+                        soql = repaired
+                        repairs += 1
+                        rv = verify_static(
+                            soql, valid_cols=col_names, curated_columns=curated,
+                            constraints=constraints,
+                        )
+                        columns_used = sorted(rv.columns_referenced)
+                        if rv.ok:
+                            ev2 = await verify_execution(
+                                soql, soda_client=self.soda, dataset_id=top.id
+                            )
+                            verified = ev2.ok
+                            layer_failed = None if ev2.ok else ev2.layer_failed
+                        else:
+                            verified = False
+                            layer_failed = rv.layer_failed
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("Reparación post-ejecución falló (%s): %s", top.id, exc)
+                    verified = False
+            elif not ev.ok:
+                verified = False
+                layer_failed = ev.layer_failed
+
+        fallback: str | None = None
+        if not verified:
+            # (a) Degradación a template determinista (ADR-022 Fase 4): correcto por
+            # construcción si la pregunta encaja en una de las 5 formas TIPO. NO se
+            # degrada si la pregunta exige filtro geográfico — los templates no
+            # filtran por valor y devolverían el total nacional como si fuera el
+            # territorio (reintroduciría el bug de alcance equivocado).
+            if constraints.tipo and not constraints.requires_geo_filter:
+                built = build_soql(constraints.tipo, curated)
+                if not built.error and built.soql:
+                    log.info(
+                        "Degradación a template TIPO=%s (%s): %s",
+                        constraints.tipo, top.id, built.soql,
+                    )
+                    soql = built.soql
+                    columns_used = list(built.columns_used)
+                    verified = True
+                    fallback = "template"
+                    layer_failed = None
+
+        if not verified:
+            # (b) No verificable ni degradable → "precisión sobre cobertura":
+            # rehusar afirmar una cifra dudosa cuando la consulta está rota
+            # (sintaxis/ejecución) o cuando el dataset está curado (alta confianza
+            # en los tipos). Si la falla es semántica sobre columnas SOLO inferidas
+            # (sin curación), ser conservador y ejecutar marcando verified=False.
+            authoritative = any(c.get("source") == "curated" for c in curated)
+            should_refuse = self._refuse_unverified and (
+                layer_failed in ("syntax", "execution") or authoritative
+            )
+            if should_refuse:
+                log.warning(
+                    "Rehúso por consulta no verificable [%s] %s", layer_failed, top.id
+                )
+                return SoqlOutcome(
+                    soql=soql,
+                    rows=[],
+                    verified=False,
+                    repairs=repairs,
+                    layer_failed=layer_failed,
+                    refused=True,
+                    refusal_reason="unverifiable",
+                    columns_used=columns_used,
+                    constraints=constraints,
+                    curated_columns=curated,
+                )
+            log.warning(
+                "SoQL NO verificado [%s] %s tras %d reparación(es): %s — ejecuto "
+                "(curación inferida, refusal conservador)",
+                layer_failed, top.id, repairs, soql,
+            )
+
         try:
             rows = await self.soda.query(dataset_id=top.id, soql_query=soql)
         except Exception as exc:  # noqa: BLE001
             log.warning("SodaClient.query falló (%s): %s", soql, exc)
             return None
 
-        # Cap rows para no inflar narrativa.
-        return soql, rows[:50]
+        return SoqlOutcome(
+            soql=soql,
+            rows=rows[:50],
+            verified=verified,
+            repairs=repairs,
+            layer_failed=None if verified else layer_failed,
+            fallback=fallback,
+            columns_used=columns_used,
+            constraints=constraints,
+            curated_columns=curated,
+        )
 
     # ------------------------------------------------------------
     # Narrativas constreñidas (mitigación 1)

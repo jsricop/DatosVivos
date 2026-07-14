@@ -77,10 +77,10 @@ def test_get_chips_devuelve_4_listas():
         assert res.status_code == 200
         data = res.json()
         assert {"tema", "tipo", "territorio", "entidad"} <= set(data.keys())
-        # TIPO siempre 5 hardcoded
-        assert len(data["tipo"]) == 5
+        # TIPO siempre 6 hardcoded (Total entró el 2026-07-13)
+        assert len(data["tipo"]) == 6
         tipo_labels = {o["label"] for o in data["tipo"]}
-        assert {"Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"} == tipo_labels
+        assert {"Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"} == tipo_labels
         # TEMA vino de la query mockeada
         assert data["tema"][0]["label"] == "Salud y Protección Social"
         # TERRITORIO incluye Nacional + macro + dptos (≥33)
@@ -123,7 +123,8 @@ def test_query_chips_subset_grande_sin_tipo_no_elige():
         assert data["total_in_subset"] == 50
         assert data["chosen_dataset_id"] is None
         assert data["suggested_chips"] is not None
-        assert "marcá" in (data["message"] or "").lower()
+        # Español Colombia (BRAND §1.3): "marca", sin voseo.
+        assert "marca otro chip" in (data["message"] or "").lower()
 
 
 def test_query_chips_con_tipo_marca_chosen():
@@ -134,7 +135,9 @@ def test_query_chips_con_tipo_marca_chosen():
          "entity_raw": "MinSalud", "category": "Salud y Protección Social",
          "row_count": 1000, "view_count": 50000, "last_updated": None,
          "url": None, "api_url": None,
-         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": []}
+         "jurisdiccion_nivel": "nacional", "jurisdiccion_geo_codes": [],
+         # el chosen exige candidato ejecutable (2026-07-11)
+         "source_type": "socrata", "federated_status": None}
     ]
     conn, _ = _mock_conn_with_responses(count_row, candidates)
     with patch("api.routes.chips._connect", return_value=conn):

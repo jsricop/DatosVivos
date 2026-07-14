@@ -53,7 +53,7 @@ export function ChipGroup({
   }
 
   return (
-    <fieldset className="border border-hairline rounded-[var(--radius-1)] bg-bg-elev/60 px-5 pt-4 pb-5 m-0">
+    <fieldset className="border border-hairline rounded-[var(--radius-2)] bg-bg-elev/60 px-5 pt-4 pb-5 m-0">
       <legend className="text-kicker px-1.5">
         {KICKER_BY_AXIS[axis]}
       </legend>

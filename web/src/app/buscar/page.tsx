@@ -2,19 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 
+import { AdvancedQueryBuilder } from "@/components/AdvancedQueryBuilder";
 import { ChipsResultView } from "@/components/ChipsResultView";
 import { HeroSearch } from "@/components/HeroSearch";
 import { ResultStream } from "@/components/ResultStream";
+import { SearchPanel } from "@/components/SearchPanel";
+import { fetchChipsLists, fetchPopular } from "@/lib/api";
+import type { Axis } from "@/components/ChipGroup";
 
 type SearchPageProps = {
   searchParams: Promise<{
     q?: string;
+    /** Pregunta NL original cuando el mapper la convirtió a chips. */
+    pregunta?: string;
     tema?: string | string[];
     tipo?: string | string[];
     territorio?: string | string[];
     entidad?: string | string[];
     subtag?: string | string[];
     refinador?: string;
+    hint?: string;
+    /** Filtros de valor sobre el dataset elegido: "col:valor" (ADR-024). */
+    filtro?: string | string[];
   }>;
 };
 
@@ -22,9 +31,7 @@ export async function generateMetadata({
   searchParams,
 }: SearchPageProps): Promise<Metadata> {
   const params = await searchParams;
-  const q = (params.q ?? "").trim();
-  // No indexar resultados dinámicos: cada combinación de query parameters
-  // generaría una URL distinta que no aporta valor SEO único.
+  const q = (params.q ?? params.pregunta ?? "").trim();
   return {
     title: q ? `${q.slice(0, 60)} · Consulta` : "Buscar",
     description: q
@@ -52,97 +59,166 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const hasChips =
     Object.values(filters).some((v) => v.length > 0) || subtags.length > 0;
 
-  // Modo chips: chips marcados sin texto libre — flujo determinista
-  // (Fase 1.1 del audit top-down).
+  // Modo chips: filtros marcados sin texto libre — flujo determinista.
   if (!q && hasChips) {
+    const pregunta = (params.pregunta ?? "").trim();
+    // Etiquetas legibles para los chips activos: el TERRITORIO viaja como
+    // código DIVIPOLA ("15") y la ENTIDAD como id — el ciudadano debe ver
+    // "Boyacá", no el código (2026-07-13).
+    const chipsLists = await fetchChipsLists();
+    const labels: Record<string, Record<string, string>> = {
+      territorio: Object.fromEntries(
+        chipsLists.territorio.map((t) => [t.value, t.label]),
+      ),
+      entidad: Object.fromEntries(
+        chipsLists.entidad.map((e) => [e.value, e.label]),
+      ),
+    };
     return (
-      <div className="container-narrow flex flex-col gap-5 py-6">
-        <header className="flex flex-col gap-2 pb-3 hairline-bottom">
-          <div className="flex justify-between gap-4 items-baseline">
-            <span className="text-kicker">Búsqueda por filtros</span>
-            <Link
-              href="/"
-              className="font-mono text-caption text-ink-2 focus-ring"
-            >
-              ← volver al inicio
-            </Link>
-          </div>
-          <ActiveFilters filters={filters} />
+      <div className="container-narrow flex flex-col gap-6 py-8">
+        <header className="flex flex-col gap-4 pb-2">
+          <Link href="/" className="font-mono text-caption text-ink-2 focus-ring">
+            ← Volver al inicio
+          </Link>
+          {pregunta ? <h1 className="text-h2 m-0 text-ink">{pregunta}</h1> : null}
+          {/* Buscador abierto arriba: refinar o preguntar otra cosa. */}
+          <HeroSearch initialValue={pregunta} size="compact" />
+          <ActiveFilters filters={filters} labels={labels} />
         </header>
 
-        <Suspense fallback={<p>Procesando…</p>}>
+        <Suspense fallback={<LoadingNote />}>
           <ChipsResultView
             filters={filters}
             subtags={subtags}
             refinador={refinador || undefined}
+            hint={params.hint || undefined}
+            initialValueFilters={parseValueFilters(params.filtro)}
+            pregunta={pregunta || undefined}
           />
         </Suspense>
-
-        <section aria-label="Modo libre (avanzado)" className="pt-6 hairline-top">
-          <details>
-            <summary className="cursor-pointer font-mono text-caption text-ink-2 hover:text-ink focus-ring">
-              Modo libre (avanzado) — preguntar con texto libre
-            </summary>
-            <div className="mt-4">
-              <HeroSearch size="compact" />
-            </div>
-          </details>
-        </section>
       </div>
     );
   }
 
-  if (!q) return <EmptyState />;
+  if (!q) {
+    // Estado vacío = la puerta del buscador (ADR-023): panel NL + voz +
+    // ejemplos, exploración por sector, populares y constructor avanzado.
+    const [chipsLists, popular] = await Promise.all([
+      fetchChipsLists(),
+      fetchPopular(5),
+    ]);
+    return <EmptyState chipsLists={chipsLists} popular={popular} />;
+  }
 
   const intent = Array.isArray(filters.tipo) ? filters.tipo[0] : filters.tipo;
   const intentLabel = intent ? INTENT_LABEL[intent] : null;
 
   return (
-    <div className="container-narrow flex flex-col gap-8 py-8">
-      <header className="flex flex-col gap-3 pb-4 hairline-bottom">
-        <div className="flex justify-between gap-4">
+    <div className="container-narrow flex flex-col gap-6 py-8">
+      <header className="flex flex-col gap-4 pb-2">
+        <div className="flex justify-between gap-4 items-baseline">
           <span className="text-kicker">
-            Pregunta
-            {intentLabel ? ` · ${intentLabel}` : null}
+            Pregunta{intentLabel ? ` · ${intentLabel}` : null}
           </span>
-          <Link
-            href="/"
-            className="font-mono text-caption text-ink-2 focus-ring"
-          >
-            ← volver al inicio
+          <Link href="/" className="font-mono text-caption text-ink-2 focus-ring">
+            ← Volver al inicio
           </Link>
         </div>
-        <h1 className="font-serif text-h1 m-0 text-ink">{q}</h1>
+        <h1 className="text-h2 m-0 text-ink">{q}</h1>
+        {/* Buscador abierto arriba: editar o preguntar otra cosa. */}
+        <HeroSearch initialValue={q} size="compact" />
         <ActiveFilters filters={filters} />
       </header>
 
-      <Suspense fallback={<p>Procesando…</p>}>
+      <Suspense fallback={<LoadingNote />}>
         <ResultStream question={q} filters={filters} />
       </Suspense>
-
-      <section aria-label="Editar consulta" className="pt-6 hairline-top">
-        <span className="text-kicker block mb-3">Editar consulta</span>
-        <HeroSearch initialValue={q} size="compact" />
-      </section>
     </div>
   );
 }
 
-function EmptyState() {
+type EmptyStateProps = {
+  chipsLists: Awaited<ReturnType<typeof fetchChipsLists>>;
+  popular: Awaited<ReturnType<typeof fetchPopular>>;
+};
+
+function EmptyState({ chipsLists, popular }: EmptyStateProps) {
+  const chips: Record<Axis, typeof chipsLists.tema> = {
+    tema: chipsLists.tema,
+    tipo: chipsLists.tipo,
+    territorio: chipsLists.territorio,
+    entidad: chipsLists.entidad,
+  };
+
   return (
-    <div className="container-narrow py-16 flex flex-col gap-4 max-w-[60ch]">
-      <span className="text-kicker">Sin consulta</span>
-      <h1 className="font-serif text-h2 m-0">Empieza por una pregunta</h1>
-      <p className="font-sans text-body-lg text-ink-2 leading-relaxed">
-        Pasa una pregunta en lenguaje natural sobre los datos públicos de
-        Colombia. Por ejemplo: ¿Cuántos colegios públicos hay en Boyacá?
+    <div className="container-narrow py-12 flex flex-col gap-10">
+      <header className="flex flex-col gap-4">
+        <span className="text-kicker">Buscador</span>
+        <h1 className="text-h2 m-0">Empieza por una pregunta</h1>
+        <p className="m-0 max-w-[60ch] font-sans text-body-lg text-ink-2 leading-relaxed">
+          Escribe una pregunta en lenguaje natural sobre los datos públicos de
+          Colombia y recibe la respuesta con su fuente original.
+        </p>
+      </header>
+
+      <SearchPanel />
+
+      {popular.length > 0 ? (
+        <section className="hairline-top pt-8">
+          <h2 className="text-kicker mb-4">Lo más consultado esta semana</h2>
+          <ol className="list-none m-0 p-0 grid gap-3">
+            {popular.map((p, i) => (
+              <li
+                key={`${p.question}-${i}`}
+                className="grid grid-cols-[auto_1fr_auto] gap-4 items-baseline py-2 hairline-bottom"
+              >
+                <span className="font-mono [font-variant-numeric:tabular-nums] text-body text-accent font-medium">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <Link
+                  href={`/buscar?q=${encodeURIComponent(p.question)}`}
+                  className="font-sans text-body-lg font-semibold text-ink focus-ring"
+                >
+                  {p.question}
+                </Link>
+                <span className="font-mono text-[length:var(--type-kicker)] text-ink-muted [font-variant-numeric:tabular-nums]">
+                  {p.count} consultas
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {/* Constructor determinista para power users, colapsado al final. */}
+      <AdvancedQueryBuilder chips={chips} />
+
+      {/* Detalle técnico: el mismo motor, expuesto como servidor MCP. */}
+      <p className="m-0 font-mono text-caption text-ink-muted">
+        ¿Eres desarrollador o usas un agente de IA?{" "}
+        <Link href="/mcp" className="text-ink-2 focus-ring">
+          Usar el MCP de DatosVivos →
+        </Link>
       </p>
-      <HeroSearch size="display" />
     </div>
   );
 }
 
-function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
+const AXIS_LABEL: Record<string, string> = {
+  tema: "Tema",
+  tipo: "Tipo",
+  territorio: "Territorio",
+  entidad: "Entidad",
+};
+
+function ActiveFilters({
+  filters,
+  labels,
+}: {
+  filters: Record<string, string[]>;
+  /** Mapa opcional eje → (valor → etiqueta legible), ej. "15" → "Boyacá". */
+  labels?: Record<string, Record<string, string>>;
+}) {
   const chips = Object.entries(filters).flatMap(([axis, values]) =>
     values.map((v) => ({ axis, value: v })),
   );
@@ -152,12 +228,28 @@ function ActiveFilters({ filters }: { filters: Record<string, string[]> }) {
       {chips.map(({ axis, value }) => (
         <li
           key={`${axis}-${value}`}
-          className="border border-hairline px-2.5 py-1 rounded-[var(--radius-1)] font-mono text-caption text-ink-2"
+          className="inline-flex items-center gap-1 rounded-[var(--radius-3)] border border-hairline bg-bg-elev px-3 py-1 font-mono text-caption text-ink-2"
         >
-          <span className="text-ink-muted">{axis} ·</span> {value}
+          <span className="uppercase tracking-wide text-ink-muted">
+            {AXIS_LABEL[axis] ?? axis}
+          </span>
+          <span className="text-hairline">·</span>{" "}
+          {labels?.[axis]?.[value] ?? value}
         </li>
       ))}
     </ul>
+  );
+}
+
+function LoadingNote() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="surface-card animate-pulse p-4 font-mono text-caption text-ink-2"
+    >
+      Procesando…
+    </div>
   );
 }
 
@@ -176,4 +268,17 @@ function normalizeFilters(
 function normalizeSubtags(raw: string | string[] | undefined): string[] {
   if (!raw) return [];
   return Array.isArray(raw) ? raw : [raw];
+}
+
+/** "?filtro=sector:OFICIAL" → [{col:"sector", value:"OFICIAL"}]. El valor
+ * puede contener ':' — solo el primer separador parte. */
+function parseValueFilters(
+  raw: string | string[] | undefined,
+): Array<{ col: string; value: string }> {
+  const items = !raw ? [] : Array.isArray(raw) ? raw : [raw];
+  return items.flatMap((s) => {
+    const i = s.indexOf(":");
+    if (i <= 0 || i === s.length - 1) return [];
+    return [{ col: s.slice(0, i), value: s.slice(i + 1) }];
+  });
 }

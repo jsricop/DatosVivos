@@ -101,6 +101,10 @@ def log_query(
     dashboard_emitted: bool | None = None,
     failure_type: str | None = None,
     user_feedback: str | None = None,
+    # --- Verificación de consulta (migration 026, ADR-022 Fase 3). ---
+    verification_repairs: int | None = None,
+    verification_passed: bool | None = None,
+    verification_layer_failed: str | None = None,
 ) -> None:
     """Appendea un registro de consulta a CSV y (si está activo) Postgres.
 
@@ -152,10 +156,12 @@ def log_query(
                     timestamp_iso, question, intent, datasets_used,
                     soql_executed, rows_count, censored_count, elapsed_s, had_statistics,
                     dataset_top1_id, dataset_top1_score, geo_resolved,
-                    geo_attribution_ok, dashboard_emitted, failure_type, user_feedback
+                    geo_attribution_ok, dashboard_emitted, failure_type, user_feedback,
+                    verification_repairs, verification_passed, verification_layer_failed
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s)
                 ON CONFLICT (timestamp_iso, question) DO NOTHING
                 RETURNING id
                 """,
@@ -176,6 +182,9 @@ def log_query(
                     dashboard_emitted,
                     failure_type,
                     user_feedback,
+                    verification_repairs,
+                    verification_passed,
+                    verification_layer_failed,
                 ),
             )
             row = cur.fetchone()

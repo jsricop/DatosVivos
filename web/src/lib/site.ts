@@ -13,7 +13,7 @@ export const SITE_URL = (
 ).replace(/\/$/, "");
 
 export const SITE_NAME = "DatosVivos";
-export const SITE_TAGLINE = "Datos del Estado, en tus palabras.";
+export const SITE_TAGLINE = "El panorama de los datos abiertos de Colombia.";
 export const SITE_DESCRIPTION =
-  "Agente civil de datos abiertos del Estado colombiano. Pregunta en lenguaje natural sobre cualquier dato público y recibe la respuesta con la fuente original a un click.";
+  "El panorama de los datos abiertos de Colombia: cifras en vivo del catálogo que integra datos.gov.co y los portales territoriales, tablero interactivo por sector y entidad, y consultas en lenguaje natural con fuente verificable.";
 export const SITE_LOCALE = "es_CO";

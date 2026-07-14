@@ -27,13 +27,17 @@ from mcp.server.fastmcp.exceptions import ToolError
 # ============================================================
 # Datasets reales que comparten `cod_dpto`:
 # - gdxc-w37w: DIVIPOLA municipios          (1.122 filas)
-# - vafm-j2df: DIVIPOLA municipios geoloc.  (1.122 filas)
+# - emp6-672w: Comunas y Barrios Valledupar (310 filas)
 # - t7kp-7a7c: DIVIPOLA departamentos geo.  (~32 filas)
 # - vcjz-niiq: DIVIPOLA departamentos (usa `codigo_departamento`, distinta convención)
+#
+# OJO: estos tests son @live y el origen puede BORRAR datasets — pasó con
+# vafm-j2df (DIVIPOLA municipios geoloc.), eliminado por el DANE y
+# reemplazado aquí por emp6-672w el 2026-07-12.
 # ============================================================
 
 DS_MUNI = "gdxc-w37w"
-DS_MUNI_GEO = "vafm-j2df"
+DS_MUNI_GEO = "emp6-672w"
 DS_DEPT_GEO = "t7kp-7a7c"
 DS_DEPT_DIFF_NAME = "vcjz-niiq"  # usa `codigo_departamento`, NO `cod_dpto`
 JOIN = "cod_dpto"

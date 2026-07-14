@@ -25,6 +25,7 @@ import type {
   MapBlock,
 } from "@/lib/schemas/dashboard";
 import type { Row } from "@/lib/dashboard-data";
+import { CheckIcon } from "@/components/icons";
 
 // Cargas dinámicas con SSR off — mismo patrón que BlockRenderer.tsx para
 // los charts pesados.
@@ -64,14 +65,14 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
     return (
       <article
         role="status"
-        className="border border-amber-300 bg-amber-50 p-4 flex flex-col gap-2"
+        className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2"
       >
-        <span className="text-kicker text-amber-900">
+        <span className="text-kicker text-ink">
           Este dataset no soporta {tipo}
         </span>
         <p className="font-sans text-body text-ink-2 m-0">{error}</p>
         <p className="font-sans text-caption text-ink-muted m-0">
-          Probá <em>Cuántos</em> o <em>Comparar</em> — funcionan sobre cualquier
+          Prueba <em>Cuántos</em> o <em>Comparar</em> — funcionan sobre cualquier
           dataset con datos tabulares.
         </p>
       </article>
@@ -84,11 +85,11 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
     return (
       <article
         role="status"
-        className="border border-hairline-strong bg-bg p-4 flex flex-col gap-2"
+        className="surface-card p-4 flex flex-col gap-2"
       >
         <span className="text-kicker">Sin datos</span>
         <p className="font-sans text-body text-ink-2 m-0">
-          El dataset existe pero no devolvió filas para esta combinación. Probá
+          El dataset existe pero no devolvió filas para esta combinación. Prueba
           quitar un chip o cambiar de TIPO.
         </p>
       </article>
@@ -105,7 +106,40 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       value_from: "n",
       format: "number_es_co",
     };
-    return <KPICardBlock block={block} rows={rowsTyped} stats={null} />;
+    // Unidad junto a la cifra: "390.903" a secas se leía como lo que no era
+    // (¿instituciones? eran estudiantes). Inferida de la metadata del
+    // dataset; si no hay, "registros" — siempre honesto.
+    return (
+      <div className="flex flex-col gap-2">
+        <KPICardBlock
+          block={block}
+          rows={rowsTyped}
+          stats={null}
+          unit={response.row_unit ?? "registros"}
+        />
+        <VerifiedNote countNote />
+      </div>
+    );
+  }
+
+  if (tipo === "Total") {
+    const block: KPIBlock = {
+      type: "kpi",
+      title: `Suma total · ${datasetName}`,
+      value_from: "total",
+      format: "number_es_co",
+    };
+    return (
+      <div className="flex flex-col gap-2">
+        <KPICardBlock block={block} rows={rowsTyped} stats={null} />
+        {columns_used[0] ? (
+          <span className="font-sans text-caption text-ink-muted">
+            Suma de la columna «{columns_used[0]}» sobre todas las filas.
+          </span>
+        ) : null}
+        <VerifiedNote />
+      </div>
+    );
   }
 
   if (tipo === "Comparar" || tipo === "Ranking") {
@@ -119,7 +153,12 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       x_column: "categoria",
       y_column: yCol,
     };
-    return <BarChartBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <BarChartBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   if (tipo === "Tendencia") {
@@ -129,10 +168,40 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       x_column: "periodo",
       y_column: "n",
     };
-    return <LineChartBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <LineChartBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   if (tipo === "Mapa") {
+    // El choropleth casa por CÓDIGO DIVIPOLA contra el GeoJSON. Muchos
+    // datasets solo traen NOMBRES ("Bogotá D.C.") — pintarían un mapa en
+    // blanco. Si la mayoría de regiones no son códigos numéricos, degradamos
+    // a barras: misma cifra verificada, artefacto legible.
+    const numericas = rowsTyped.filter((r) =>
+      /^\d{1,5}$/.test(String(r["region"] ?? "").trim()),
+    ).length;
+    if (rowsTyped.length > 0 && numericas < rowsTyped.length / 2) {
+      const block: ChartBlock = {
+        type: "bar",
+        title: `Por región — ${datasetName}`,
+        x_column: "region",
+        y_column: "n",
+      };
+      return (
+        <div className="flex flex-col gap-2">
+          <BarChartBlock block={block} rows={rowsTyped.slice(0, 10)} />
+          <p className="m-0 font-sans text-caption text-ink-muted">
+            Este dataset registra la región por nombre (sin código DIVIPOLA),
+            así que se muestra como barras en lugar de mapa.
+          </p>
+          <VerifiedNote />
+        </div>
+      );
+    }
     const block: MapBlock = {
       type: "choropleth",
       title: `Mapa — ${datasetName}`,
@@ -141,10 +210,35 @@ export function ChipsResultPanel({ response, datasetName }: Props) {
       metric_column: "n",
       legend_format: "number_es_co",
     };
-    return <ChoroplethMapBlock block={block} rows={rowsTyped} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <ChoroplethMapBlock block={block} rows={rowsTyped} />
+        <VerifiedNote />
+      </div>
+    );
   }
 
   // Type guard exhaustivo: TIPO desconocido (no debería pasar — el backend
   // valida el enum).
   return null;
+}
+
+/**
+ * Nota de verificación bajo la cifra/visualización determinista. Refuerza el
+ * pilar de Verificabilidad: la cifra sale del SoQL real, no de IA.
+ * `countNote` añade la advertencia COUNT(*)≠suma (ADR-017).
+ */
+function VerifiedNote({ countNote = false }: { countNote?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex items-center gap-1.5 font-sans text-caption font-semibold text-ok">
+        <CheckIcon /> Cifra verificada — sale del dataset, no de IA
+      </span>
+      {countNote ? (
+        <span className="font-sans text-caption text-ink-muted">
+          ⓘ Cuenta registros del dataset, no suma valores.
+        </span>
+      ) : null}
+    </div>
+  );
 }

@@ -8,14 +8,14 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "DatosVivos — Datos del Estado, en tus palabras",
+    name: "DatosVivos — El panorama de los datos abiertos de Colombia",
     short_name: "DatosVivos",
     description:
-      "Agente civil de datos abiertos del Estado colombiano. Pregunta en lenguaje natural sobre cualquier dato público y recibe la respuesta con la fuente original a un click.",
+      "El panorama de los datos abiertos de Colombia: cifras en vivo del catálogo que integra datos.gov.co y los portales territoriales, tablero interactivo por sector y entidad, y consultas en lenguaje natural con fuente verificable.",
     start_url: "/",
     display: "standalone",
-    background_color: "#F3EFE3",
-    theme_color: "#F3EFE3",
+    background_color: "#FFFFFF",
+    theme_color: "#004884",
     orientation: "any",
     lang: "es-CO",
     dir: "ltr",

@@ -14,8 +14,10 @@ para que el eval harness y dashboards midan adopción.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 from typing import Any
 
 import httpx
@@ -24,11 +26,18 @@ from fastapi import APIRouter, HTTPException, Query
 from psycopg.rows import dict_row
 
 from ai_engine.chips_telemetry import emit_event
-from ai_engine.duckdb_executor import describe_csv, execute_csv
+from ai_engine.duckdb_executor import (
+    _safe_ident_dbq,
+    describe_csv,
+    describe_parquet,
+    execute_csv,
+    execute_parquet,
+)
 from ai_engine.duckdb_templates import build_duckdb_sql
 from ai_engine.llm_backend import get_backend, model_for_task
 from ai_engine.nl_to_chips import map_nl_to_chips
 from ai_engine.soql_templates import build_soql
+from ai_engine.vocabulario_ciudadano import expandir as vocab_expandir
 from api.models.schemas import (
     ChipOption,
     ChipsCandidateDataset,
@@ -42,6 +51,10 @@ from api.models.schemas import (
     ChipsQueryResponse,
     ChipsRefineResponse,
     ChipsResponse,
+    DatasetFiltersResponse,
+    FilterColumn,
+    FilterOption,
+    FilterSpec,
 )
 from mcp_server.socrata.soda_client import SodaClient
 
@@ -51,6 +64,21 @@ from mcp_server.socrata.soda_client import SodaClient
 _soda_client = SodaClient(timeout=60.0)
 
 router = APIRouter()
+
+# Índice vectorial para el re-ranking semántico de candidatos (lazy: el
+# modelo e5 pesa ~280 MB y solo se carga si algún request lo necesita).
+# Umbral más permisivo que el del camino generativo: aquí NO decide si hay
+# respuesta — solo reordena un subset ya filtrado por chips.
+_vindex = None
+
+
+def _get_vindex():
+    global _vindex
+    if _vindex is None:
+        from ai_engine.vector_index import VectorIndex
+
+        _vindex = VectorIndex(min_score=float(os.getenv("CHIPS_RERANK_MIN_SCORE", "0.78")))
+    return _vindex
 log = logging.getLogger(__name__)
 
 
@@ -65,6 +93,8 @@ log = logging.getLogger(__name__)
 _TIPO_OPTIONS = [
     ChipOption(value="Cuántos", label="Cuántos",
                hint="Conteo simple: cuántos X hay"),
+    ChipOption(value="Total", label="Total",
+               hint="Suma del valor principal: cuánto vale/cuesta en total"),
     ChipOption(value="Comparar", label="Comparar",
                hint="Diferencias entre dos o más territorios/categorías"),
     ChipOption(value="Ranking", label="Ranking",
@@ -156,7 +186,7 @@ def _connect():
 async def list_chips() -> ChipsResponse:
     """Devuelve las 4 listas de chips construidas dinámicamente desde la DB.
 
-    - TEMA: top-12 categorías (`datasets.category`) por count.
+    - TEMA: todas las categorías canónicas (`datasets.category`) por count.
     - TIPO: 5 fijos (UI determina forma de respuesta).
     - TERRITORIO: Nacional + 32 dptos + 5 macroregiones (ordenados).
     - ENTIDAD: top-20 entities por uso real (telemetría dataset_top1_id).
@@ -174,7 +204,13 @@ async def list_chips() -> ChipsResponse:
                   AND (quality_flag IS NULL OR quality_flag = 'ok')
                 GROUP BY category
                 ORDER BY c DESC
-                LIMIT 12
+                -- 30 cubre el vocabulario completo (25 canónicas tras la
+                -- consolidación de 2026-07-12 + geospatial). El LIMIT 12
+                -- original era para el vocabulario sucio de 60+ variantes;
+                -- dejaba fuera Agricultura y Seguridad y Defensa, y el
+                -- mapper NL no podía elegirlas aunque la pregunta fuera
+                -- inequívoca ("producción agrícola" → caía en Comercio).
+                LIMIT 30
                 """
             )
             temas = [
@@ -396,68 +432,226 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     if not any([req.tema, req.tipo, req.territorio, req.entidad, req.refinador, req.subtags]):
         raise HTTPException(
             status_code=400,
-            detail="Marcá al menos un chip antes de buscar.",
+            detail="Marca al menos un chip antes de buscar.",
         )
 
+    # El refinador NO filtra el subset (2026-07-11): a menudo es la palabra
+    # clave de la pregunta ("estudiantes") inventada o extraída por el mapper,
+    # y como filtro ILIKE literal vaciaba subsets válidos o —peor— al
+    # descartarlo se perdía la semántica y se contaba un dataset arbitrario.
+    # Ahora es un BOOST de ranking en el score: los datasets que lo mencionan
+    # quedan de primeros, y si nada lo menciona el orden normal se mantiene.
     where_sql, params = _build_chips_where(
         tema=req.tema,
         entidad=req.entidad,
         territorio=req.territorio,
         subtags=req.subtags,
-        refinador=req.refinador,
+        refinador=None,
     )
 
     # Conteo + top-10
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
-            row = cur.fetchone()
-            total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
+    # Texto del boost de ranking (None → el CASE del SQL rinde 0 para todos).
+    refinador_boost = (req.refinador or "").strip() or None
 
-        with conn.cursor() as cur:
-            # Score compuesto (A.2): view_count log-normalizado contra el max
-            # del subset + freshness lineal decay 2 años. Reemplaza ORDER BY
-            # crudo que elegía datasets popular-pero-viejos.
-            #
-            # Estructura CTE:
-            #   subset → todos los datasets que matchean los chips
-            #   stats  → max(view_count) del subset (constante para
-            #            normalización LN dentro del subset)
-            #
-            # max_view se calcula GREATEST(1) para que LN(0)=undefined no
-            # rompa, y NULLIF para que datasets sin view_count no propaguen
-            # NaN. last_updated NULL → freshness = 0.
-            cur.execute(
-                f"""
-                WITH subset AS (
-                  SELECT d.* FROM datasets d WHERE {where_sql}
-                ),
-                stats AS (
-                  SELECT GREATEST(MAX(view_count), 1) AS max_view FROM subset
+    # Diccionario ciudadano↔institucional (transversal, 2026-07-13): las
+    # palabras del ciudadano se complementan con el término OFICIAL con que
+    # los datos las nombran ("colegios"→"establecimientos educativos") de
+    # forma determinista — el prompt del mapper también lo intenta, esto lo
+    # garantiza. Solo mejora el ORDEN: ni filtra ni inventa.
+    refinador_expandido = refinador_boost
+    if refinador_boost:
+        extra = vocab_expandir(refinador_boost)
+        if extra:
+            refinador_expandido = f"{refinador_boost} {extra}"
+
+    # Boost POR PALABRAS, no por frase exacta: "tarifas de energía por
+    # estrato" debe premiar títulos que contengan "tarifas" y "energía"
+    # aunque la frase completa no exista en ningún nombre (con frase exacta
+    # el boost valía 0 y ganaba el dataset más popular del tema — caso
+    # "prestadores de salud" → medicamentos, 2026-07-12). Palabras de ≥4
+    # letras, máximo 5, insensibles a tildes (mismo translate del
+    # clasificador 1712); cada una aporta una fracción igual de 0.5.
+    _norm_sql = "translate(lower({col}), 'áéíóúüñ', 'aeiouun')"
+
+    def _raiz(w: str) -> str:
+        """Raíz insensible a género/número: 'colegios'→'colegi',
+        'oficiales'→'oficial', 'educativos'→'educativ'. Sin esto el boost
+        exigía la forma exacta y 'educativos' no premiaba títulos con
+        'Educativas' (caso Boyacá, 2026-07-13)."""
+        stem = w
+        if stem.endswith("es"):
+            stem = stem[:-2]
+        elif stem.endswith("s"):
+            stem = stem[:-1]
+        if stem.endswith(("o", "a")):
+            stem = stem[:-1]
+        return stem if len(stem) >= 4 else w
+
+    palabras = list(dict.fromkeys(
+        _raiz(w.lower().translate(str.maketrans("áéíóúüñ", "aeiouun")))
+        for w in re.split(r"\W+", refinador_expandido or "")
+        if len(w) >= 4
+    ))[:6]
+    if palabras:
+        frac = round(0.5 / len(palabras), 4)
+        boost_sql = " + ".join(
+            f"CASE WHEN {_norm_sql.format(col='s.name')} LIKE %s"
+            f" OR {_norm_sql.format(col='s.description')} LIKE %s"
+            f" THEN {frac} ELSE 0 END"
+            for _ in palabras
+        )
+        boost_params: list = []
+        for w in palabras:
+            boost_params += [f"%{w}%", f"%{w}%"]
+    else:
+        boost_sql = "0"
+        boost_params = []
+
+    # Preguntas DEPARTAMENTALES prefieren datasets de alcance departamental o
+    # nacional: con territorio='05' el subset incluye datasets de cada
+    # municipio de Antioquia y el top ciego elegía uno ("Instituciones
+    # Educativas de Yondó" para "¿cuántas IE hay en Antioquia?", 2026-07-12).
+    # Es un boost, no un filtro: los municipales siguen como candidatos.
+    # Simétrico para las NACIONALES: "homicidios en Colombia" caía en el
+    # dataset de Cali (43 filas presentadas como cifra nacional, ciclo
+    # ciudadano c13 2026-07-12).
+    es_dpto = bool(req.territorio and re.fullmatch(r"\d{2}", req.territorio))
+    es_nacional = req.territorio == "nacional"
+
+    def _run(where_sql: str, params: list) -> tuple[int, list]:
+        """Conteo + top-10 con score compuesto para un WHERE dado."""
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) AS c FROM datasets d WHERE {where_sql}", params)
+                row = cur.fetchone()
+                total = (row["c"] if row else 0) if isinstance(row, dict) else (row[0] if row else 0)
+
+            with conn.cursor() as cur:
+                # Score compuesto (A.2): view_count log-normalizado contra el max
+                # del subset + freshness lineal decay 2 años. Reemplaza ORDER BY
+                # crudo que elegía datasets popular-pero-viejos.
+                #
+                # Estructura CTE:
+                #   subset → todos los datasets que matchean los chips
+                #   stats  → max(view_count) del subset (constante para
+                #            normalización LN dentro del subset)
+                #
+                # max_view se calcula GREATEST(1) para que LN(0)=undefined no
+                # rompa, y NULLIF para que datasets sin view_count no propaguen
+                # NaN. El COALESCE EXTERNO del término de popularidad es clave:
+                # si TODO el subset es federado sin view_count, max_view=1 →
+                # LN(1)=0 → NULLIF lo vuelve NULL y sin COALESCE el score entero
+                # quedaba NULL para todos (orden degradado a popularidad cruda).
+                cur.execute(
+                    f"""
+                    WITH subset AS (
+                      SELECT d.* FROM datasets d WHERE {where_sql}
+                    ),
+                    stats AS (
+                      SELECT GREATEST(MAX(view_count), 1) AS max_view FROM subset
+                    )
+                    SELECT s.dataset_id, s.name, s.entity_raw,
+                           s.category, s.row_count, s.view_count,
+                           s.rows_updated_at::text AS last_updated,
+                           s.socrata_url AS url, s.api_url,
+                           s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
+                           s.source_type, s.federated_status,
+                           (
+                             COALESCE(
+                               %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
+                                     NULLIF(LN((SELECT max_view FROM stats)), 0)),
+                               0
+                             )
+                             +
+                             %s * GREATEST(0, 1 - LEAST(1,
+                                EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
+                                (%s * 2 * 86400)
+                             ))
+                             +
+                             ({boost_sql})
+                             +
+                             -- Cobertura vs alcance de la pregunta: para una
+                             -- pregunta DEPARTAMENTAL el dataset departamental
+                             -- responde exacto (+0.5); el nacional la contiene
+                             -- pero sobre-cuenta (+0.25); el municipal nunca
+                             -- puede responderla. El +0.3 anterior quedaba
+                             -- ahogado por el rango ~1.2 del re-rank semántico
+                             -- (Sogamoso ganó a Boyacá por 0.11, 2026-07-13).
+                             CASE WHEN %s THEN
+                                  CASE s.jurisdiccion_nivel
+                                       WHEN 'departamental' THEN 0.5
+                                       WHEN 'nacional' THEN 0.25
+                                       ELSE 0 END
+                                  ELSE 0 END
+                             +
+                             CASE WHEN %s AND s.jurisdiccion_nivel = 'nacional'
+                                  THEN 0.5 ELSE 0 END
+                             -
+                             -- Origen MUERTO: el farmeo ya intentó bajarlo y
+                             -- el portal respondió 403/404 (privado o
+                             -- retirado). Sin columnas nuevas: la marca vive
+                             -- en dataset_snapshots. Penaliza, no excluye —
+                             -- la metadata sigue siendo válida como catálogo.
+                             CASE WHEN snap.status = 'failed'
+                                   AND (snap.error ILIKE '%%403%%'
+                                        OR snap.error ILIKE '%%404%%')
+                                  THEN 0.6 ELSE 0 END
+                           ) AS score
+                    FROM subset s
+                    LEFT JOIN dataset_snapshots snap USING (dataset_id)
+                    ORDER BY score DESC NULLS LAST,
+                             s.view_count DESC NULLS LAST,
+                             s.rows_updated_at DESC NULLS LAST
+                    LIMIT 50
+                    """,
+                    params + [
+                        _SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS,
+                    ] + boost_params + [es_dpto, es_nacional],
                 )
-                SELECT s.dataset_id, s.name, s.entity_raw,
-                       s.category, s.row_count, s.view_count,
-                       s.rows_updated_at::text AS last_updated,
-                       s.socrata_url AS url, s.api_url,
-                       s.jurisdiccion_nivel, s.jurisdiccion_geo_codes,
-                       (
-                         %s * (LN(GREATEST(COALESCE(s.view_count, 0), 1)) /
-                               NULLIF(LN((SELECT max_view FROM stats)), 0))
-                         +
-                         %s * GREATEST(0, 1 - LEAST(1,
-                            EXTRACT(EPOCH FROM (NOW() - s.rows_updated_at)) /
-                            (%s * 2 * 86400)
-                         ))
-                       ) AS score
-                FROM subset s
-                ORDER BY score DESC NULLS LAST,
-                         s.view_count DESC NULLS LAST,
-                         s.rows_updated_at DESC NULLS LAST
-                LIMIT 10
-                """,
-                params + [_SCORE_W_VIEW, _SCORE_W_FRESHNESS, _FRESHNESS_HALF_LIFE_DAYS],
-            )
-            rows = cur.fetchall()
+                rows = cur.fetchall()
+        return total, rows
+
+    total, rows = _run(where_sql, params)
+
+    # ---- Re-ranking SEMÁNTICO (ciclo ciudadano 2026-07-12) ----
+    # El score SQL (popularidad + palabras del refinador) no acota
+    # semánticamente: cuando ninguna palabra matchea, gana el dataset más
+    # popular del tema ("¿parques nacionales?" → Lotería de Santander). El
+    # índice vectorial e5 YA rankea por significado en el camino generativo;
+    # aquí re-rankea el top-50 del subset: el chip filtra, el embedding
+    # ordena. Falla silenciosa → queda el orden SQL.
+    aviso_lejania: str | None = None
+    if refinador_boost and rows:
+        try:
+            hits = {
+                h.id: h.score
+                for h in _get_vindex().search(refinador_expandido, k=100)
+            }
+            if not hits:
+                # Honestidad: nada del catálogo se parece semánticamente a lo
+                # pedido. Se responde igual (el más relacionado del tema) pero
+                # SIN fingir que es exactamente lo que se buscó.
+                aviso_lejania = (
+                    f"Ningún dataset del catálogo coincide de cerca con "
+                    f"«{refinador_boost}»; te muestro lo más relacionado del tema."
+                )
+            if hits:
+                s_min, s_max = min(hits.values()), max(hits.values())
+                rango = (s_max - s_min) or 1.0
+
+                def _score_final(r: dict) -> float:
+                    sql_score = float(r.get("score") or 0)
+                    sem = hits.get(r["dataset_id"])
+                    if sem is None:
+                        return sql_score
+                    return sql_score + 1.2 * ((sem - s_min) / rango + 0.25)
+
+                rows = sorted(rows, key=_score_final, reverse=True)
+                for r in rows:
+                    r["score"] = round(_score_final(r), 4)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Re-rank semántico falló (%s) — orden SQL", exc)
+    rows = rows[:10]
 
     candidates = [
         ChipsCandidateDataset(
@@ -482,16 +676,62 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
     msg: str | None = None
     suggested: list[str] | None = None
 
+    if aviso_lejania:
+        msg = aviso_lejania
+
     if req.force_dataset_id:
         chosen = req.force_dataset_id
     elif total == 0:
-        msg = "Ningún dataset coincide con esta combinación de chips. Probá quitar alguno."
+        msg = "Ningún dataset coincide con esta combinación de chips. Prueba quitar alguno."
     elif total <= 10 or req.tipo:
-        # Subset manejable o usuario ya marcó TIPO → ejecutar
-        chosen = candidates[0].dataset_id if candidates else None
+        # Subset manejable o usuario ya marcó TIPO → ejecutar sobre el primer
+        # candidato QUE PUEDA PRODUCIR DATOS. Un federado solo_metadatos
+        # (no_csv) no tiene filas que contar: elegirlo devolvía cifra None
+        # silenciosa (caso real n6k3-wycd, 2026-07-11).
+        ejecutables = [
+            r for r in rows
+            if r.get("source_type") == "socrata" or r.get("federated_status") == "ok"
+        ]
+        # El elegido además debe SOPORTAR el TIPO pedido: Tendencia necesita
+        # una columna fecha y Mapa una geo. Elegir el top ciego producía
+        # errores honestos evitables ("evolución de homicidios" → dataset sin
+        # fecha) cuando el candidato #2 sí podía responder (2026-07-12). Solo
+        # se conoce el esquema curado de los nativos; los federados quedan
+        # como respaldo (su CSV puede tener la columna). Si ninguno soporta
+        # el TIPO, cae al comportamiento anterior (error honesto).
+        necesita = {"Tendencia": "fecha", "Mapa": "geo"}.get(req.tipo or "")
+        if necesita and ejecutables:
+            nativos = [r["dataset_id"] for r in ejecutables
+                       if r.get("source_type") == "socrata"]
+            capaces: set[str] = set()
+            if nativos:
+                with _connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT dataset_id FROM dataset_columns_curated
+                        WHERE dataset_id = ANY(%s) AND semantic_type = %s
+                        """,
+                        (nativos, necesita),
+                    )
+                    capaces = {r["dataset_id"] for r in cur.fetchall()}
+            compatible = next(
+                (r for r in ejecutables if r["dataset_id"] in capaces), None
+            ) or next(
+                (r for r in ejecutables if r.get("source_type") == "federated"),
+                None,
+            )
+            if compatible is not None:
+                ejecutables = [compatible]
+        if ejecutables:
+            chosen = ejecutables[0]["dataset_id"]
+        elif candidates:
+            msg = (
+                "Estos datasets solo son consultables en su portal de origen "
+                "(no exponen tabla de datos). Abre la fuente para verlos."
+            )
     else:
         # Subset grande sin TIPO marcado → sugerir refinar
-        msg = f"Hay {total} datasets que coinciden. Marcá otro chip para verlos más específicos."
+        msg = f"Hay {total} datasets que coinciden. Marca otro chip para verlos más específicos."
         suggested = _suggest_chips(req)
 
     return ChipsQueryResponse(
@@ -511,8 +751,321 @@ async def query_chips(req: ChipsQueryRequest) -> ChipsQueryResponse:
 import time as _time
 
 
+def _merge_categorias_duplicadas(resp: ChipsExecuteResponse) -> ChipsExecuteResponse:
+    """Funde filas de Comparar/Ranking cuya categoría difiere solo en
+    mayúsculas/tildes ("Transporte" + "TRANSPORTE" del SIIF, 2026-07-12).
+
+    El dato de origen viene sucio y el GROUP BY los separa; para el ciudadano
+    son la misma barra. Se queda la etiqueta de la variante con mayor valor y
+    se suman los valores. Solo toca la forma {categoria, n|total}.
+    """
+    if resp.tipo not in ("Comparar", "Ranking") or not resp.rows:
+        return resp
+    metrica = "total" if "total" in resp.rows[0] else "n"
+    if "categoria" not in resp.rows[0] or metrica not in resp.rows[0]:
+        return resp
+    tabla = str.maketrans("áéíóúüñ", "aeiouun")
+    grupos: dict[str, dict] = {}
+    for r in resp.rows:
+        cat = str(r.get("categoria") or "")
+        try:
+            val = float(r.get(metrica) or 0)
+        except (TypeError, ValueError):
+            return resp  # métrica no numérica: no tocar
+        clave = cat.strip().lower().translate(tabla)
+        g = grupos.setdefault(clave, {"categoria": cat, "valor": 0.0, "mayor": -1.0})
+        g["valor"] += val
+        if val > g["mayor"]:
+            g["mayor"] = val
+            g["categoria"] = cat
+    if len(grupos) == len(resp.rows):
+        return resp  # no había duplicados
+    fundidas = sorted(grupos.values(), key=lambda g: g["valor"], reverse=True)
+    resp.rows = [
+        {"categoria": g["categoria"],
+         metrica: int(g["valor"]) if g["valor"].is_integer() else g["valor"]}
+        for g in fundidas
+    ]
+    resp.row_count = len(resp.rows)
+    return resp
+
+
+@router.get("/datasets/{dataset_id}/filters", response_model=DatasetFiltersResponse)
+async def dataset_filters(dataset_id: str) -> DatasetFiltersResponse:
+    """Columnas filtrables del dataset con sus VALORES reales (ADR-024).
+
+    Sale del perfil de la bodega (`dataset_filter_values`, lo escribe el
+    profiler diario). Vacío si el dataset no está farmeado o no tiene
+    columnas de baja cardinalidad. La UI pinta chips con esto; execute
+    solo acepta filtros que existan aquí.
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT col_name, kind, value, n
+                FROM dataset_filter_values
+                WHERE dataset_id = %s AND kind IN ('valor', 'anio')
+                ORDER BY kind, col_name, n DESC NULLS LAST
+                """,
+                (dataset_id,),
+            )
+            rows = cur.fetchall()
+    cols: dict[tuple[str, str], list[FilterOption]] = {}
+    for r in rows:
+        cols.setdefault((r["kind"], r["col_name"]), []).append(
+            FilterOption(value=r["value"], n=r["n"])
+        )
+    # Años: ordenados del más reciente al más viejo (no por frecuencia).
+    for (kind, _col), vals in cols.items():
+        if kind == "anio":
+            vals.sort(key=lambda v: -int(v.value))
+    filtros = [
+        FilterColumn(col=col, kind=kind, values=vals)
+        for (kind, col), vals in cols.items()
+    ]
+    # 'valor' primero (sector, zona…), luego años; dentro, menos valores
+    # primero (chips más legibles).
+    filtros.sort(key=lambda f: (f.kind != "valor", len(f.values)))
+    return DatasetFiltersResponse(dataset_id=dataset_id, filtros=filtros)
+
+
+def _validate_filters(
+    conn, dataset_id: str, filters: list[FilterSpec] | None
+) -> tuple[list[dict], str | None]:
+    """Filtros pedidos → filtros VALIDADOS contra el perfil de la bodega.
+
+    Devuelve (filtros con kind resuelto, nota sobre los descartados). Un
+    (col, value) que no exista EXACTO en `dataset_filter_values` se
+    descarta con nota honesta — nunca se inventa un WHERE.
+    """
+    if not filters:
+        return [], None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT col_name, kind, value FROM dataset_filter_values
+            WHERE dataset_id = %s AND kind IN ('valor', 'anio')
+            """,
+            (dataset_id,),
+        )
+        perfil = {(r["col_name"], r["value"]): r["kind"] for r in cur.fetchall()}
+    validos: list[dict] = []
+    descartados: list[str] = []
+    for f in filters:
+        kind = perfil.get((f.col, f.value))
+        if kind:
+            validos.append({"col": f.col, "kind": kind, "value": f.value})
+        else:
+            descartados.append(f"{f.col}={f.value}")
+    note = None
+    if descartados:
+        note = (
+            "Filtros ignorados (el valor no existe en los datos): "
+            + ", ".join(descartados)
+        )
+    return validos, note
+
+
+def _load_perfil(conn, dataset_id: str) -> list[dict]:
+    """Perfil de filtrables del dataset (para el filtro automático)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT col_name, kind, value, n FROM dataset_filter_values "
+            "WHERE dataset_id = %s AND kind IN ('valor', 'anio') "
+            "ORDER BY col_name, n DESC NULLS LAST",
+            (dataset_id,),
+        )
+        return cur.fetchall()
+
+
+async def _filtros_desde_pregunta(
+    pregunta: str, perfil: list[dict]
+) -> list[dict]:
+    """Fase 3 (ADR-024): la pregunta elige filtros ENTRE los valores reales.
+
+    El LLM recibe las columnas filtrables con sus valores exactos y solo
+    puede señalar pares de esa lista; todo lo demás se descarta. La
+    garantía anti-alucinación se mantiene: el SQL lo arma el template y el
+    valor existe en el dato. Falla silenciosa → sin filtro.
+    """
+    cols: dict[tuple[str, str], list[str]] = {}
+    for r in perfil:
+        cols.setdefault((r["col_name"], r["kind"]), []).append(r["value"])
+    if not cols:
+        return []
+    for key, vals in cols.items():
+        if key[1] == "anio":
+            # Años COMPLETOS y ordenados: recortar por frecuencia escondía
+            # el año pedido ("en 2024" no filtraba, 2026-07-13).
+            cols[key] = sorted(vals, key=lambda v: -int(v))[:25]
+        else:
+            cols[key] = vals[:12]
+    lineas = "\n".join(
+        f"- {col}{' (año)' if kind == 'anio' else ''}: {' | '.join(vals)}"
+        for (col, kind), vals in list(cols.items())[:6]
+    )
+    prompt = f"""La pregunta de un ciudadano y las columnas filtrables del dataset elegido, con sus valores REALES.
+
+Pregunta: "{pregunta}"
+
+Columnas y valores disponibles:
+{lineas}
+
+¿La pregunta pide explícitamente alguno de esos recortes? (ej. "públicos" → sector OFICIAL; "en 2024" → año 2024). Devuelve SOLO JSON, máximo 2 filtros, con el valor EXACTO de la lista. Si la pregunta no pide ningún recorte: lista vacía.
+
+{{"filtros": [{{"col": "<columna>", "value": "<valor exacto>"}}]}}
+
+JSON:"""
+    raw = await get_backend().generate(
+        prompt, max_tokens=150, model=model_for_task("fast")
+    )
+    m = re.search(r"\{[\s\S]*\}", raw or "")
+    if not m:
+        return []
+    try:
+        propuestos = json.loads(m.group(0)).get("filtros") or []
+    except (json.JSONDecodeError, AttributeError):
+        return []
+    validos_set = {(r["col_name"], r["value"]): r["kind"] for r in perfil}
+    out = []
+    for f in propuestos[:2]:
+        # El LLM copia la anotación "(año)" del prompt dentro del nombre de
+        # la columna ("FECHA HECHO (año)", 2026-07-13) — se limpia antes de
+        # validar; la validación exacta contra el perfil sigue intacta.
+        col = re.sub(r"\s*\(año\)\s*$", "", str(f.get("col") or "").strip())
+        kind = validos_set.get((col, str(f.get("value"))))
+        if kind:
+            out.append({"col": col, "kind": kind, "value": str(f["value"])})
+    return out
+
+
+# Unidad de fila por dataset — cache en memoria del proceso: la unidad solo
+# depende del dataset, y 1 llamada Haiku por dataset y por vida del contenedor
+# es despreciable.
+_UNIT_CACHE: dict[str, str | None] = {}
+_UNIT_RE = re.compile(r"^[a-záéíóúüñ][a-záéíóúüñ\- ]{2,40}$")
+
+
+async def _unidad_de_fila(dataset_id: str) -> str | None:
+    """Qué representa UNA fila del dataset ("estudiantes matriculados",
+    "contratos"), inferido de su metadata oficial con el LLM.
+
+    La CIFRA sigue siendo verificada (count de filas reales); la unidad es
+    interpretación de la metadata — por eso se valida a un sustantivo corto
+    y ante cualquier duda se devuelve None (la UI cae a "registros")."""
+    if dataset_id in _UNIT_CACHE:
+        return _UNIT_CACHE[dataset_id]
+    unit: str | None = None
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT name, left(coalesce(description, ''), 400) AS descr "
+                    "FROM datasets WHERE dataset_id = %s",
+                    (dataset_id,),
+                )
+                ds = cur.fetchone()
+                cur.execute(
+                    "SELECT col_name FROM dataset_columns_curated "
+                    "WHERE dataset_id = %s ORDER BY confidence DESC LIMIT 10",
+                    (dataset_id,),
+                )
+                cols = [r["col_name"] for r in cur.fetchall()]
+        if ds:
+            prompt = (
+                f"Dataset de datos abiertos:\n"
+                f"Nombre: {ds['name']}\n"
+                f"Descripción: {ds['descr']}\n"
+                f"Columnas: {', '.join(cols) or '(desconocidas)'}\n\n"
+                f"¿Qué representa UNA fila de este dataset? Responde SOLO un "
+                f"sustantivo plural en minúsculas, máximo 3 palabras (ej: "
+                f"'estudiantes matriculados', 'contratos', 'establecimientos "
+                f"educativos'). Si una fila es un agregado o no está claro, "
+                f"responde exactamente: registros"
+            )
+            raw = await get_backend().generate(
+                prompt, max_tokens=20, model=model_for_task("fast")
+            )
+            cand = (raw or "").strip().splitlines()[0].strip(" .\"'«»").lower()
+            if (
+                cand
+                and cand != "registros"
+                and len(cand.split()) <= 3
+                and _UNIT_RE.match(cand)
+            ):
+                unit = cand
+    except Exception as exc:  # noqa: BLE001 — la unidad es opcional
+        log.warning("unidad de fila falló para %s: %s", dataset_id, exc)
+    _UNIT_CACHE[dataset_id] = unit
+    return unit
+
+
+_GEO_NORM_SQL = "translate(upper(trim({col})), 'ÁÉÍÓÚÜÑ', 'AEIOUUN')"
+
+
+def _filtro_territorial(
+    parquet_path: str, lake_cols: list[dict], territorio: str | None
+) -> dict | None:
+    """Fase 4 (ADR-024): pregunta departamental sobre dataset NACIONAL →
+    WHERE departamento = X, verificado contra el Parquet (determinista).
+
+    Busca el nombre canónico del departamento entre los valores de las
+    columnas geo del Parquet; si existe, filtra por el valor TAL CUAL está
+    almacenado. Sin match → None (nunca se adivina)."""
+    if not territorio or not re.fullmatch(r"\d{2}", territorio):
+        return None
+    from ai_engine.geo_resolver import DEPARTAMENTOS
+    canon = next((c for c, code, *_ in DEPARTAMENTOS if code == territorio), None)
+    if not canon:
+        return None
+    objetivo = canon.upper().translate(str.maketrans("ÁÉÍÓÚÜÑ", "AEIOUUN"))
+    for col in lake_cols:
+        if col.get("semantic_type") != "geo":
+            continue
+        if not str(col.get("socrata_data_type", "")).upper().startswith("VARCHAR"):
+            continue
+        q = _safe_ident_dbq(col["col_name"])
+        if not q:
+            continue
+        try:
+            rows = execute_parquet(
+                parquet_path,
+                f"SELECT {q} AS v FROM {{src}} "
+                f"WHERE {_GEO_NORM_SQL.format(col=q)} = '{objetivo}' LIMIT 1",
+            )
+        except Exception:  # noqa: BLE001 — columna rara, probar la siguiente
+            continue
+        if rows:
+            return {"col": col["col_name"], "kind": "valor",
+                    "value": str(rows[0]["v"])}
+    return None
+
+
 @router.post("/query/chips/execute", response_model=ChipsExecuteResponse)
 async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
+    resp = _merge_categorias_duplicadas(await _query_chips_execute_impl(req))
+    # Tendencia pide ORDER BY periodo DESC LIMIT 60 (los últimos 60 periodos,
+    # no los primeros — un dataset 2010-2025 mostraba solo 2010-2014). La
+    # gráfica lee izq→der: invertir es el inverso exacto del DESC del SQL,
+    # sin re-interpretar el formato de la fecha.
+    if req.tipo == "Tendencia" and resp.rows:
+        resp.rows = list(reversed(resp.rows))
+    # Honestidad transversal: si pidieron filtros y NINGUNO se aplicó (rama
+    # viva, Mapa, snapshot desactualizado), decirlo — nunca fingir filtro.
+    if req.filters and not resp.filters_applied and not resp.filter_note:
+        resp.filter_note = (
+            "Los filtros no se aplicaron en esta consulta (solo están "
+            "disponibles sobre la copia local del dataset)."
+        )
+    # Unidad de medida del conteo: "390.903" a secas se leía como lo que no
+    # era. Solo para Cuántos (el conteo de filas es el que necesita unidad).
+    if req.tipo == "Cuántos" and resp.rows and not resp.error:
+        resp.row_unit = await _unidad_de_fila(req.dataset_id)
+    return resp
+
+
+async def _query_chips_execute_impl(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
     """Ejecuta una consulta SoQL determinista sobre el dataset elegido.
 
     Flujo:
@@ -534,8 +1087,16 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT source_type, row_count, data_url, federated_status
-                FROM datasets WHERE dataset_id = %s
+                SELECT d.source_type, d.row_count, d.data_url, d.federated_status,
+                       d.jurisdiccion_nivel,
+                       s.parquet_path,
+                       (s.status = 'downloaded'
+                        AND s.parquet_path IS NOT NULL
+                        AND s.source_updated_at IS NOT DISTINCT FROM d.rows_updated_at
+                       ) AS snapshot_fresco
+                FROM datasets d
+                LEFT JOIN dataset_snapshots s USING (dataset_id)
+                WHERE d.dataset_id = %s
                 """,
                 (req.dataset_id,),
             )
@@ -550,6 +1111,102 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
             data_url = row["data_url"]
             federated_status = row["federated_status"]
 
+            # ---- Rama BODEGA (farmeo): Parquet local, sin red, milisegundos ----
+            # Mecanismo de decisión bodega-vs-vivo: si el dataset está en la
+            # bodega Y su snapshot es FRESCO (source_updated_at == el
+            # rows_updated_at actual del catálogo — la regla diaria lo
+            # mantiene), se consulta el Parquet local. Si el catálogo dice que
+            # la fuente cambió y la bodega aún no refresca, se cae al camino
+            # VIVO (SODA/CSV) — preferimos el dato más nuevo a la velocidad.
+            # Cualquier fallo local degrada silenciosamente al camino vivo.
+            # Mapa NUNCA va a la bodega: el choropleth casa por código
+            # DIVIPOLA y el heurístico sobre el Parquet elige columnas de
+            # NOMBRE ("Departamento" → 'ANTIOQUIA'), que el mapa no pinta.
+            # El camino vivo (columnas curadas SODA) sí produce códigos.
+            if row["snapshot_fresco"] and req.tipo != "Mapa":
+                try:
+                    # Filtros de valor (ADR-024): solo los que EXISTEN en el
+                    # perfil de la bodega. Solo en esta rama — el perfil
+                    # describe las columnas del Parquet, no las de SODA.
+                    filtros, filter_note = _validate_filters(
+                        conn, req.dataset_id, req.filters
+                    )
+                    # Fase 3: sin filtros explícitos y con la pregunta a mano,
+                    # el LLM elige filtros ENTRE los valores reales del perfil
+                    # ("públicos" → SECTOR=OFICIAL). Falla → sin filtro.
+                    if not filtros and req.pregunta:
+                        try:
+                            perfil = _load_perfil(conn, req.dataset_id)
+                            if perfil:
+                                filtros = await _filtros_desde_pregunta(
+                                    req.pregunta, perfil
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            log.warning("auto-filtro falló (%s) — sin filtro", exc)
+                    lake_cols = describe_parquet(row["parquet_path"])
+                    # Fase 4: pregunta departamental sobre dataset NACIONAL →
+                    # recorte territorial determinista contra el Parquet.
+                    if row.get("jurisdiccion_nivel") == "nacional":
+                        terr = _filtro_territorial(
+                            row["parquet_path"], lake_cols, req.territorio
+                        )
+                        if terr and terr["col"] not in {f["col"] for f in filtros}:
+                            filtros = [*filtros, terr]
+                    built = build_duckdb_sql(
+                        req.tipo, lake_cols, row["parquet_path"],
+                        filters=filtros or None,
+                    )
+                    if not built.error:
+                        rows_out = execute_parquet(row["parquet_path"], built.sql)
+                        rows_norm = [
+                            {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v))
+                             for k, v in r.items()}
+                            for r in rows_out
+                        ]
+                        # Honestidad: con filtro en un conteo, también el
+                        # total SIN filtro para dar escala.
+                        unfiltered_total = None
+                        if filtros and req.tipo in ("Cuántos", "Total"):
+                            try:
+                                base = execute_parquet(
+                                    row["parquet_path"],
+                                    "SELECT count(*) AS n FROM {src}",
+                                )
+                                unfiltered_total = int(base[0]["n"])
+                            except Exception:  # noqa: BLE001 — opcional
+                                pass
+                        emit_event(
+                            endpoint="execute", dataset_id=req.dataset_id,
+                            tipo=req.tipo, source_type="lake",
+                            elapsed_ms=int((_time.time()-t0)*1000),
+                            row_count=len(rows_norm), soql_chars=len(built.sql),
+                        )
+                        return ChipsExecuteResponse(
+                            dataset_id=req.dataset_id,
+                            tipo=req.tipo,
+                            soql=built.sql,
+                            columns_used=built.columns_used,
+                            rows=rows_norm,
+                            row_count=len(rows_norm),
+                            filters_applied=[
+                                FilterSpec(col=f["col"], value=f["value"])
+                                for f in filtros
+                            ] or None,
+                            filter_note=filter_note,
+                            unfiltered_total=unfiltered_total,
+                        )
+                except Exception as exc:  # noqa: BLE001 — degradar a vivo
+                    log.warning(
+                        "Bodega falló para %s (%s) — degradando a vivo",
+                        req.dataset_id, exc,
+                    )
+            elif req.filters:
+                # Filtros pedidos pero la bodega no aplica (Mapa, snapshot
+                # desactualizado o dataset sin farmear): se responde SIN
+                # filtro y se dice — nunca se finge que se filtró.
+                log.info("filtros pedidos sin bodega para %s — sin filtro",
+                         req.dataset_id)
+
             # ---- Rama FEDERADO (Reto F.4 — DuckDB sobre CSV externo) ----
             if source_type == "federated":
                 if federated_status != "ok" or not data_url:
@@ -560,6 +1217,36 @@ async def query_chips_execute(req: ChipsExecuteRequest) -> ChipsExecuteResponse:
                             "expone CSV consultable (federated_status="
                             f"{federated_status!r}). Sólo es descubrible."
                         ),
+                    )
+                # Guarda de tamaño: consultar en vivo un CSV federado gigante
+                # revienta el timeout del gateway (502 con gwqv-sqvs,
+                # 2026-07-12). Si el origen declara Content-Length por encima
+                # del tope, respuesta honesta inmediata en vez de colgarse.
+                try:
+                    head = httpx.head(data_url, follow_redirects=True, timeout=6)
+                    fed_bytes = int(head.headers.get("content-length") or 0)
+                except Exception:  # noqa: BLE001 — sin HEAD, se intenta igual
+                    fed_bytes = 0
+                if fed_bytes > 250 * 1024 * 1024:
+                    friendly = (
+                        "El archivo de este dataset pesa "
+                        f"{fed_bytes / (1024 * 1024):.0f} MB — demasiado para "
+                        "consultarlo en vivo. Descárgalo desde su portal de origen."
+                    )
+                    emit_event(
+                        endpoint="execute", dataset_id=req.dataset_id, tipo=req.tipo,
+                        source_type="federated",
+                        elapsed_ms=int((_time.time()-t0)*1000),
+                        row_count=0, error=friendly,
+                    )
+                    return ChipsExecuteResponse(
+                        dataset_id=req.dataset_id,
+                        tipo=req.tipo,
+                        soql="",
+                        columns_used=[],
+                        rows=[],
+                        row_count=0,
+                        error=friendly,
                     )
                 # Descubrir columnas via DuckDB DESCRIBE (sin descargar filas).
                 try:
@@ -858,7 +1545,7 @@ def _format_for_prompt(rows: list[dict]) -> str:
 _EXPLAIN_PROMPT = """Eres un explicador de cifras públicas colombianas para ciudadanos.
 
 Dataset: {dataset_name}
-TIPO de consulta: {tipo}
+TIPO de consulta: {tipo}{unidad_linea}
 Datos resultantes (JSON):
 {rows_json}
 
@@ -866,6 +1553,7 @@ Reglas estrictas:
 - 2 frases en español neutro. NO uses listas.
 - Empieza con la cifra principal.
 - NO INVENTES números. Cada cifra que menciones DEBE estar en los datos arriba.
+- NO INVENTES la unidad: si arriba dice qué representa cada fila, usa ESA unidad; si no lo dice, di "registros".
 - Si la cifra es 0 o vacía, di "no se reportaron datos" sin más.
 
 Respuesta:"""
@@ -894,10 +1582,15 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
     # ceros — esto reduce alucinaciones de magnitud en Ranking.
     sample = req.rows[:10]
     rows_json = _format_for_prompt(sample)
+    unidad_linea = (
+        f"\nCada fila del dataset representa: {req.row_unit}"
+        if req.row_unit else ""
+    )
     prompt = _EXPLAIN_PROMPT.format(
         dataset_name=req.dataset_name,
         tipo=req.tipo,
         rows_json=rows_json,
+        unidad_linea=unidad_linea,
     )
 
     backend = get_backend()
@@ -950,6 +1643,60 @@ async def query_chips_explain(req: ChipsExplainRequest) -> ChipsExplainResponse:
 
 
 # ----------------------------------------------------------------------
+# Señales léxicas → TIPO. Orden = prioridad; "cuánt" es la más fuerte y
+# además la única que puede SOBREESCRIBIR al LLM (ver chips_from_nl).
+_TIPO_LEXICO: list[tuple[re.Pattern[str], str]] = [
+    # "cuánto ha subido/bajado" pregunta por la EVOLUCIÓN de un valor, no por
+    # un conteo — va antes que el resto (ciclo ciudadano c28, 2026-07-12).
+    (re.compile(r"cu[aá]nto han? (subido|bajado|crecido|aumentado|cambiado|variado)",
+                re.IGNORECASE), "Tendencia"),
+    # "en qué gasta/invierte" pide el desglose, no el total (c19).
+    (re.compile(r"en qu[eé] (se )?(gasta|invierte)", re.IGNORECASE), "Comparar"),
+    # "cuánto vale/cuesta/cuánta plata" pide la SUMA del valor, no un
+    # conteo de filas (ciclo ciudadano c17/c20/c50, 2026-07-12).
+    (re.compile(r"cu[aá]nto (vale|cuesta|gana|debe|recauda|dinero)"
+                r"|cu[aá]nta plata|a cu[aá]nto asciende|valor total|monto total",
+                re.IGNORECASE), "Total"),
+    # SOLO el plural es conteo: "¿cuántos contratos?" cuenta filas, pero
+    # "¿cuánto vale la deuda?" pide un MONTO — forzar Cuántos ahí producía
+    # conteos irrelevantes presentados como cifra verificada (c17, c20, c50).
+    (re.compile(r"\bcu[aá]nt[oa]s\b", re.IGNORECASE), "Cuántos"),
+    (re.compile(r"\b(comparar?|versus|vs\.?|frente a)\b", re.IGNORECASE), "Comparar"),
+    (re.compile(r"\b(ranking|top \d+|top\b|mayores|m[aá]s alt[oa]s)\b", re.IGNORECASE), "Ranking"),
+    (re.compile(r"\b(tendencia|evoluci[oó]n|hist[oó]rico|a lo largo)\b", re.IGNORECASE), "Tendencia"),
+    (re.compile(r"\b(mapa|d[oó]nde)\b", re.IGNORECASE), "Mapa"),
+]
+
+
+def _infer_tipo_lexico(q: str) -> str | None:
+    """TIPO por señal léxica inequívoca, o None si no hay ninguna."""
+    for pattern, tipo in _TIPO_LEXICO:
+        if pattern.search(q):
+            return tipo
+    return None
+
+
+# Señales léxicas → TEMA. Solo entradas con evidencia de fallo del mapper
+# (2026-07-12: "producción agrícola" → Comercio; "estaciones de policía" →
+# Función pública). Inequívocas y cortas a propósito: un guardrail, no un
+# clasificador. Solo aplican si el tema existe en las listas de la BD.
+_TEMA_LEXICO: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"agr[ií]col|agricultur|cultivo|cosecha|ganader|pecuari",
+                re.IGNORECASE), "Agricultura y Desarrollo Rural"),
+    (re.compile(r"polic[ií]a|homicid|hurto|delito|secuestro|extorsi[oó]n",
+                re.IGNORECASE), "Seguridad y Defensa"),
+]
+
+
+def _infer_tema_lexico(q: str) -> str | None:
+    """TEMA por señal léxica inequívoca, o None si no hay ninguna."""
+    for pattern, tema in _TEMA_LEXICO:
+        if pattern.search(q):
+            return tema
+    return None
+
+
+# ----------------------------------------------------------------------
 # POST /api/v1/chips/from-nl (Hito 1 Fase 2 — mapper NL→chips)
 # ----------------------------------------------------------------------
 
@@ -975,6 +1722,43 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         "entidad": [{"value": opt.value, "label": opt.label} for opt in chips.entidad],
     }
     mapped = await map_nl_to_chips(req.q, available)
+
+    # Heurística léxica de TIPO (barata, determinista, corre después del LLM):
+    # "¿Cuántos…?" es señal inequívoca de conteo y el mapper LLM la pierde o
+    # la confunde con frecuencia (medido 2026-07-10: tipo=null o "Ranking"
+    # para preguntas de conteo). La señal fuerte SIEMPRE gana; las demás solo
+    # rellenan si el LLM no propuso tipo.
+    tipo_lexico = _infer_tipo_lexico(req.q)
+    if tipo_lexico in ("Cuántos", "Total"):
+        # Señales inequívocas que SOBREESCRIBEN al LLM: el plural cuenta y
+        # "cuánto vale/cuesta" suma — el mapper insistía en Cuántos para
+        # montos (ciclo 3, 2026-07-13) y el conteo de filas es la respuesta
+        # equivocada a una pregunta de plata.
+        mapped["tipo"] = tipo_lexico
+    elif tipo_lexico and not mapped.get("tipo"):
+        mapped["tipo"] = tipo_lexico
+
+    # Guardrail léxico de TEMA: señales inequívocas ganan al LLM (medido:
+    # el mapper puso "producción agrícola" en Comercio y "policía" en
+    # Función pública). Solo si el tema existe en las listas reales.
+    tema_lexico = _infer_tema_lexico(req.q)
+    if tema_lexico and tema_lexico in available["tema"]:
+        mapped["tema"] = tema_lexico
+
+    # "Mi ciudad / donde vivo" no es adivinable: en vez de responder con el
+    # dato de OTRO municipio como si fuera el suyo (ciclo ciudadano c01/c06,
+    # 2026-07-12), se pide el territorio explícito.
+    hint = None
+    if not mapped.get("territorio") and re.search(
+        r"\bmi (ciudad|municipio|barrio|departamento|alcald[ií]a|localidad|regi[oó]n|eps)\b"
+        r"|donde vivo|cerca de (mi casa|donde vivo)",
+        req.q, re.IGNORECASE,
+    ):
+        hint = (
+            "La pregunta habla de TU territorio y no puedo adivinarlo: "
+            "márcalo en el chip Territorio para una respuesta local."
+        )
+
     picked = sum(1 for v in mapped.values() if v is not None)
     emit_event(
         endpoint="from_nl",
@@ -989,4 +1773,5 @@ async def chips_from_nl(req: ChipsFromNLRequest) -> ChipsFromNLResponse:
         territorio=mapped.get("territorio"),
         entidad=mapped.get("entidad"),
         refinador=mapped.get("refinador"),
+        hint=hint,
     )

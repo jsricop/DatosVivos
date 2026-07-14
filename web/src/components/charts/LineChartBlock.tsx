@@ -5,7 +5,7 @@ import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { AreaClosed, LinePath } from "@visx/shape";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useUserScale } from "@/lib/motion";
 import {
@@ -17,8 +17,21 @@ import {
 import type { ChartBlock } from "@/lib/schemas/dashboard";
 import { dashArray } from "@/components/charts/chart-patterns";
 
-const MARGIN = { top: 12, right: 16, bottom: 48, left: 56 };
-const BASE_HEIGHT = 280;
+// bottom amplio: las etiquetas X van VERTICALES (fechas completas se
+// solapaban en horizontal, 2026-07-13).
+const MARGIN = { top: 12, right: 16, bottom: 92, left: 56 };
+const BASE_HEIGHT = 300;
+
+/**
+ * Etiqueta legible para un periodo del eje X: quita la hora ("2021-04-01
+ * 00:00:00" → "2021-04") y deja el día solo cuando aporta ("2021-04-15").
+ * Valores que no parecen fecha (años, trimestres) pasan tal cual.
+ */
+function formatPeriodo(raw: string): string {
+  const m = raw.match(/^"?(\d{4})-(\d{2})-(\d{2})[T ]?/);
+  if (m) return m[3] === "01" ? `${m[1]}-${m[2]}` : `${m[1]}-${m[2]}-${m[3]}`;
+  return raw.replace(/"/g, "");
+}
 
 const AXIS_TICK_LABEL = {
   fontFamily: "var(--font-mono)",
@@ -30,6 +43,9 @@ type Props = { block: ChartBlock; rows: Row[] };
 
 export function LineChartBlock({ block, rows }: Props) {
   const series = useMemo(() => prepareSeriesData(block, rows), [block, rows]);
+  // Punto bajo el cursor (serie, índice): tooltip SVG propio — el <title>
+  // nativo tarda y el punto de 3px era un blanco imposible (2026-07-13).
+  const [hover, setHover] = useState<{ s: number; i: number } | null>(null);
   const userScale = useUserScale();
   const height = Math.round(BASE_HEIGHT * userScale);
   const isArea = block.type === "area";
@@ -153,23 +169,64 @@ export function LineChartBlock({ block, rows }: Props) {
                             strokeDasharray={dash}
                           />
                         )}
-                        {s.data.map((d) => (
-                          <circle
-                            key={`${s.name}-${String(d.x)}`}
-                            cx={xAt(d)}
-                            cy={y(d.y)}
-                            r={3}
-                            fill={color}
-                          >
-                            <title>
-                              {isMulti ? `${s.name} · ` : ""}
-                              {String(d.x)}: {formatValue(d.y)}
-                            </title>
-                          </circle>
+                        {s.data.map((d, i) => (
+                          <g key={`${s.name}-${String(d.x)}`}>
+                            <circle
+                              cx={xAt(d)}
+                              cy={y(d.y)}
+                              r={hover?.s === sIdx && hover?.i === i ? 5 : 3}
+                              fill={color}
+                            />
+                            {/* blanco de hover generoso e invisible */}
+                            <circle
+                              cx={xAt(d)}
+                              cy={y(d.y)}
+                              r={12}
+                              fill="transparent"
+                              onMouseEnter={() => setHover({ s: sIdx, i })}
+                              onMouseLeave={() => setHover(null)}
+                            />
+                          </g>
                         ))}
                       </g>
                     );
                   })}
+                  {hover && series[hover.s]?.data[hover.i] ? (
+                    (() => {
+                      const s = series[hover.s]!;
+                      const d = s.data[hover.i]!;
+                      const texto = `${isMulti ? `${s.name} · ` : ""}${formatPeriodo(
+                        String(d.x),
+                      )}: ${formatValue(d.y)}`;
+                      const tw = texto.length * 7 + 16;
+                      const tx = Math.min(
+                        Math.max(xAt(d) - tw / 2, 0),
+                        Math.max(0, innerW - tw),
+                      );
+                      const ty = Math.max(y(d.y) - 34, -MARGIN.top + 2);
+                      return (
+                        <g pointerEvents="none" transform={`translate(${tx}, ${ty})`}>
+                          <rect
+                            width={tw}
+                            height={24}
+                            rx={3}
+                            fill="var(--ink)"
+                            opacity="0.92"
+                          />
+                          <text
+                            x={tw / 2}
+                            y={16}
+                            textAnchor="middle"
+                            fontFamily="var(--font-mono)"
+                            fontSize={12}
+                            fill="var(--bg)"
+                          >
+                            {texto}
+                          </text>
+                        </g>
+                      );
+                    })()
+                  ) : null}
                   <AxisLeft
                     scale={y}
                     numTicks={5}
@@ -189,16 +246,25 @@ export function LineChartBlock({ block, rows }: Props) {
                     scale={x}
                     stroke="var(--hairline-strong)"
                     tickStroke="var(--hairline-strong)"
+                    numTicks={Math.max(4, Math.floor(innerW / 30))}
+                    tickFormat={(v) => formatPeriodo(String(v))}
+                    // Verticales: las fechas completas en horizontal se
+                    // solapaban hasta ser ilegibles (2026-07-13).
                     tickLabelProps={() => ({
                       ...AXIS_TICK_LABEL,
-                      textAnchor: "middle",
+                      textAnchor: "end" as const,
+                      angle: -90,
+                      dx: -4,
+                      dy: -4,
                     })}
                     label={block.x_column}
                     labelProps={{
                       fontFamily: "var(--font-mono)",
                       fontSize: 10,
                       fill: "var(--ink-2)",
+                      dy: 24,
                     }}
+                    labelOffset={62}
                   />
                 </Group>
               </svg>

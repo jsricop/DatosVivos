@@ -13,11 +13,18 @@ export function DisclaimerBeta({ variant = "inline" }: DisclaimerBetaProps) {
   return (
     <aside
       className={[
-        "py-6 text-ink-2 font-sans text-body-sm leading-[1.55]",
-        isFooter ? "hairline-top" : "border-l-2 border-hairline-strong pl-4",
+        "text-ink-2 font-sans text-body-sm leading-[1.55]",
+        isFooter
+          ? "mt-6 pt-6 hairline-top"
+          : "rounded-[var(--radius-2)] border border-hairline border-l-4 border-l-accent bg-bg-elev p-4",
       ].join(" ")}
     >
-      <span className="text-kicker mb-2 block">Disclaimer</span>
+      <span className="mb-2 inline-flex items-center gap-2">
+        <span className="rounded-[var(--radius-1)] bg-accent px-2 py-0.5 font-sans text-[length:var(--type-kicker)] font-bold uppercase tracking-wide text-bg">
+          Beta
+        </span>
+        <span className="text-kicker">Cómo leer esta respuesta</span>
+      </span>
       <p className="m-0">
         Esta es la versión Beta-1. Las cifras del bloque{" "}
         <strong className="text-ink">Datos verificados</strong> salen

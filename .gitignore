@@ -35,9 +35,29 @@ ollama_models/
 # Estado operativo personal — no se sube
 STATUS.md
 
-# Documentación interna — se publicará al final.
-# Se mantienen: README.md, prompts cargados por código (ai_engine/prompts/*),
-# y los README.md de paquetes (web/...).
-/docs/
+# Documentación pública (exigencia del concurso: repo replicable/auditable).
+# Queda PRIVADO solo lo operativo: topología/credenciales de la VM.
+/docs/etl_cron_devops.md
 /CHANGELOG.md
 /PLAN_DASHBOARD.md
+
+# Lock files de Office (PowerPoint abierto)
+~$*
+
+# === Documentos de TRABAJO (se conservan localmente, no se publican) ===
+# Bitácoras, handoffs y salidas regenerables: útiles para el desarrollo,
+# exponen proceso interno sin aportar al lector del repo (ADR de depuración
+# documental 2026-07-13).
+docs/lessons_learned.md
+docs/powerbi/HANDOFF_*.md
+docs/powerbi/guia_powerbi.html
+eval/ciudadano/entregado_ciclo*.yaml
+eval/reports/*
+
+# === Poda documental máxima (2026-07-13): el repo público lleva código,
+# README, BRAND e insumos del concurso. El resto de docs/ es material de
+# trabajo interno — se conserva LOCALMENTE, no se publica.
+docs/*
+!docs/BRAND.md
+eval/ciudadano/seguimiento_50.md
+eval/ciudadano/analisis_ciclos.md

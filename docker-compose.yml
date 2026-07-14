@@ -5,16 +5,13 @@
 #   - api         → ✅ FastAPI + SSE (ADR-013)     — backend de la SPA
 #   - web         → ✅ Next.js 15 (ADR-011)        — frontend Civic Editorial
 #   - postgres    → ✅ ACTIVO (ADR-014)            — telemetría + catálogo para PowerBI
-#   - streamlit   → ⚙️ legacy (profile=legacy)     — disponible 30 días tras cutover
-#   - ollama      → ⚠️ opcional, recomendado en host para no duplicar memoria
-#   - nginx       → ✅ reverse proxy con routing / → web · /legacy → streamlit · /api → api
+#   - nginx       → ✅ reverse proxy con routing / → web · /api → api
 #
 # Comandos comunes (local):
 #   docker compose up postgres -d                  # solo BD
 #   docker compose up mcp-server api web nginx     # stack completo Beta-2
-#   docker compose --profile legacy up streamlit   # solo si necesitas la UI vieja
 #
-# Despliegue en producción: ver docs/deployment_runbook.md.
+# Despliegue en producción: ver docs/validation_guide.md (replicación) y README.
 
 services:
   mcp-server:
@@ -71,6 +68,11 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
       DATABASE_URL: ${DATABASE_URL:-postgresql://dv:${POSTGRES_PASSWORD}@postgres:5432/datosvivos}
       PYTHONPATH: /app
+      # Caché del modelo de EMBEDDINGS (e5-base, re-rank semántico) en el
+      # volumen ./data: dentro del contenedor se perdía en cada recreate y
+      # el primer query re-descargaba 1.1 GB de HF — el 2026-07-13 la
+      # descarga se estancó y /buscar quedó colgado en 504.
+      HF_HOME: /app/data/hf_cache
     ports:
       - "8000:8000"
     volumes:
@@ -90,10 +92,9 @@ services:
         # Default a producción; override en dev con `NEXT_PUBLIC_SITE_URL=...`.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://datosvivos.co}
     restart: unless-stopped
-    # env_file pasa NEXTAUTH_SECRET, DATABASE_URL, SMTP_URL, AUTH_ALLOWED_DOMAINS,
-    # NEXTAUTH_URL al runtime de Next.js. Sin esto el server crashea con
-    # `MissingSecret` de next-auth. Es runtime — no build — porque esos
-    # secretos no deben quedar inlineados en el bundle estático.
+    # env_file pasa variables de RUNTIME a Next.js (p. ej. PBI_EMBED_URL, que
+    # el server component /tablero lee en cada request). Runtime — no build —
+    # así cambiar la URL del tablero solo requiere recrear el contenedor web.
     env_file: .env
     environment:
       NODE_ENV: production
@@ -104,27 +105,6 @@ services:
     depends_on:
       - api
       - postgres
-
-  streamlit:
-    profiles: ["legacy"]
-    build:
-      context: .
-      dockerfile: Dockerfile.streamlit
-      args:
-        APP_UID: "${APP_UID:-1000}"
-        APP_GID: "${APP_GID:-1000}"
-    env_file: .env
-    environment:
-      MCP_SERVER_URL: http://mcp-server:3000/sse
-      LLM_BACKEND: ${LLM_BACKEND:-ollama}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      PYTHONPATH: /app
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      - mcp-server
 
   nginx:
     image: nginx:1.27-alpine

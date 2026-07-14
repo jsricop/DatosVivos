@@ -34,7 +34,7 @@ export function DashboardRenderer({ spec, rows, stats = null }: Props) {
     >
       <header className="flex flex-col gap-1.5">
         <span className="text-kicker">Dashboard generado</span>
-        <h2 className="m-0 font-serif text-h2">{spec.title}</h2>
+        <h2 className="m-0 font-sans text-h2">{spec.title}</h2>
         {spec.subtitle ? (
           <p className="m-0 font-sans text-body-sm text-ink-2">
             {spec.subtitle}

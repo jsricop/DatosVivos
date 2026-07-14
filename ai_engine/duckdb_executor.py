@@ -218,6 +218,62 @@ def describe_csv(url: str) -> list[dict[str, Any]]:
     return out
 
 
+# ----------------------------------------------------------------------
+# Bodega local (farmeo): gemelos de describe/execute sobre Parquet.
+# Sin fallback de encoding (Parquet es binario autodescriptivo) y sin red:
+# la consulta corre en milisegundos contra /app/data/lake/{id}.parquet.
+# ----------------------------------------------------------------------
+
+
+def _parquet_expr(path: str) -> str:
+    return "read_parquet('" + str(path).replace("'", "''") + "')"
+
+
+def describe_parquet(path: str) -> list[dict[str, Any]]:
+    """Schema del Parquet local + clasificación semántica por columna.
+
+    Mismo shape que `describe_csv` / `dataset_columns_curated`.
+    """
+    if not path:
+        raise ValueError("ruta vacía")
+    con = _connection()
+    try:
+        rows = con.execute(
+            f"DESCRIBE SELECT * FROM {_parquet_expr(path)} LIMIT 0"
+        ).fetchall()
+    finally:
+        con.close()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        col_name = str(row[0])
+        data_type = str(row[1]) if len(row) > 1 else ""
+        cls = classify_column(col_name=col_name, data_type=data_type)
+        out.append(
+            {
+                "col_name": col_name,
+                "socrata_data_type": data_type,
+                "socrata_description": None,
+                "semantic_type": cls.semantic_type,
+                "semantic_subtype": cls.semantic_subtype,
+                "confidence": cls.confidence,
+            }
+        )
+    return out
+
+
+def execute_parquet(path: str, sql: str) -> list[dict[str, Any]]:
+    """Ejecuta SQL (placeholder `{src}`) contra el Parquet local de la bodega."""
+    if not path:
+        raise ValueError("ruta vacía")
+    con = _connection()
+    try:
+        res = con.execute(sql.replace("{src}", _parquet_expr(path)))
+        cols = [d[0] for d in res.description]
+        return [dict(zip(cols, row)) for row in res.fetchall()]
+    finally:
+        con.close()
+
+
 def execute_csv(url: str, sql: str) -> list[dict[str, Any]]:
     """Ejecuta SQL contra el CSV en `url` y devuelve filas como dicts.
 

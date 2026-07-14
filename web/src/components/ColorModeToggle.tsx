@@ -49,24 +49,19 @@ export function ColorModeToggle() {
   // Evita mismatch SSR/CSR: no mostramos botones activos hasta que montamos.
   const currentValue = mounted ? theme : "light";
 
+  // Sin label visible: los tres botones con icono + texto ya se leen como
+  // selector; "APARIENCIA" era ruido en la barra (2026-07-13).
   return (
     <div className="flex items-center gap-3">
-      <span
-        id="color-mode-label"
-        className="hidden sm:inline font-mono text-caption text-ink-muted uppercase tracking-[0.08em]"
-      >
-        Apariencia
-      </span>
       <div
         role="group"
-        aria-labelledby="color-mode-label"
-        aria-label="Modo de color"
+        aria-label="Apariencia — modo de color"
         className="inline-flex items-center border border-hairline bg-bg-elev p-[2px] rounded-[var(--radius-1)]"
       >
         {OPTIONS.map((opt) => {
           const isActive = currentValue === opt.value;
           const stateClass = isActive
-            ? "bg-ink text-bg"
+            ? "bg-accent text-bg"
             : "bg-transparent text-ink-2 hover:text-ink";
           return (
             <button
@@ -78,7 +73,7 @@ export function ColorModeToggle() {
               className={`${stateClass} inline-flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[length:var(--type-kicker)] font-medium uppercase tracking-[0.08em] transition-colors focus-ring`}
             >
               <Icon name={opt.icon} size={14} />
-              <span>{opt.label}</span>
+              <span className="hidden md:inline">{opt.label}</span>
             </button>
           );
         })}

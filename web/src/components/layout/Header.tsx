@@ -1,41 +1,40 @@
-import Link from "next/link";
-import { Suspense } from "react";
-
 import { ColorModeToggle } from "@/components/ColorModeToggle";
-import { UserMenu } from "@/components/UserMenu";
+import { NavLink } from "@/components/layout/NavLink";
 import { Wordmark } from "@/components/Wordmark";
 
 export function Header() {
   return (
     <header className="sticky top-0 z-10 bg-bg hairline-bottom">
-      <div className="container-narrow flex items-center justify-between gap-6 py-4">
+      {/* Barra institucional — imagen del Estado colombiano (atribución textual,
+          sin escudo ni logo gov.co). Evoca el patrón GovHead. */}
+      <div className="bg-accent text-bg">
+        <div className="container-narrow flex items-center justify-between gap-4 py-1.5">
+          <span className="font-sans text-[length:var(--type-kicker)] font-semibold tracking-wide uppercase">
+            República de Colombia
+          </span>
+          <span className="font-mono text-[length:var(--type-kicker)] tracking-wide">
+            Datos abiertos del Estado
+          </span>
+        </div>
+      </div>
+      {/* flex-wrap: en pantallas medias la navegación baja a su propia
+          línea en vez de desbordar (revisión responsive 2026-07-13). */}
+      <div className="container-narrow flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
         <Wordmark size="header" />
         <nav
           aria-label="Navegación primaria"
-          className="flex items-center gap-6"
+          className="flex flex-wrap items-center gap-1.5"
         >
-          <Link
-            href="/buscar"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Buscar
-          </Link>
-          <Link
-            href="/acerca"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Acerca
-          </Link>
-          <Link
-            href="/accesibilidad"
-            className="font-sans text-body-sm text-ink-2 focus-ring"
-          >
-            Accesibilidad
-          </Link>
-          <Suspense fallback={null}>
-            <UserMenu />
-          </Suspense>
-          <ColorModeToggle />
+          <NavLink href="/">Inicio</NavLink>
+          <NavLink href="/tablero">Tablero</NavLink>
+          <NavLink href="/buscar">Buscar</NavLink>
+          <NavLink href="/mcp">MCP</NavLink>
+          <NavLink href="/acerca">Acerca</NavLink>
+          {/* La página /accesibilidad vive en el footer: el header ya cubre
+              la necesidad inmediata con el switch de apariencia. */}
+          <span className="ml-3">
+            <ColorModeToggle />
+          </span>
         </nav>
       </div>
     </header>

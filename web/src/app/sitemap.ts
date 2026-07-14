@@ -4,7 +4,8 @@ import { SITE_URL } from "@/lib/site";
 
 /**
  * Sitemap estático. Incluye solo páginas estables y útiles SEO:
- * - / : landing.
+ * - / : panorama nacional (ADR-023).
+ * - /tablero : detalle por sector/entidad (nivel 2 de la arquitectura).
  * - /acerca : manifiesto y equipo (alta importancia institucional).
  * - /accesibilidad : Ley 1618 + WCAG.
  *
@@ -19,6 +20,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified,
       changeFrequency: "weekly",
       priority: 1.0,
+    },
+    {
+      url: `${SITE_URL}/tablero`,
+      lastModified,
+      changeFrequency: "weekly",
+      priority: 0.9,
     },
     {
       url: `${SITE_URL}/acerca`,

@@ -19,7 +19,8 @@ cases:
     tipo: Cuántos
     expect:
       row_count: 1
-      first_row_must_contain: { n: "86283" }
+      # El dataset crece (86.283 el 2026-05-29; 86.603 el 2026-07-12): mínimo.
+      first_row_field_min: { n: 86283 }
 
   - id: subsidios_vivienda_top_programa
     dataset_id: h2yr-zfb2
@@ -81,8 +82,10 @@ cases:
     tipo: Cuántos
     expect:
       row_count: 1
-      # SECOPII crece. Verifica que n >= 25M (era 28,4M el 2026-05-29).
-      first_row_field_min: { n: 25000000 }
+      # OJO: SECOPII también ENCOGE — el portal lo reestructuró y pasó de
+      # 28,4M (2026-05-29) a 11,4M (2026-07-12, verificado con count(1) vivo).
+      # El mínimo protege contra corrupción del catálogo, no contra el portal.
+      first_row_field_min: { n: 5000000 }
 
   - id: secopii_mapa_no_aplica
     dataset_id: 9sue-ezhx
@@ -121,12 +124,15 @@ cases:
       first_row_must_contain: { n: "30" }
 
   # ---- Federados Bogotá CKAN ----
-  - id: bogota_pqrs_concesionario_total
-    dataset_id: bog-4f35071c186d4b07
+  # (bog-4f35071c186d4b07 PQRS salió del golden el 2026-07-12: el portal de
+  # Bogotá dejó de servir su CSV — la degradación honesta ya la cubre FONCEP.)
+  - id: bogota_troncal_total
+    dataset_id: bog-29c8239dcb4e40b0
     tipo: Cuántos
     expect:
       row_count: 1
-      first_row_must_contain: { n: "245" }
+      # 96.455 filas al 2026-07-12 (snapshot de bodega fresco); crece → mínimo.
+      first_row_field_min: { n: 90000 }
 
   # ---- Federado 403 (FONCEP) — error legible, no 502 ----
   - id: bogota_foncep_403_degrada

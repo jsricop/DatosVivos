@@ -121,7 +121,7 @@ export function DataTable({
     <div
       role="region"
       aria-label="Tabla de datos crudos"
-      className="border border-hairline overflow-auto max-h-[60vh]"
+      className="rounded-[var(--radius-2)] border border-hairline overflow-auto max-h-[60vh]"
     >
       <div className="flex flex-wrap items-center gap-4 px-4 py-3 hairline-bottom bg-bg-elev sticky top-0 z-10">
         <div className="flex items-center gap-2 flex-1 min-w-[200px]">
@@ -149,7 +149,7 @@ export function DataTable({
           onClick={() => setFiltersOpen((v) => !v)}
           aria-pressed={filtersOpen}
           aria-controls="datatable-column-filters"
-          className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
+          className="inline-flex items-center gap-2 rounded-[var(--radius-1)] border border-accent px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-accent hover:bg-bg-overlay focus-ring"
         >
           <Icon name="filter" size={14} aria-hidden />
           <span>Filtros{activeColumnFilters > 0 ? ` (${activeColumnFilters})` : ""}</span>
@@ -166,7 +166,7 @@ export function DataTable({
         <button
           type="button"
           onClick={downloadCsv}
-          className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
+          className="inline-flex items-center gap-2 rounded-[var(--radius-1)] border border-accent px-3 py-1.5 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-accent hover:bg-bg-overlay focus-ring"
           aria-label="Descargar CSV con las filas visibles"
         >
           <Icon name="download" size={14} aria-hidden />
@@ -283,7 +283,7 @@ export function DataTable({
               type="button"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="border border-hairline px-2.5 py-1 focus-ring disabled:opacity-50"
+              className="rounded-[var(--radius-1)] border border-hairline px-2.5 py-1 hover:border-accent focus-ring disabled:opacity-50"
             >
               Anterior
             </button>
@@ -291,7 +291,7 @@ export function DataTable({
               type="button"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="border border-hairline px-2.5 py-1 focus-ring disabled:opacity-50"
+              className="rounded-[var(--radius-1)] border border-hairline px-2.5 py-1 hover:border-accent focus-ring disabled:opacity-50"
             >
               Siguiente
             </button>

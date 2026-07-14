@@ -72,12 +72,20 @@ export type QueryEvent =
   | { type: "done"; elapsed_s: number };
 
 /** Hito 1 / Fase B — Motor SoQL determinista. Espejo de api/models/schemas.py. */
-export type ChipTipo = "Cuántos" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
+export type ChipTipo = "Cuántos" | "Total" | "Comparar" | "Ranking" | "Tendencia" | "Mapa";
+
+/** Un filtro de valor sobre el dataset elegido (ADR-024). */
+export type FilterSpec = {
+  col: string;
+  value: string;
+};
 
 export type ChipsExecuteRequest = {
   dataset_id: string;
   tipo: ChipTipo;
   territorio?: string | null;
+  filters?: FilterSpec[] | null;
+  pregunta?: string | null;
 };
 
 export type ChipsExecuteResponse = {
@@ -88,6 +96,19 @@ export type ChipsExecuteResponse = {
   rows: Row[];
   row_count: number;
   error?: string | null;
+  filters_applied?: FilterSpec[] | null;
+  filter_note?: string | null;
+  unfiltered_total?: number | null;
+  /** Unidad de UNA fila ("estudiantes matriculados") — da unidad al conteo. */
+  row_unit?: string | null;
+};
+
+/** GET /api/datasets/{id}/filters — perfil de filtrables (ADR-024). */
+export type FilterOption = { value: string; n?: number | null };
+export type FilterColumn = { col: string; kind: string; values: FilterOption[] };
+export type DatasetFiltersResponse = {
+  dataset_id: string;
+  filtros: FilterColumn[];
 };
 
 /** Hito 1 / Fase D — narrativa LLM "Explicar" (ADR-017). */
@@ -97,6 +118,8 @@ export type ChipsExplainRequest = {
   tipo: ChipTipo;
   rows: Row[];
   columns_used?: string[];
+  /** Unidad de UNA fila — sin ella la narrativa inventaba la unidad. */
+  row_unit?: string | null;
 };
 
 export type ChipsFromNLResponse = {
@@ -114,4 +137,65 @@ export type ChipsExplainResponse = {
   hallucinated_numbers?: string[];
   model: string;
   error?: string | null;
+};
+
+/** GET /api/v1/stats/catalog — conteos en vivo desde la vista del tablero. */
+export type CatalogStats = {
+  total: number;
+  nativos: number;
+  federados: number;
+  directo: number;
+  requiere_herramienta: number;
+  solo_metadatos: number;
+  consultable_tabla: number;
+  util: number;
+  admin: number;
+};
+
+/** Agregado por sector administrativo (solo datasets con sector conocido). */
+export type SectorCount = {
+  sector: string;
+  n_datasets: number;
+  n_entidades: number;
+};
+
+/** Agregado por departamento DIVIPOLA. */
+export type DeptCount = {
+  codigo: string;
+  nombre: string;
+  n_datasets: number;
+};
+
+/** Agregado por portal de origen del catálogo integrado. */
+export type PortalCount = {
+  portal: string;
+  n_datasets: number;
+};
+
+/** Punto de la línea de tiempo: acumulado del catálogo a fin de ese año. */
+export type YearCumulative = {
+  anio: number;
+  acumulado: number;
+};
+
+/**
+ * GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
+ * Línea editorial sobre el CATÁLOGO COMPLETO: `total` coincide con
+ * CatalogStats. La división temáticos/administrativos va en `composicion`.
+ */
+export type PanoramaStats = {
+  total: number;
+  n_entidades: number;
+  composicion: Record<"tematicos" | "administrativos", number>;
+  semaforo: Record<"verde" | "amarillo" | "rojo" | "desconocido", number>;
+  acceso: Record<"directo" | "requiere_herramienta" | "solo_metadatos", number>;
+  por_sector: SectorCount[];
+  por_departamento: DeptCount[];
+  por_portal: PortalCount[];
+  nacional_sin_geo: number;
+  generated_at: string;
+  /** finished_at de la última corrida del ETL (la fecha real del dato). */
+  last_etl_at?: string | null;
+  /** Acumulado de datasets por año de creación en su portal de origen. */
+  crecimiento?: YearCumulative[];
 };

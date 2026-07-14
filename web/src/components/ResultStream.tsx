@@ -7,6 +7,10 @@ import { DatasetCitation } from "@/components/DatasetCitation";
 import { DataTable } from "@/components/DataTable";
 import { DisclaimerBeta } from "@/components/DisclaimerBeta";
 import { Icon } from "@/components/Icon";
+import {
+  InterpretationBlock,
+  type Interpretation,
+} from "@/components/InterpretationBlock";
 import { NarrativeBlock } from "@/components/NarrativeBlock";
 import { SpeechOutput } from "@/components/SpeechOutput";
 import {
@@ -48,6 +52,11 @@ type State = {
   status: "idle" | "streaming" | "done" | "error";
   elapsed?: number;
   errorMessage?: string;
+  /** Rehúso verificado (ADR-022 Fase 4): el motor no afirma una cifra no
+   *  verificable. Cuando está presente, no se renderiza figura ni narrativa. */
+  refusal?: { reason: string; message: string; suggestion: string };
+  /** "Esto entendí" (ADR-022 Fase 5): interpretación informativa de la consulta. */
+  interpretation?: Interpretation;
 };
 
 const INTENT_LABEL: Record<string, string> = {
@@ -175,6 +184,16 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
   }, [question, filters]);
 
   const isLoading = state.status === "streaming";
+  // Salvaguarda de confianza: si la consulta terminó sin datasets ni filas ni
+  // figura, NO renderizamos prosa de IA sin fuente — mostramos el mensaje
+  // canónico (lo que el disclaimer promete y antes no se implementaba).
+  const noDatasets =
+    state.status === "done" &&
+    state.citations.length === 0 &&
+    state.rowCount === 0 &&
+    !state.dashboardSpec &&
+    !state.refusal;
+  const refusal = state.refusal;
 
   return (
     <article className="flex flex-col gap-8" aria-live="polite">
@@ -198,77 +217,111 @@ export function ResultStream({ question, filters }: ResultStreamProps) {
         </p>
       ) : null}
 
-      {state.narrativeSummary || state.narrative ? (
-        <section className="measure">
-          <NarrativeBlock
-            summary={state.narrativeSummary || state.narrative}
-            extended={state.narrative}
-            summaryComplete={state.summaryComplete}
-            extendedComplete={state.extendedComplete}
-            citationCount={state.citations.length}
-          />
-          <div className="mt-3">
-            <SpeechOutput
-              text={state.narrative || state.narrativeSummary}
+      {refusal ? (
+        <section className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2">
+          <span className="text-kicker text-ink">
+            No puedo afirmar esta cifra con confianza
+          </span>
+          <p className="font-sans text-body text-ink-2 m-0">{refusal.message}</p>
+          <p className="font-sans text-body-sm text-ink-muted m-0">
+            {refusal.suggestion}
+          </p>
+        </section>
+      ) : null}
+
+      {noDatasets ? (
+        <section className="surface-card border-l-4 border-l-warn p-4 flex flex-col gap-2">
+          <span className="text-kicker text-ink">No encontré datasets relevantes</span>
+          <p className="font-sans text-body text-ink-2 m-0">
+            Ningún dataset del catálogo responde esta pregunta con datos
+            verificables. Prueba reformularla o explora por sector desde el
+            inicio. DatosVivos no improvisa respuestas sin fuente.
+          </p>
+        </section>
+      ) : (
+        <>
+          {/* 0) "Esto entendí" — interpretación antes de la cifra (ADR-022 Fase 5). */}
+          {state.interpretation ? (
+            <InterpretationBlock data={state.interpretation} />
+          ) : null}
+
+          {/* 1) Figura/visualización verificada (determinista) primero. */}
+          {state.dashboardSpec ? (
+            <DashboardRenderer
+              spec={state.dashboardSpec}
+              rows={state.rows as Record<string, unknown>[]}
             />
-          </div>
-        </section>
-      ) : null}
+          ) : null}
 
-      {state.dashboardSpec ? (
-        <DashboardRenderer
-          spec={state.dashboardSpec}
-          rows={state.rows as Record<string, unknown>[]}
-        />
-      ) : null}
-
-      {state.soql ? (
-        <section className="surface-elev p-4">
-          <div className="flex items-center justify-between gap-4 mb-2">
-            <span className="text-kicker">SoQL ejecutado</span>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(state.soql)}
-              aria-label="Copiar SoQL"
-              className="inline-flex items-center gap-1.5 border border-hairline-strong px-2.5 py-1 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-ink hover:bg-bg focus-ring"
-            >
-              <Icon name="copy" size={12} aria-hidden />
-              <span>Copiar</span>
-            </button>
-          </div>
-          <pre className="font-mono text-mono text-ink overflow-auto m-0 whitespace-pre-wrap">
-            {state.soql}
-          </pre>
-        </section>
-      ) : null}
-
-      {state.rows.length > 0 ? (
-        <section className="mt-3">
-          <details>
-            <summary>
-              Ver tabla cruda ({state.rowCount.toLocaleString("es-CO")} filas)
-            </summary>
-            <div className="mt-4">
-              <DataTable
-                columns={state.columns}
-                rows={state.rows}
-                downloadFilename="datosvivos-rows.csv"
+          {/* 2) Respuesta en palabras — etiquetada como generada por IA. */}
+          {state.narrativeSummary || state.narrative ? (
+            <section className="measure">
+              <NarrativeBlock
+                summary={state.narrativeSummary || state.narrative}
+                extended={state.narrative}
+                summaryComplete={state.summaryComplete}
+                extendedComplete={state.extendedComplete}
+                citationCount={state.citations.length}
               />
-            </div>
-          </details>
-        </section>
-      ) : null}
+              <div className="mt-3">
+                <SpeechOutput text={state.narrative || state.narrativeSummary} />
+              </div>
+            </section>
+          ) : null}
 
-      {state.citations.length > 0 ? (
-        <section>
-          <h2 className="text-kicker mb-4">Fuentes consultadas</h2>
-          <ol className="list-none">
-            {state.citations.map((c) => (
-              <DatasetCitation key={c.index} citation={c} />
-            ))}
-          </ol>
-        </section>
-      ) : null}
+          {/* 3) Fuentes — prominentes, junto a la respuesta (no al pie). */}
+          {state.citations.length > 0 ? (
+            <section>
+              <h2 className="text-kicker mb-4">Fuentes consultadas</h2>
+              <ol className="list-none">
+                {state.citations.map((c) => (
+                  <DatasetCitation key={c.index} citation={c} />
+                ))}
+              </ol>
+            </section>
+          ) : null}
+
+          {/* 4) Detalles técnicos — colapsados (no ruido para el ciudadano). */}
+          {state.soql ? (
+            <details className="surface-elev p-4">
+              <summary className="text-kicker cursor-pointer">
+                Ver consulta técnica (SoQL)
+              </summary>
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(state.soql)}
+                  aria-label="Copiar SoQL"
+                  className="self-end inline-flex items-center gap-1.5 rounded-[var(--radius-1)] border border-accent px-2.5 py-1 font-mono text-[length:var(--type-kicker)] uppercase tracking-[0.08em] text-accent hover:bg-bg-overlay focus-ring"
+                >
+                  <Icon name="copy" size={12} aria-hidden />
+                  <span>Copiar</span>
+                </button>
+                <pre className="font-mono text-mono text-ink overflow-auto m-0 whitespace-pre-wrap">
+                  {state.soql}
+                </pre>
+              </div>
+            </details>
+          ) : null}
+
+          {state.rows.length > 0 ? (
+            <section>
+              <details>
+                <summary>
+                  Ver todos los datos ({state.rowCount.toLocaleString("es-CO")} filas)
+                </summary>
+                <div className="mt-4">
+                  <DataTable
+                    columns={state.columns}
+                    rows={state.rows}
+                    downloadFilename="datosvivos-rows.csv"
+                  />
+                </div>
+              </details>
+            </section>
+          ) : null}
+        </>
+      )}
 
       {state.status === "error" ? (
         <p
@@ -302,6 +355,34 @@ function applyEvent(
         return { ...s, datasets: (payload.datasets as State["datasets"]) ?? [] };
       case "soql":
         return { ...s, soql: (payload.soql as string) ?? "" };
+      case "refusal":
+        // ADR-022 Fase 4: el motor rehúsa afirmar una cifra no verificable.
+        return {
+          ...s,
+          refusal: {
+            reason: (payload.reason as string) ?? "unverifiable",
+            message: (payload.message as string) ?? "",
+            suggestion: (payload.suggestion as string) ?? "",
+          },
+        };
+      case "interpretation": {
+        // ADR-022 Fase 5: "esto entendí" — informativo, no bloqueante.
+        const v = (payload.verificacion as Record<string, unknown>) ?? {};
+        return {
+          ...s,
+          interpretation: {
+            intent: payload.intent as string | undefined,
+            dataset: (payload.dataset as Interpretation["dataset"]) ?? null,
+            filtros: (payload.filtros as Interpretation["filtros"]) ?? [],
+            columnasUsadas: (payload.columnas_usadas as string[]) ?? [],
+            verificacion: {
+              passed: Boolean(v.passed),
+              repairs: (v.repairs as number) ?? 0,
+              fallback: (v.fallback as string | null) ?? null,
+            },
+          },
+        };
+      }
       case "narrative_chunk":
         // Legacy event (ADR-013). Si el backend ya emitió narrative_chunk_extended
         // ignoramos esto para evitar duplicación.

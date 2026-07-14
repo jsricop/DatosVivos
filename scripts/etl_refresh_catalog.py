@@ -46,6 +46,7 @@ from psycopg.types.json import Jsonb
 from mcp_server.socrata.discovery_client import DiscoveryClient
 from mcp_server.socrata.metadata_client import MetadataClient
 from mcp_server.socrata.soda_client import SodaClient
+from scripts.classify_quality_flag import mark_admin_only, normalize_categories
 
 log = logging.getLogger("etl_refresh_catalog")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -148,6 +149,31 @@ def _find_by_token(dm: dict[str, str], token: str) -> str | None:
     return None
 
 
+# Plantilla Mustache sin diligenciar: el título llegó como "{{name}}" (o
+# cualquier "{{...}}"). Ocurre cuando un portal federa a datos.gov.co con la
+# metadata de plantilla vacía; el resultado es un dataset sin título ni
+# descripción reales (y suele 404 en origen poco después). Se descarta.
+_PLACEHOLDER_RE = re.compile(r"^\{\{.*\}\}$")
+
+
+def _is_placeholder(value: str) -> bool:
+    """True si el string es una plantilla Mustache sin diligenciar ({{...}})."""
+    return bool(_PLACEHOLDER_RE.match(value.strip()))
+
+
+def _scrub_placeholder(value: str | None) -> str | None:
+    """El valor, o None si es una plantilla sin diligenciar.
+
+    El caso {{name}} descarta la fila completa (arriba), pero un portal puede
+    federar con el título bien y OTROS campos de plantilla vacíos (117 datasets
+    llegaron con entity_raw='{{source}}', 2026-07-12): el dataset vale, el
+    campo no.
+    """
+    if value and _is_placeholder(value):
+        return None
+    return value
+
+
 def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
     """Mapea un `result` de la Discovery API a las columnas de `datasets`."""
     resource = result.get("resource") or {}
@@ -156,6 +182,12 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
 
     dataset_id = resource.get("id")
     if not dataset_id:
+        return None
+
+    # Guarda anti-placeholder: no ingerir filas cuyo título es un {{...}} sin
+    # diligenciar — son metadata muerta que contamina el catálogo y el tablero.
+    if _is_placeholder(resource.get("name") or ""):
+        log.debug("Descartado %s: nombre placeholder %r", dataset_id, resource.get("name"))
         return None
 
     pv = resource.get("page_views") or {}
@@ -213,9 +245,9 @@ def _extract_discovery(result: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "dataset_id": dataset_id,
         "name": resource.get("name") or "",
-        "entity_raw": entity_raw_val,
-        "category": category_val,
-        "description": (resource.get("description") or "")[:2000],
+        "entity_raw": _scrub_placeholder(entity_raw_val) or "",
+        "category": _scrub_placeholder(category_val),
+        "description": (_scrub_placeholder(resource.get("description")) or "")[:2000],
         # rows_updated_at = fecha del DATO (no del metadata) → semáforo correcto.
         "rows_updated_at": data_updated,
         "data_updated_at": data_updated,
@@ -387,7 +419,10 @@ def _upsert_dataset(cur: psycopg.Cursor, rec: dict[str, Any], entity_id: int | N
             name = EXCLUDED.name,
             entity_id = EXCLUDED.entity_id,
             entity_raw = EXCLUDED.entity_raw,
-            category = EXCLUDED.category,
+            -- COALESCE+NULLIF: si la fuente no declara categoría, se conserva
+            -- la existente (puede ser inferida por backfill_categories.py) en
+            -- vez de pisarla con NULL cada noche.
+            category = COALESCE(NULLIF(EXCLUDED.category, ''), datasets.category),
             description = EXCLUDED.description,
             rows_updated_at = EXCLUDED.rows_updated_at,
             update_frequency = EXCLUDED.update_frequency,
@@ -641,6 +676,19 @@ async def main(args: argparse.Namespace) -> int:
                 conn, to_enrich, want_count=not args.no_rowcount, want_comments=not args.no_comments
             )
 
+        # Clasificación de calidad: re-aplica admin_only (Ley 1712) sobre los nombres ya
+        # ingestados. Idempotente. Antes era un script manual desacoplado → se desfasaba con
+        # cada ingesta. Solo admin_only (NO no_rows: los sin-conteo son federados no-tabulares).
+        n_admin = mark_admin_only(conn)
+        conn.commit()
+        log.info("Clasificación calidad: admin_only marcados/actualizados=%d", n_admin)
+
+        # Grafías de categoría: la fuente re-declara variantes cada noche
+        # ("Función Pública"/"Función pública") → se re-unifican a la dominante.
+        n_norm = normalize_categories(conn)
+        conn.commit()
+        log.info("Categorías normalizadas (grafía dominante): %d", n_norm)
+
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE etl_runs SET finished_at = NOW(), datasets_succeeded = %s WHERE run_id = %s",
@@ -649,6 +697,17 @@ async def main(args: argparse.Namespace) -> int:
         conn.commit()
 
     log.info("ETL terminado. total=%d", len(ids))
+
+    # Farmeo: regla diaria de la bodega Parquet (entra-uno-sale-uno, migración
+    # 027). Corre DESPUÉS de cerrar etl_runs: acotado en tiempo, con advisory
+    # lock, y un fallo suyo jamás afecta al ETL (run_daily nunca lanza).
+    if not args.no_farm:
+        from scripts.farm_datasets import run_daily
+        run_daily()
+        # Perfil de filtrables (ADR-024): tras el farmeo, re-perfila los
+        # parquets nuevos/refrescados. Incremental, acotado, nunca lanza.
+        from scripts.profile_filter_values import run_daily as profile_daily
+        profile_daily()
     return 0
 
 
@@ -661,6 +720,8 @@ def _parse_args() -> argparse.Namespace:
                    help="recontar solo nuevos/cambiados (compara data_updated_at); para refresco recurrente")
     p.add_argument("--no-rowcount", action="store_true", help="omitir count(*) SODA")
     p.add_argument("--no-comments", action="store_true", help="omitir comments/rating Metadata")
+    p.add_argument("--no-farm", action="store_true",
+                   help="omitir la regla diaria de la bodega Parquet (farmeo)")
     return p.parse_args()
 
 

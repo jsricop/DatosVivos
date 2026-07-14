@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChipsResultPanel } from "@/components/ChipsResultPanel";
+import { FilterBar } from "@/components/FilterBar";
 import { Icon } from "@/components/Icon";
 import type {
   ChipTipo,
   ChipsExecuteResponse,
   ChipsExplainResponse,
+  DatasetFiltersResponse,
+  FilterColumn,
+  FilterSpec,
 } from "@/lib/types";
 
 /** Espejo de api/models/schemas.py::ChipsCandidateDataset */
@@ -43,6 +47,12 @@ type Props = {
   filters: Record<string, string[]>;
   subtags?: string[];
   refinador?: string;
+  /** Aviso del mapper NL (p. ej. "marca tu municipio"). */
+  hint?: string;
+  /** Filtros de valor iniciales desde la URL (?filtro=col:valor). */
+  initialValueFilters?: FilterSpec[];
+  /** Pregunta NL original — habilita el filtro automático (ADR-024 F3). */
+  pregunta?: string;
 };
 
 const AXIS_LABEL: Record<string, string> = {
@@ -52,7 +62,14 @@ const AXIS_LABEL: Record<string, string> = {
   entidad: "Entidad",
 };
 
-export function ChipsResultView({ filters, subtags, refinador }: Props) {
+export function ChipsResultView({
+  filters,
+  subtags,
+  refinador,
+  hint,
+  initialValueFilters,
+  pregunta,
+}: Props) {
   const [data, setData] = useState<ChipsQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +81,18 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
   const [execLoading, setExecLoading] = useState(false);
   const [showSoql, setShowSoql] = useState(false);
 
+  // Filtros de VALOR sobre el dataset elegido (ADR-024, Fase 2). Los
+  // disponibles salen del perfil de la bodega; los activos viven aquí y
+  // se reflejan en la URL (?filtro=col:valor) para que el enlace comparta
+  // el resultado filtrado.
+  const [availableFilters, setAvailableFilters] = useState<FilterColumn[]>([]);
+  const [valueFilters, setValueFilters] = useState<FilterSpec[]>(
+    initialValueFilters ?? [],
+  );
+  // true cuando el usuario ya interactuó con los filtros (o el auto-filtro
+  // se sembró): a partir de ahí manda el estado explícito, no la pregunta.
+  const filtersTouchedRef = useRef((initialValueFilters?.length ?? 0) > 0);
+
   // Fase D — narrativa LLM "Explicar" (opt-in por botón).
   const [explain, setExplain] = useState<ChipsExplainResponse | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
@@ -73,6 +102,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     const v = filters.tipo?.[0];
     return isValidTipo(v) ? v : null;
   }, [filters.tipo]);
+
+  // COUNT(*) por defecto: si hay dataset elegido pero el usuario no marcó
+  // TIPO, ejecutamos "Cuántos" — siempre hay una cifra que mostrar en vez de
+  // tarjetas sin número (el conteo es la pregunta base de cualquier dataset).
+  const tipoEfectivo: ChipTipo | null = tipo ?? "Cuántos";
 
   // Cuando cambia el resultado, resetear narrativa.
   useEffect(() => {
@@ -95,6 +129,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
           tipo: exec.tipo,
           rows: exec.rows,
           columns_used: exec.columns_used,
+          row_unit: exec.row_unit ?? null,
         }),
       });
       if (!res.ok) throw new Error(`Backend ${res.status}`);
@@ -113,10 +148,60 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     }
   }
 
-  // Auto-execute cuando hay dataset elegido + TIPO marcado.
+  // Filtros disponibles del dataset elegido (perfil de la bodega). Al
+  // cambiar de dataset se limpian los filtros activos: los valores son
+  // específicos de CADA dataset.
+  const lastDatasetRef = useRef<string | null>(null);
   useEffect(() => {
     const dsId = data?.chosen_dataset_id;
-    if (!dsId || !tipo) {
+    if (!dsId) {
+      setAvailableFilters([]);
+      return;
+    }
+    if (lastDatasetRef.current && lastDatasetRef.current !== dsId) {
+      setValueFilters([]);
+      filtersTouchedRef.current = false; // dataset nuevo, auto-filtro permitido
+    }
+    lastDatasetRef.current = dsId;
+    let cancelled = false;
+    fetch(`/api/datasets/${encodeURIComponent(dsId)}/filters`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: DatasetFiltersResponse | null) => {
+        if (!cancelled) setAvailableFilters(j?.filtros ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableFilters([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.chosen_dataset_id]);
+
+  // Toggle de filtro: uno por columna; click en el activo lo quita. La URL
+  // se actualiza sin navegación (replaceState) para compartir el enlace.
+  function toggleFilter(col: string, value: string) {
+    filtersTouchedRef.current = true;
+    setValueFilters((prev) => {
+      const existing = prev.find((f) => f.col === col);
+      let next: FilterSpec[];
+      if (existing?.value === value) {
+        next = prev.filter((f) => f.col !== col);
+      } else {
+        next = [...prev.filter((f) => f.col !== col), { col, value }];
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("filtro");
+      for (const f of next) url.searchParams.append("filtro", `${f.col}:${f.value}`);
+      window.history.replaceState(null, "", url.toString());
+      return next;
+    });
+  }
+
+  // Auto-execute cuando hay dataset elegido; sin TIPO marcado degrada a
+  // "Cuántos" (tipoEfectivo) para que siempre haya cifra, no tarjetas mudas.
+  useEffect(() => {
+    const dsId = data?.chosen_dataset_id;
+    if (!dsId || !tipoEfectivo) {
       setExec(null);
       setExecError(null);
       return;
@@ -129,14 +214,39 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
         const res = await fetch("/api/chips/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataset_id: dsId, tipo }),
+          body: JSON.stringify({
+            dataset_id: dsId,
+            tipo: tipoEfectivo,
+            filters: valueFilters.length > 0 ? valueFilters : null,
+            territorio: filters.territorio?.[0] ?? null,
+            // La pregunta habilita el auto-filtro (F3) SOLO mientras el
+            // usuario no haya tocado los filtros: al quitar un filtro no
+            // debe re-aplicarse solo.
+            pregunta:
+              !filtersTouchedRef.current && valueFilters.length === 0
+                ? pregunta ?? null
+                : null,
+          }),
         });
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(`Backend ${res.status}: ${txt}`);
         }
         const json: ChipsExecuteResponse = await res.json();
-        if (!cancelled) setExec(json);
+        if (!cancelled) {
+          setExec(json);
+          // Auto-filtro aplicado por el backend → se refleja como chips
+          // activos para que el ciudadano lo VEA y pueda quitarlo.
+          if (
+            json.filters_applied &&
+            json.filters_applied.length > 0 &&
+            !filtersTouchedRef.current &&
+            valueFilters.length === 0
+          ) {
+            filtersTouchedRef.current = true;
+            setValueFilters(json.filters_applied);
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           setExecError(e instanceof Error ? e.message : "Error desconocido");
@@ -149,16 +259,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [data?.chosen_dataset_id, tipo]);
+  }, [data?.chosen_dataset_id, tipoEfectivo, valueFilters]);
 
-  // Cuando llega data, hacer scroll al inicio de los resultados — si el header
-  // (chips activos, breadcrumb) es alto, los datasets pueden quedar abajo del
-  // fold y el usuario no ve nada.
-  useEffect(() => {
-    if (!loading && data && sectionRef.current) {
-      sectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [loading, data]);
+  // (Se eliminó el scrollIntoView automático: movía el viewport sin acción del
+  // usuario — anti-patrón de accesibilidad WCAG 2.4.3. El orden del DOM ya pone
+  // la respuesta arriba.)
 
   useEffect(() => {
     let cancelled = false;
@@ -216,8 +321,11 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
 
   if (error) {
     return (
-      <div role="alert" className="py-6 text-red-700 border border-red-200 bg-red-50 p-4">
-        <strong>Error: </strong> {error}
+      <div
+        role="alert"
+        className="rounded-[var(--radius-2)] border border-l-4 border-bad p-4 text-ink-2"
+      >
+        <strong className="text-bad">Error: </strong> {error}
       </div>
     );
   }
@@ -231,9 +339,15 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
           <span className="text-kicker">Resultado</span>
           <span className="font-mono text-caption text-ink-muted">
             {data.total_in_subset} dataset
-            {data.total_in_subset !== 1 ? "s" : ""} en el subset
+            {data.total_in_subset !== 1 ? "s" : ""} relacionado
+            {data.total_in_subset !== 1 ? "s" : ""}
           </span>
         </div>
+        {hint ? (
+          <p className="font-sans text-body text-warn leading-relaxed m-0">
+            {hint}
+          </p>
+        ) : null}
         {data.message ? (
           <p className="font-sans text-body text-ink-2 leading-relaxed">
             {data.message}
@@ -259,6 +373,13 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
           aria-label="Resultado de la consulta"
           className="flex flex-col gap-3"
         >
+          {availableFilters.length > 0 ? (
+            <FilterBar
+              filtros={availableFilters}
+              active={valueFilters}
+              onToggle={toggleFilter}
+            />
+          ) : null}
           {execLoading ? (
             <div
               role="status"
@@ -270,9 +391,9 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
           ) : execError ? (
             <div
               role="alert"
-              className="border border-red-200 bg-red-50 p-4 flex flex-col gap-1"
+              className="rounded-[var(--radius-2)] border border-l-4 border-bad p-4 flex flex-col gap-1"
             >
-              <span className="text-kicker text-red-900">
+              <span className="text-kicker text-bad">
                 No pudimos calcular
               </span>
               <p className="font-sans text-body text-ink-2 m-0">
@@ -303,6 +424,28 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
                   )?.name ?? exec.dataset_id
                 }
               />
+              {exec.filters_applied && exec.filters_applied.length > 0 ? (
+                <p className="font-sans text-body text-ink-2 m-0">
+                  Filtrado:{" "}
+                  <strong className="text-ink">
+                    {exec.filters_applied
+                      .map((f) => `${f.col.replace(/_/g, " ")} = ${f.value}`)
+                      .join(" · ")}
+                  </strong>
+                  {exec.unfiltered_total != null ? (
+                    <span className="text-ink-muted">
+                      {" "}
+                      (de {exec.unfiltered_total.toLocaleString("es-CO")}{" "}
+                      registros sin filtro)
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              {exec.filter_note ? (
+                <p className="font-sans text-caption text-warn m-0">
+                  {exec.filter_note}
+                </p>
+              ) : null}
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="font-mono text-caption text-ink-muted">
                   {exec.row_count} fila{exec.row_count !== 1 ? "s" : ""} ·
@@ -329,7 +472,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
                   type="button"
                   onClick={requestExplain}
                   disabled={explainLoading}
-                  className="font-mono text-caption text-ink border border-ink px-3 py-1 hover:bg-ink hover:text-bg disabled:opacity-50 focus-ring"
+                  className="font-mono text-caption text-accent border border-accent rounded-[var(--radius-1)] px-3 py-1 hover:bg-accent hover:text-bg disabled:opacity-50 transition-colors focus-ring"
                 >
                   {explainLoading
                     ? "Explicando…"
@@ -345,7 +488,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
               </div>
               {explain?.narrative ? (
                 <article className="surface-elev p-4">
-                  <p className="font-serif text-body text-ink m-0 leading-relaxed">
+                  <p className="font-sans text-body text-ink m-0 leading-relaxed">
                     {explain.narrative}
                   </p>
                 </article>
@@ -353,7 +496,7 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
               {explain?.error ? (
                 <div
                   role="alert"
-                  className="border border-amber-300 bg-amber-50 p-3 font-sans text-caption text-ink-2"
+                  className="rounded-[var(--radius-2)] border border-l-4 border-warn p-3 font-sans text-caption text-ink-2"
                 >
                   No pude generar la explicación: {explain.error}
                   {explain.hallucinated_numbers &&
@@ -376,67 +519,113 @@ export function ChipsResultView({ filters, subtags, refinador }: Props) {
 
       {data.candidates.length === 0 ? (
         <p className="font-sans text-body text-ink-2">
-          Ningún dataset coincide. Probá quitar algún chip o ampliar el
-          territorio (ej. usar &quot;Nacional&quot;).
+          Ningún dataset coincide. Prueba quitar algún filtro o ampliar el
+          territorio (por ejemplo, usar &quot;Nacional&quot;).
         </p>
       ) : (
-        <ul className="flex flex-col gap-3 list-none p-0 m-0">
-          {data.candidates.map((c, i) => (
-            <li
-              key={c.dataset_id}
-              className={`border border-hairline-strong p-4 ${
-                c.dataset_id === data.chosen_dataset_id
-                  ? "bg-bg-elev ring-2 ring-ink"
-                  : "bg-bg"
-              }`}
-            >
-              <div className="flex justify-between items-start gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-kicker text-ink-muted">
-                      #{i + 1}
-                    </span>
-                    {c.dataset_id === data.chosen_dataset_id ? (
-                      <span className="font-mono text-kicker bg-ink text-bg px-1.5 py-0.5">
-                        ELEGIDO
-                      </span>
-                    ) : null}
-                    {c.jurisdiccion_nivel ? (
-                      <span className="font-mono text-kicker text-ink-2 uppercase">
-                        {c.jurisdiccion_nivel}
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="font-serif text-h4 m-0 mb-1">{c.name}</h3>
-                  <p className="font-sans text-caption text-ink-2 mb-2">
-                    {c.entity ?? "(sin entidad)"}
-                    {c.category ? ` · ${c.category}` : null}
-                  </p>
-                  <div className="font-mono text-caption text-ink-muted flex gap-3 flex-wrap">
-                    {c.row_count != null ? (
-                      <span>{c.row_count.toLocaleString("es-CO")} filas</span>
-                    ) : null}
-                    {c.view_count != null ? (
-                      <span>{c.view_count.toLocaleString("es-CO")} vistas</span>
-                    ) : null}
-                    {c.last_updated ? (
-                      <span>actualizado {c.last_updated.slice(0, 10)}</span>
-                    ) : null}
-                  </div>
-                </div>
-                <a
-                  href={c.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-caption text-ink hover:underline focus-ring"
-                >
-                  Ver fuente <Icon name="external-link" size={12} aria-hidden />
-                </a>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <CandidatesSection
+          candidates={data.candidates}
+          chosenId={data.chosen_dataset_id}
+        />
       )}
     </section>
+  );
+}
+
+/**
+ * Presenta las fuentes: la elegida (de donde sale la cifra) prominente como
+ * "Fuente", y las alternativas condensadas en un `<details>`. Cuando no hay
+ * elegida (navegación sin TIPO), lista los datasets relacionados para explorar.
+ */
+function CandidatesSection({
+  candidates,
+  chosenId,
+}: {
+  candidates: Candidate[];
+  chosenId: string | null;
+}) {
+  const chosen = chosenId
+    ? candidates.find((c) => c.dataset_id === chosenId) ?? null
+    : null;
+  const others = chosen
+    ? candidates.filter((c) => c.dataset_id !== chosen.dataset_id)
+    : candidates;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-kicker">{chosen ? "Fuente" : "Datasets relacionados"}</span>
+
+      {chosen ? <CandidateCard c={chosen} chosen /> : null}
+
+      {others.length > 0 ? (
+        chosen ? (
+          <details className="group">
+            <summary className="cursor-pointer font-mono text-caption text-ink-2 hover:text-ink focus-ring">
+              Ver otras {others.length} fuente{others.length !== 1 ? "s" : ""} relacionada
+              {others.length !== 1 ? "s" : ""}
+            </summary>
+            <ul className="mt-3 flex flex-col gap-3 list-none p-0 m-0">
+              {others.map((c) => (
+                <li key={c.dataset_id}>
+                  <CandidateCard c={c} />
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : (
+          <ul className="flex flex-col gap-3 list-none p-0 m-0">
+            {others.map((c) => (
+              <li key={c.dataset_id}>
+                <CandidateCard c={c} />
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function CandidateCard({ c, chosen = false }: { c: Candidate; chosen?: boolean }) {
+  return (
+    <article className={`surface-card p-4 ${chosen ? "border-accent" : ""}`}>
+      <div className="flex justify-between items-start gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            {chosen ? (
+              <span className="rounded-[var(--radius-1)] bg-accent text-bg font-sans text-[length:var(--type-kicker)] font-bold uppercase tracking-wide px-2 py-0.5">
+                Fuente de la cifra
+              </span>
+            ) : null}
+            {c.jurisdiccion_nivel ? (
+              <span className="rounded-[var(--radius-1)] border border-hairline bg-bg-elev font-mono text-kicker text-ink-2 uppercase px-2 py-0.5">
+                {c.jurisdiccion_nivel}
+              </span>
+            ) : null}
+          </div>
+          <h3 className="text-h4 m-0 mb-1">{c.name}</h3>
+          <p className="font-sans text-caption text-ink-2 mb-2">
+            {c.entity ?? "(sin entidad)"}
+            {c.category ? ` · ${c.category}` : null}
+          </p>
+          <div className="font-mono text-caption text-ink-muted flex gap-3 flex-wrap">
+            {c.row_count != null ? (
+              <span>{c.row_count.toLocaleString("es-CO")} filas</span>
+            ) : null}
+            {c.last_updated ? (
+              <span>actualizado {c.last_updated.slice(0, 10)}</span>
+            ) : null}
+          </div>
+        </div>
+        <a
+          href={c.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius-1)] border border-accent px-3 py-1 font-sans text-body-sm font-semibold text-accent no-underline hover:bg-bg-overlay focus-ring"
+        >
+          Ver dataset <Icon name="external-link" size={12} aria-hidden />
+        </a>
+      </div>
+    </article>
   );
 }

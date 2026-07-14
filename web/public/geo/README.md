@@ -1,18 +1,28 @@
 # GeoJSON DIVIPOLA — Colombia
 
-Carpeta destino de los archivos GeoJSON oficiales para mapas coropléticos (PLAN_DASHBOARD §6).
+GeoJSON oficiales para los mapas coropléticos del sitio. Render: **SVG puro con
+`d3-geo`** (geoMercator + geoPath), sin tiles ni servicios externos — cumple la
+promesa "Sin trackers" del footer.
 
-| Archivo | Nivel | Origen sugerido | Tamaño |
+| Archivo | Nivel | Origen | Tamaño |
 |---|---|---|---|
-| `co_dptos.geojson` | 33 departamentos | DANE / IGAC `Marco geoestadístico nacional` | ~50 KB minificado |
-| `co_mpios.geojson` | 1122 municipios | DANE / IGAC `Marco geoestadístico nacional` | ~2 MB (simplificado al 10 %) |
+| `co_dptos.geojson` | 33 departamentos | DANE / IGAC `Marco geoestadístico nacional` | ~1.5 MB |
+| `co_mpios.geojson` | 1122 municipios | DANE / IGAC (simplificado al 10 % con mapshaper) | ~790 KB |
 
-## Descarga sugerida
+## Consumidores
 
-Una opción libre y verificable es el repositorio público de [john-guerra/colombia.geo.json](https://github.com/john-guerra/colombia.geo.json) (Creative Commons), o el shapefile oficial DANE convertido a GeoJSON con `mapshaper`:
+- `web/src/components/panorama/PanoramaMap.tsx` — coropleta de departamentos
+  en la home panorama (ADR-023). Carga `co_dptos.geojson` lazy client-side.
+- `web/src/components/charts/ChoroplethMapBlock.tsx` — mapas en dashboards
+  generados por el flujo de búsqueda. Soporta `dpto` y `mpio`.
+
+Ambos hacen match por las propiedades `DPTO` (2 dígitos) / `MPIO` (5 dígitos)
+y usan buckets por cuantiles con opacidad creciente sobre `--accent`.
+
+## Regeneración (si cambia la fuente DANE)
 
 ```bash
-# Departamentos (uso oficial DANE):
+# Departamentos:
 ogr2ogr -f GeoJSON co_dptos.geojson MGN_DPTO_POLITICO.shp -t_srs EPSG:4326 \
         -simplify 0.001 -lco RFC7946=YES
 
@@ -22,10 +32,7 @@ mapshaper MGN_MPIO_POLITICO.shp -simplify 10% keep-shapes \
 ```
 
 Reglas:
-- Conservar propiedad `cod_dpto` o `cod_mpio` (5 dígitos) en cada feature — es la llave que el spec usa para hacer match.
-- Servir con `Cache-Control: max-age=31536000, immutable` en Nginx (ver `nginx/default.conf`).
-- El de mpios se carga **lazy** desde el frontend solo cuando un Dashboard spec lo requiere.
-
-## Estado actual
-
-`ChoroplethMapBlock.tsx` ya soporta el render coroplético via MapLibre. Mientras los archivos no estén presentes, el componente cae a un mapa de marcadores en las capitales de los códigos DIVIPOLA referenciados (versión degradada honesta — no inventa polígonos).
+- Conservar `DPTO`/`MPIO`/`NOMBRE_DPT`/`NOMBRE_MPI` en cada feature — llaves
+  del match y de los tooltips.
+- El geojson se carga **lazy** desde el frontend solo cuando hay un mapa en
+  pantalla.

@@ -107,7 +107,7 @@ export function SubtagsBar({
   }
 
   return (
-    <fieldset className="border border-hairline rounded-[var(--radius-1)] bg-bg-elev/40 px-5 pt-4 pb-5 m-0">
+    <fieldset className="border border-hairline rounded-[var(--radius-2)] bg-bg-elev/40 px-5 pt-4 pb-5 m-0">
       <legend className="text-kicker px-1.5">Refinar</legend>
       <p className="font-sans text-caption text-ink-muted mb-3 -mt-1">
         sub-temas reales del subset

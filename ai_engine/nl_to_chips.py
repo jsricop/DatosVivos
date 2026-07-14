@@ -80,9 +80,10 @@ Reglas:
 - "Mapa/por departamento/por municipio" → TIPO=Mapa.
 - "Bogotá" → TERRITORIO con código 11. "Capital" también.
 - Si menciona una palabra clave específica (ej. "matrícula", "homicidios", "subsidios"), inclúyela en `refinador`.
+- En `refinador` añade también el término OFICIAL con que los datos abiertos nombran eso, porque los datasets usan lenguaje institucional: "colegios" → añade "establecimientos educativos instituciones educativas"; "públicos" → añade "oficial"; "plata/gastos" → añade "presupuesto ejecución"; "robos" → añade "hurto". Máximo ~8 palabras en total.
 
 Formato JSON exacto:
-{{"tema": "<TEMA o null>", "tipo": "<TIPO o null>", "territorio": "<código o null>", "entidad": "<id o null>", "refinador": "<palabra clave opcional o null>"}}
+{{"tema": "<TEMA o null>", "tipo": "<TIPO o null>", "territorio": "<código o null>", "entidad": "<id o null>", "refinador": "<palabras clave y términos oficiales, o null>"}}
 
 JSON:"""
 

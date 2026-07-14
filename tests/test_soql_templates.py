@@ -76,6 +76,17 @@ def test_tendencia_date_real_usa_date_trunc_ym():
     assert "date_trunc_ym(fecha_evento)" in r.soql
 
 
+def test_tendencia_pide_los_ultimos_periodos():
+    """DESC LIMIT 60 = los ÚLTIMOS 60 periodos. Con ASC un dataset 2010-2025
+    respondía '¿está subiendo?' con datos de 2010-2014 (2026-07-13). El
+    endpoint invierte a ascendente antes de responder."""
+    r = build_soql(
+        "Tendencia",
+        [col("fecha_evento", "fecha", subtype="date", data_type="calendar_date")],
+    )
+    assert "ORDER BY periodo DESC" in r.soql
+
+
 def test_tendencia_year_como_numero_no_usa_date_trunc():
     """`año` (semantic=fecha, data_type=number) NO debe envolverse en
     date_trunc_ym — SODA falla con type-mismatch. Group by raw."""

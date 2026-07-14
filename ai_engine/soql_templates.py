@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal
 
-ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+ChipTipo = Literal["Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"]
 
 # Identificador SoQL válido — coincide con `columns_field_name` snake_case.
 _IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -56,15 +56,42 @@ def _safe_ident(name: str | None) -> str | None:
     return name
 
 
+_RATE_LIKE_RE = re.compile(
+    r"tasa|porcentaje|porc(_|$)|[ií]ndice|promedio|media|per_?capita|variaci",
+    re.IGNORECASE,
+)
+_ID_LIKE_RE = re.compile(
+    r"(^|_)(id|ids|codigo|cod|nro|numero|num|consecutivo|registro|radicado)(_|$)"
+    r"|identificaci|expediente",
+    re.IGNORECASE,
+)
+
+
 def _pick(columns: Iterable[dict[str, Any]], stype: str) -> dict[str, Any] | None:
     """Devuelve el primer col-dict del tipo semántico solicitado cuyo
-    `col_name` es identificador SoQL válido. Asume orden de confidence DESC."""
+    `col_name` es identificador SoQL válido. Asume orden de confidence DESC.
+
+    Para `dimension`, evita columnas con nombre de IDENTIFICADOR (id, código,
+    consecutivo…): agrupar por ellas produce una barra por registro (Saber
+    Pro agrupó por código de estudiante, ciclo ciudadano c07 2026-07-12).
+    Si solo hay dimensiones tipo ID, cae a la primera (mejor que nada)."""
+    fallback = None
     for c in columns:
         if c.get("semantic_type") != stype:
             continue
-        if _safe_ident(c.get("col_name")):
-            return c
-    return None
+        if not _safe_ident(c.get("col_name")):
+            continue
+        if stype == "dimension" and _ID_LIKE_RE.search(c["col_name"]):
+            fallback = fallback or c
+            continue
+        if stype == "metrica" and _RATE_LIKE_RE.search(c["col_name"]):
+            # Una TASA/porcentaje/promedio no se suma con sentido: sumar
+            # "tasa de interés" dio 67.11 como "deuda pública" (2026-07-13).
+            # Se prefiere una métrica de monto; si solo hay tasas, cae a ella.
+            fallback = fallback or c
+            continue
+        return c
+    return fallback
 
 
 def _fecha_expr(col: dict[str, Any]) -> str:
@@ -100,6 +127,21 @@ def build_soql(
     if tipo == "Cuántos":
         return BuildResult(soql="SELECT count(*) AS n", columns_used=[])
 
+    if tipo == "Total":
+        # "¿Cuánto vale/cuesta X?" pide la SUMA del valor principal, no un
+        # conteo de filas (ciclo ciudadano c17/c20/c50, 2026-07-12).
+        metrica_col = _pick(columns, "metrica")
+        if not metrica_col:
+            return BuildResult(
+                soql="",
+                error="Total requiere ≥1 columna de tipo `metrica` (un valor sumable)",
+            )
+        met = metrica_col["col_name"]
+        return BuildResult(
+            soql=f"SELECT sum({met}) AS total",
+            columns_used=[met],
+        )
+
     if tipo in ("Comparar", "Ranking"):
         dim_col = _pick(columns, "dimension")
         if not dim_col:
@@ -107,6 +149,17 @@ def build_soql(
                 soql="", error=f"{tipo} requiere ≥1 columna de tipo `dimension`"
             )
         dim = dim_col["col_name"]
+        # Sin categorías-basura como barras ("NR: 19" en Pruebas ICFES, ciclo
+        # ciudadano c07 2026-07-12). El NOT IN con upper() solo aplica a
+        # columnas de texto — sobre numéricas rompería el SoQL completo.
+        if (dim_col.get("socrata_data_type") or "").lower() == "text":
+            sin_basura = (
+                f"WHERE {dim} IS NOT NULL AND upper({dim}) NOT IN "
+                f"('', 'NR', 'N/A', 'NA', 'N.A', 'N.A.', 'NULL', 'SIN DATO', "
+                f"'SIN INFORMACION', 'SIN INFORMACIÓN', 'NO APLICA', 'NO REPORTA') "
+            )
+        else:
+            sin_basura = f"WHERE {dim} IS NOT NULL "
         if tipo == "Ranking" and use_metric:
             metrica_col = _pick(columns, "metrica")
             if metrica_col:
@@ -115,6 +168,7 @@ def build_soql(
                     soql=(
                         f"SELECT {dim} AS categoria, "
                         f"sum({metrica}) AS total "
+                        f"{sin_basura}"
                         f"GROUP BY {dim} "
                         f"ORDER BY total DESC "
                         f"LIMIT 10"
@@ -124,6 +178,7 @@ def build_soql(
         return BuildResult(
             soql=(
                 f"SELECT {dim} AS categoria, count(*) AS n "
+                f"{sin_basura}"
                 f"GROUP BY {dim} "
                 f"ORDER BY n DESC "
                 f"LIMIT 10"
@@ -138,11 +193,15 @@ def build_soql(
                 soql="", error="Tendencia requiere ≥1 columna de tipo `fecha`"
             )
         expr = _fecha_expr(fecha_col)
+        # DESC: los ÚLTIMOS 60 periodos, no los primeros. Con ASC un dataset
+        # 2010-2025 mostraba solo 2010-2014 y "¿está subiendo?" se respondía
+        # con datos de hace una década (2026-07-13). El endpoint re-ordena
+        # ascendente antes de responder para que la gráfica lea izq→der.
         return BuildResult(
             soql=(
                 f"SELECT {expr} AS periodo, count(*) AS n "
                 f"GROUP BY periodo "
-                f"ORDER BY periodo "
+                f"ORDER BY periodo DESC "
                 f"LIMIT 60"
             ),
             columns_used=[fecha_col["col_name"]],

@@ -22,7 +22,7 @@ export default function AccesibilidadPage() {
       <article className="measure-narrow flex flex-col gap-6">
         <header className="pb-4 hairline-bottom">
           <span className="text-kicker">Accesibilidad</span>
-          <h1 className="m-0 mt-2 font-serif text-h1">
+          <h1 className="m-0 mt-2 font-sans text-h1">
             Ajusta DatosVivos a tu lectura.
           </h1>
           <p className="m-0 mt-4 font-sans text-body-lg text-ink-2 leading-relaxed">

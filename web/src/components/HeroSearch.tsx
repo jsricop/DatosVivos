@@ -25,10 +25,9 @@ type HeroSearchProps = {
 
 const DEFAULT_PLACEHOLDERS = [
   "¿Cuántos colegios públicos hay en Boyacá?",
-  "¿Tendencia de matrícula en Cundinamarca 2018-2024?",
-  "¿Cobertura de vacunación contra fiebre amarilla?",
-  "¿Top 10 municipios con más estudiantes matriculados?",
-  "¿Cuántos contratos firmó la ANI en 2024?",
+  "¿Está subiendo o bajando el hurto de celulares en Colombia?",
+  "¿Cuántos hurtos hubo en Boyacá en 2024?",
+  "¿Cuánto cuesta el programa de alimentación escolar?",
 ];
 
 /**
@@ -51,6 +50,16 @@ export function HeroSearch({
   const [isFocused, setIsFocused] = useState(false);
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Permite que el padre "siembre" la caja (ej. chips de ejemplo o dictado de
+  // voz): cuando initialValue cambia, sincronizamos el valor y enfocamos para
+  // que el ciudadano vea el texto listo y solo pulse Buscar.
+  useEffect(() => {
+    if (initialValue) {
+      setQ(initialValue);
+      inputRef.current?.focus();
+    }
+  }, [initialValue]);
 
   useEffect(() => {
     if (reducedMotion) return; // respeta prefers-reduced-motion (BRAND.md §5.5)
@@ -107,18 +116,25 @@ export function HeroSearch({
             territorio?: string | null;
             entidad?: string | null;
             refinador?: string | null;
+            hint?: string | null;
           };
-          // Aceptamos el mapeo si hay al menos UN chip inferido —
-          // basta TIPO o TEMA para activar el flujo de chips.
-          const hasAnyChip =
-            !!(j.tema || j.tipo || j.territorio || j.entidad);
-          if (hasAnyChip) {
+          // Aceptamos el mapeo solo si hay al menos UN chip de CONTENIDO
+          // (tema/territorio/entidad). TIPO solo no dice CUÁL dataset:
+          // "Cuántos" a secas contaría el top-1 global (arbitrario) — ese
+          // caso va mejor por el camino generativo con la pregunta completa.
+          const hasContentChip = !!(j.tema || j.territorio || j.entidad);
+          if (hasContentChip) {
             chipsParams = new URLSearchParams();
+            // La pregunta original viaja en la URL: sin ella la caja de
+            // búsqueda quedaba vacía y el ciudadano perdía su pregunta al
+            // llegar al resultado (2026-07-13).
+            chipsParams.set("pregunta", trimmed);
             if (j.tema) chipsParams.set("tema", j.tema);
             if (j.tipo) chipsParams.set("tipo", j.tipo);
             if (j.territorio) chipsParams.set("territorio", j.territorio);
             if (j.entidad) chipsParams.set("entidad", j.entidad);
             if (j.refinador) chipsParams.set("refinador", j.refinador);
+            if (j.hint) chipsParams.set("hint", j.hint);
           }
         }
       } catch {
@@ -147,7 +163,7 @@ export function HeroSearch({
       onSubmit={onSubmit}
       role="search"
       aria-label="Buscar en datos.gov.co"
-      className="flex items-stretch w-full border border-hairline bg-bg-elev focus-within:border-accent transition-colors"
+      className="flex items-stretch w-full overflow-hidden rounded-[var(--radius-2)] border border-hairline bg-bg-elev focus-within:border-accent transition-colors"
     >
       <label htmlFor="hero-search-input" className="sr-only">
         Escribe tu pregunta
@@ -177,7 +193,7 @@ export function HeroSearch({
         type="submit"
         disabled={isMapping}
         aria-label="Ejecutar búsqueda"
-        className="inline-flex items-center gap-2.5 px-6 bg-ink text-bg font-sans text-body font-semibold tracking-[0.2px] focus-ring disabled:opacity-60"
+        className="inline-flex items-center gap-2.5 px-6 bg-accent hover:bg-accent-2 text-bg font-sans text-body font-bold tracking-[0.2px] transition-colors focus-ring disabled:opacity-60"
       >
         <span>{isMapping ? "Interpretando…" : "Buscar"}</span>
         <Icon name="enter" size={18} aria-hidden />

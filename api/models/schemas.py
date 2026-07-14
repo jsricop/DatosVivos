@@ -91,7 +91,7 @@ class HealthResponse(BaseModel):
 # ============================================================
 
 
-ChipTipo = Literal["Cuántos", "Comparar", "Ranking", "Tendencia", "Mapa"]
+ChipTipo = Literal["Cuántos", "Total", "Comparar", "Ranking", "Tendencia", "Mapa"]
 
 
 class ChipOption(BaseModel):
@@ -204,6 +204,15 @@ class DatasetCuratedColumns(BaseModel):
     by_type: dict[SemanticType, list[str]]
 
 
+class FilterSpec(BaseModel):
+    """Un filtro de valor sobre el dataset elegido (ADR-024). El par
+    (col, value) debe EXISTIR en `dataset_filter_values` — el endpoint
+    valida contra el perfil de la bodega antes de aplicar."""
+
+    col: str
+    value: str
+
+
 class ChipsExecuteRequest(BaseModel):
     """POST /api/v1/query/chips/execute — ejecutar la consulta SoQL sobre
     el dataset elegido + TIPO. Sin LLM: build_soql + SodaClient."""
@@ -212,6 +221,10 @@ class ChipsExecuteRequest(BaseModel):
     tipo: ChipTipo
     # Territorio opcional como filtro adicional (DIVIPOLA code o "macro:*").
     territorio: str | None = None
+    # Filtros de valor (ADR-024) — solo aplican en la rama bodega.
+    filters: list[FilterSpec] | None = None
+    # Pregunta NL original: habilita el filtro automático (Fase 3).
+    pregunta: str | None = None
 
 
 class ChipsExecuteResponse(BaseModel):
@@ -224,6 +237,36 @@ class ChipsExecuteResponse(BaseModel):
     rows: list[dict]            # filas crudas de SODA
     row_count: int              # len(rows), por conveniencia del cliente
     error: str | None = None    # mensaje si no se pudo construir o ejecutar
+    # ---- Filtros de valor (ADR-024) ----
+    filters_applied: list[FilterSpec] | None = None  # los que SÍ se aplicaron
+    filter_note: str | None = None       # filtros ignorados / no disponibles
+    unfiltered_total: int | None = None  # total sin filtros (honestidad, Cuántos)
+    # Unidad de UNA fila del dataset ("estudiantes matriculados",
+    # "contratos") inferida de su metadata — da unidad de medida al conteo
+    # de Cuántos ("390.903" a secas se leía como lo que no era, 2026-07-13).
+    row_unit: str | None = None
+
+
+class FilterOption(BaseModel):
+    """Un valor filtrable con su conteo (del perfil de la bodega)."""
+
+    value: str
+    n: int | None = None
+
+
+class FilterColumn(BaseModel):
+    """Columna filtrable del dataset con sus valores reales."""
+
+    col: str
+    kind: str                   # 'valor' | 'anio'
+    values: list[FilterOption]
+
+
+class DatasetFiltersResponse(BaseModel):
+    """GET /api/v1/datasets/{id}/filters — qué se puede filtrar (ADR-024)."""
+
+    dataset_id: str
+    filtros: list[FilterColumn]
 
 
 # ============================================================
@@ -242,6 +285,11 @@ class ChipsExplainRequest(BaseModel):
     tipo: ChipTipo
     rows: list[dict]                # filas tal como el motor las devolvió
     columns_used: list[str] = []
+    # Unidad de UNA fila ("programas matriculados") — sin ella la narrativa
+    # inventaba la unidad ("390.903 estudiantes" cuando cada fila era un
+    # registro por programa, 2026-07-13). El validador censura cifras, no
+    # unidades: hay que dárselas.
+    row_unit: str | None = None
 
 
 class ChipsFromNLRequest(BaseModel):
@@ -261,6 +309,9 @@ class ChipsFromNLResponse(BaseModel):
     territorio: str | None = None  # código DIVIPOLA o "macro:*"
     entidad: str | None = None     # entity_id como string
     refinador: str | None = None
+    # Aviso para el usuario cuando la pregunta necesita algo que el sistema
+    # no puede adivinar (p. ej. "mi ciudad" sin decir cuál).
+    hint: str | None = None
 
 
 class ChipsExplainResponse(BaseModel):
@@ -274,3 +325,76 @@ class ChipsExplainResponse(BaseModel):
     hallucinated_numbers: list[str] = []
     model: str                      # ej. "qwen2.5:3b-instruct"
     error: str | None = None
+
+
+class CatalogStats(BaseModel):
+    """GET /api/v1/stats/catalog — conteos del catálogo agregados desde la
+    misma vista que alimenta el tablero Power BI (`v_dataset_status_decisor`),
+    para que frontend y tablero nunca se desfasen. Todo es COUNT en vivo."""
+
+    total: int                      # total de datasets en el catálogo
+    nativos: int                    # es_federado='no' (Socrata datos.gov.co)
+    federados: int                  # es_federado='sí' (CKAN/DCAT/IGAC)
+    directo: int                    # acceso_datos='directo'
+    requiere_herramienta: int       # acceso_datos='requiere_herramienta'
+    solo_metadatos: int             # acceso_datos='solo_metadatos'
+    consultable_tabla: int          # directo + requiere_herramienta
+    util: int                       # quality_flag NULL/'ok' (no administrativo)
+    admin: int                      # quality_flag='admin_only' (Ley 1712)
+
+
+class SectorCount(BaseModel):
+    """Agregado por sector administrativo (solo datasets con sector conocido)."""
+
+    sector: str
+    n_datasets: int
+    n_entidades: int                # entidades distintas que publican en el sector
+
+
+class DeptCount(BaseModel):
+    """Agregado por departamento DIVIPOLA (datasets con jurisdicción identificada)."""
+
+    codigo: str                     # DIVIPOLA 2 dígitos ("11", "05", ...)
+    nombre: str                     # "Bogotá D.C.", "Antioquia", ...
+    n_datasets: int
+
+
+class PortalCount(BaseModel):
+    """Agregado por portal de origen del catálogo integrado."""
+
+    portal: str                     # hostname ("datos.gov.co", "datos.cali.gov.co", ...)
+    n_datasets: int
+
+
+class YearCumulative(BaseModel):
+    """Punto de la línea de tiempo del catálogo: acumulado a fin de ese año."""
+
+    anio: int
+    acumulado: int
+
+
+class PanoramaStats(BaseModel):
+    """GET /api/v1/stats/panorama — panorama nacional para la home (ADR-023).
+
+    Línea editorial sobre el CATÁLOGO COMPLETO (decisión 2026-07-10): `total`
+    coincide con /stats/catalog. La división temáticos/administrativos
+    (Ley 1712) se expone en `composicion` como una dimensión más del panorama.
+    """
+
+    total: int                      # todos los datasets del catálogo
+    n_entidades: int                # entidades distintas que publican
+    composicion: dict[str, int]     # tematicos / administrativos (Ley 1712)
+    semaforo: dict[str, int]        # verde / amarillo / rojo / desconocido
+    acceso: dict[str, int]          # directo / requiere_herramienta / solo_metadatos
+    por_sector: list[SectorCount]   # top 10 por n_datasets
+    por_departamento: list[DeptCount]  # hasta 33, orden n_datasets desc
+    por_portal: list[PortalCount]   # catálogo integrado: nacional + territoriales
+    nacional_sin_geo: int           # sin códigos DIVIPOLA (alcance nacional)
+    generated_at: str               # ISO del momento de cómputo (caché TTL)
+    # ISO de finished_at de la última corrida del ETL: la fecha que ve el
+    # usuario en "Actualizado ...". generated_at es del caché, no del dato.
+    last_etl_at: str | None = None
+    # Línea de tiempo: acumulado de datasets por año de creación en su portal
+    # de origen (para los anteriores al registro de DatosVivos es un estimado;
+    # los años ≤2015 se agrupan en el primer punto).
+    crecimiento: list[YearCumulative] = []

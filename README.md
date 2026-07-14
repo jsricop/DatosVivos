@@ -1,139 +1,223 @@
-# DatosVivos
+# DatosVivos — el panorama de los datos abiertos de Colombia
 
-Agente de IA con modelo local que permite a cualquier ciudadano hacer preguntas en lenguaje natural sobre los datos públicos de Colombia, ejecutando consultas reales sobre [datos.gov.co](https://www.datos.gov.co), cruzando datasets de múltiples entidades y entregando análisis verificables con visualizaciones.
+**El panorama de los datos abiertos de Colombia.**
 
-Incluye un **modo de accesibilidad** para personas con discapacidad visual: entrada por voz y respuestas narradas.
+> **Concurso Datos al Ecosistema 2026: IA para Colombia** (MinTIC)
+> **Equipo 93 · Reto de Innovación y Tecnología (Reto 7, id 102) · Nivel Avanzado**
+> Equipo GIT TIC — **Agencia Nacional de Infraestructura (ANI)**
+>
+> 🔴 **En producción:** https://datosvivos.co — cifras en vivo, actualización diaria automática.
 
-> **Concurso "Datos al Ecosistema 2026: IA para Colombia"** — Reto #07 (Innovación y Tecnología). Equipo: Oficina de Tecnología de la **ANI** (Agencia Nacional de Infraestructura).
+DatosVivos integra en un solo catálogo consultable los **25.226 datasets** públicos de
+Colombia (corte 2026-07-12; se actualiza a diario) y los entrega en **cuatro puertas,
+una por audiencia**:
 
-## Arquitectura
-
-Tres capas:
-
-1. **MCP Server** — expone 4 tools sobre las APIs de Socrata de datos.gov.co (`search_datasets`, `get_metadata`, `query_data`, `cross_datasets`).
-2. **Motor de IA** — clasificador de intención (embeddings `multilingual-e5-large`) + índice vectorial de metadatos (ChromaDB, 8 389 datasets) + generador local (Ollama / Qwen 2.5 Coder 3B default, 7B opcional). Búsqueda 3-tier (acrónimos + topic keywords + reformulación LLM), GeoResolver con DIVIPOLA, plantillas SoQL deterministas para comparativas, validador whitelist anti-alucinación de cifras. **Sprints 2-3 + Sprint 6 endurecimiento Beta-1.**
-3. **Interfaz** — Streamlit para ciudadanos (chat + Plotly + Folium + Web Speech API + enlaces verificables a cada dataset citado + telemetría CSV). **Sprint 4 + Sprint 6.** (Power BI / logging persistente quedan como integraciones externas opcionales, fuera del entregable.)
-
-## Stack
-
-Python 3.11+ · MCP SDK · Ollama (Qwen 2.5 Coder 3B default · 7B opcional) · sentence-transformers `multilingual-e5-large` · ChromaDB · pandas 3.0 (auto-cast + estadísticas deterministas) · Streamlit · Plotly · Folium · `streamlit-folium` · Web Speech API · Docker Compose · Nginx (producción)
-
-## Estado actual (2026-05-19)
-
-| Capa | Sprint | Estado |
+| Funcionalidad | Para quién | Dónde |
 |---|---|---|
-| MCP Server (4 tools sobre datos.gov.co) | 1 + 3 | ✅ Funcional, tests verdes |
-| Motor de IA (índice vectorial + clasificador) | 2 | ✅ Funcional |
-| `cross_datasets` (1-5 datasets) + Ollama + analyzer end-to-end | 3 + ext | ✅ Funcional |
-| Acrónimos + topic keywords (3-tier search) | ext | ✅ Funcional |
-| Streamlit + accesibilidad (sin Power BI) | 4 | ✅ Funcional, 16 tests verdes |
-| Docs CRISP-ML(Q) + capítulo MCP + checklist MinTIC | 5 | ✅ Redactados |
-| **Cifras pandas + whitelist anti-alucinación** | **6** | **✅ 55 tests verdes; 30/30 sin alucinaciones en journey** |
-| **GeoResolver DIVIPOLA + comparativa multi-target** | **6** | **✅ plantillas SoQL deterministas; tests congelados** |
-| **Telemetría CSV + disclaimer beta + enlaces verificables** | **6** | **✅ activa por defecto** |
+| **Panorama general** — cifras en vivo del ecosistema (frescura, sectores, territorio) | Tomadores de decisiones, prensa, ciudadanía | [datosvivos.co](https://datosvivos.co) |
+| **Tablero por entidad** — detalle interactivo por sector, entidad y territorio | Gerentes sectoriales y entidades publicadoras | [/tablero](https://datosvivos.co/tablero) |
+| **Buscador ciudadano** — preguntas en lenguaje natural, cifra verificada + fuente | Cualquier persona, sin barrera técnica | [/buscar](https://datosvivos.co/buscar) |
+| **Servidor MCP** — el motor expuesto como herramientas para agentes de IA | Desarrolladores y agentes (Claude, OpenAI, etc.) | [/mcp](https://datosvivos.co/mcp) |
 
-## Garantías para el ciudadano (Beta-1)
+Todo con **modo de accesibilidad**: entrada por voz, narración de resultados y alto
+contraste (Ley 1618 de 2013).
 
-- **Cero cifras inventadas**: toda cuantificación que aparece en una respuesta se calcula con pandas sobre los rows reales devueltos por Socrata. Si el LLM intenta colar un número fuera de la lista blanca, esa oración se censura antes de mostrarse.
-- **Trazabilidad por enlace**: cada respuesta incluye los IDs de los datasets consultados + un link clicable a `https://www.datos.gov.co/d/{id}` (página humana) y al endpoint JSON SODA (para reusar los datos).
-- **Honestidad sobre límites**: si no encontramos datasets relevantes, lo decimos con un mensaje fijo. No inventamos datasets ficticios ni datos de otros países.
-- **Geolocalización estricta**: cuando preguntás sobre un departamento o municipio, usamos códigos DIVIPOLA oficiales y plantillas SoQL deterministas (no le pedimos al LLM que "adivine" el filtro).
+---
 
-## Estructura
+## Problema abordado
 
-```
-mcp_server/   Capa 1 — MCP Server + clientes Socrata    (Sprint 1: ✅)
-ai_engine/    Capa 2 — Clasificador, vector index, LLM   (Sprints 2-3: ✅)
-app/          Capa 3 — Streamlit + accesibilidad         (Sprint 4: ✅)
-db/           Schema PostgreSQL (referencia)             (sprint posterior)
-scripts/      Indexación, mantenimiento                  (Sprint 2)
-tests/        Pruebas pytest                             (continuo)
-```
+Colombia publica más de 25.000 datasets abiertos, pero **nadie tiene el panorama**:
+una entidad no sabe cuántos datasets tiene publicados ni cuántos actualizados; un
+gerente sectorial con N entidades adscritas no puede hacer control; el propio MinTIC
+carece de una vista consolidada (los portales federados viven separados); y el
+ciudadano que quiere una cifra necesita saber de APIs y SQL. **Si no conocemos, no
+podemos medir — y si no medimos, no podemos mejorar.**
 
-## Lo que funciona hoy
+## Justificación (valor público)
 
-```bash
-# 1. Clonar y preparar entorno
-git clone https://github.com/jsricop/DatosVivos.git
-cd DatosVivos
-python3.11 -m venv .venv && source .venv/bin/activate
+El dato bien gobernado es infraestructura. Al corte del 2026-07-12, **el 71 % del
+catálogo está desactualizado frente a la frecuencia que su propia entidad declaró** —
+un incumplimiento invisible hasta ahora porque no existía la herramienta que lo
+mostrara. DatosVivos convierte ese punto ciego en un indicador gestionable por
+entidad, sector y territorio, y elimina la barrera técnica para consultar el dato
+público. Se alinea con las Hojas de Ruta de Datos Abiertos Estratégicos y fortalece la
+apropiación ciudadana del ecosistema digital (objetivo del Reto 7).
 
-# Para el MCP Server (Sprint 1)
-pip install -r requirements.mcp.txt -r requirements-dev.txt
+## Cantidad de datasets utilizados
 
-# Adicionalmente, para el motor de IA (Sprint 2: índice vectorial + clasificador, Sprint 3: orquestación)
-pip install -r requirements.ai.txt
+**25.226 datasets** de **1.423 entidades** (corte 2026-07-12 — el catálogo se
+re-ingesta automáticamente a diario, las cifras varían). Nivel Avanzado: integración
+masiva de fuentes heterogéneas, no un análisis de dataset único.
 
-# Sprint 3 requiere Ollama corriendo local para tests con LLM real:
-#   brew install ollama && ollama serve &
-#   ollama pull qwen2.5-coder:3b
-# (Sin Ollama, los tests dependientes se saltan con skipif. Suite no-LLM corre normal.)
+## Datasets utilizados de datos.gov.co
 
-# 2. Configurar entorno (opcional para el MCP Server — funciona con defaults)
-cp .env.example .env
-# editar .env si necesitas un SOCRATA_APP_TOKEN para mayor rate limit
+- **El catálogo completo del portal nacional**: 12.112 datasets vía Socrata Discovery
+  API + SODA + Metadata API (8.458 nativos consultables en línea).
+- **DIVIPOLA — Codificación de municipios** (`gdxc-w37w`, DANE): referencia canónica
+  territorial para la inferencia geográfica y el mapa por departamento.
+- Cualquier dataset tabular nativo es consultable en vivo desde el buscador (matrícula,
+  contratación, vacunación, etc.) — el motor ejecuta la consulta sobre su API SODA.
 
-# 3. Correr los tests
-pytest                              # toda la suite
-pytest tests/test_mcp_tools.py      # solo Sprint 1
-pytest tests/test_sprint2_acceptance.py  # solo Sprint 2 (requiere índice)
+## Datasets utilizados externos
 
-# 4. Levantar el MCP Server (elige un transporte)
-MCP_TRANSPORT=stdio python -m mcp_server.server     # para hosts MCP locales
-MCP_TRANSPORT=sse   python -m mcp_server.server     # HTTP/SSE en :3000
+Portales integrados por harvesting directo y atribución de origen:
+**IGAC / Colombia en Mapas** (6.626) · **Datos Abiertos Bogotá** (4.323, CKAN) ·
+**Datos Abiertos Cali** (1.236, CKAN) · **MEDATA Medellín** (823, DCAT) ·
+**Datos Abiertos Valle del Cauca** (106, CKAN).
 
-# 5. Build y run del MCP Server vía Docker
-docker build -f Dockerfile.mcp -t datosvivos-mcp:dev .
-docker run --rm -p 3000:3000 -e MCP_TRANSPORT=sse datosvivos-mcp:dev
+## Variables seleccionadas
 
-# 6. Construir el índice vectorial del catálogo (Sprint 2, ~10 min para ~8k datasets)
-python -m scripts.build_index                       # build completo
-python -m scripts.build_index --limit 500           # build parcial (dev/test)
-python -m scripts.build_index --output ./custom     # output custom
-```
+**29 variables curadas por dataset** en la vista `v_dataset_status_decisor` (fuente
+única del tablero y del panorama): identidad y publicador, **semáforo de frescura**
+(`status`, calculado contra la frecuencia declarada), uso (descargas/vistas), acceso
+(`directo` / `requiere_herramienta` / `solo_metadatos`), procedencia, territorio
+(DIVIPOLA) y calidad (`quality_flag`).
 
-## Pendientes / fuera de scope
+## Tipo de análisis
 
-- **Demo público con TLS** — la VM corre tras VPN; falta dominio público con Nginx + Let's Encrypt antes de sustentación.
-- **Publicación en `datos.gov.co` y `herramientas.datos.gov.co/usos`** — coordinación con MinTIC, FASE 8 del Sprint 5.
-- **PostgreSQL logging persistente** — schema definido en `db/init.sql` como referencia, no activado.
-- **Power BI / dashboards analíticos** — fuera del entregable, integraciones externas opcionales.
+- **Descriptivo del ecosistema**: panorama nacional en vivo (composición, frescura,
+  acceso, sectores, territorio, portales) + tablero exploratorio Power BI.
+- **IA generativa aplicada (agente de servicios públicos)**: consultas ciudadanas en
+  lenguaje natural resueltas con **NL2SQL / Text-to-SQL verificado** sobre los datos
+  reales; clasificación automática de calidad; inferencia territorial.
 
-## Convenciones de desarrollo
+## Modelo utilizado
 
-Si vas a contribuir código, dos disciplinas obligatorias:
+Organizado por nivel del producto (nivel avanzado del TDR):
 
-### Test-first para features de sprint
-Los tests con criterios de aceptación se escriben **antes** del código de producción. Cada sprint con criterios medibles (accuracy, latencia, cobertura) tiene un archivo `tests/test_sprintN_acceptance.py` con todos los tests `@pytest.mark.skip`. Se va quitando el `@skip` a medida que cada feature se implementa. **Los tests no se modifican** durante el sprint; si fallan, se corrige el código. Ejemplo activo: [`tests/test_sprint2_acceptance.py`](tests/test_sprint2_acceptance.py).
+- **En los tableros** — IA para la **depuración, consolidación y definición de casos de
+  calidad de datos**: clasificación de reportes administrativos (Ley 1712), curación de
+  columnas con LLM + heurísticas, inferencia territorial DIVIPOLA, guardas anti-basura,
+  consolidación de 6 portales con 3 protocolos.
+- **En el buscador** — **motor NL2SQL generativo con verificación determinista de 3
+  capas** (genera con LLM viendo solo columnas curadas reales; verifica con código
+  antes de ejecutar; repara o rehúsa): embeddings `multilingual-e5` + ChromaDB para
+  retrieval semántico **en ambos caminos** (el estructurado re-rankea sus candidatos
+  con el mismo índice: el chip filtra, el embedding ordena), clasificador de
+  intención, 6 TIPOs de respuesta (conteo, **suma de montos**, comparación, ranking,
+  tendencia, mapa), narrativa anti-alucinación (cero cifras inventadas) y **MCP
+  server** que expone las herramientas a cualquier agente de IA.
+- Backend LLM conectable: **producción con la API de Claude (Haiku)** desde 2026-07-11 — interpretación NL en ~1.5 s (antes 31-45 s con modelo local); `LLM_BACKEND=ollama` queda para réplicas sin API key.
 
-### Doc-first para cambios visibles
-Toda PR que afecte interfaz pública (comandos, contratos de tools, arquitectura, dependencias) debe actualizar la documentación en el mismo PR. Sin docs, no se mergea. Para el checklist específico por tipo de cambio, pregúntale a un maintainer.
+## Por qué Nivel Avanzado (con la letra del TDR)
 
-### Convención de commits
-Formato: `tipo(scope): descripción`. Tipos: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`. Cada commit debe cerrar con `Co-Authored-By: ANI Team & Claude <noreply@anthropic.com>`. Ver historial reciente para ejemplos.
+| El TDR (Nivel Avanzado) exige | DatosVivos lo cumple con |
+|---|---|
+| **Agentes de IA para servicios públicos** que consulten y procesen datos abiertos automáticamente | El agente consulta, cruza y procesa el catálogo para responder solicitudes ciudadanas |
+| **IA generativa** para asistentes y **sistemas conversacionales basados en datos abiertos** | Buscador en lenguaje natural con motor **NL2SQL / Text-to-SQL** generativo verificado |
+| **Modelos de lenguaje** y **arquitecturas híbridas** | LLM + verificación determinista de 3 capas ("la IA razona, el motor verifica") + embeddings neuronales de retrieval |
+| **Integración de grandes volúmenes de datos**, múltiples fuentes | **25.226 datasets** de 6 portales y 3 protocolos (Socrata, CKAN, DCAT) — muy por encima de los 3-10 conjuntos del nivel intermedio |
+| **Datos estructurados y no estructurados** | Metadata estructurada + texto libre (títulos, descripciones) procesado con embeddings y clasificadores |
+| Más variables que el nivel intermedio (10-20) | **29 variables curadas por dataset** en la vista analítica (sobre 42 columnas fuente) |
+| **Automatización, escalabilidad y despliegue funcional** | Actualización diaria automática, arquitectura agnóstica del portal, **en producción** en datosvivos.co |
+| IA **pertinente, aplicable, interpretable y con aporte real** (no superficial) | Cada componente de IA resuelve un problema concreto y es auditable: la verificación es código, la clasificación es reproducible, cada cifra cita su fuente |
 
-## Seguridad y privacidad
+## Resultados clave
 
-- DatosVivos opera **exclusivamente** sobre datos públicos de [datos.gov.co](https://www.datos.gov.co)
-- No accede, procesa ni expone información interna de la ANI ni de ninguna entidad del Estado
-- El modelo LLM corre **localmente** (Ollama) — ni consultas ciudadanas ni datos analizados salen del servidor
-- La VM productiva está detrás de VPN (FortiClient SSL) — no expuesta a internet público
-- Las credenciales viven en `.env` (`.gitignore`d) — nunca en código
-- El repositorio público en GitHub solo contiene código, no datos ni credenciales
+1. **Integración única**: nadie más consolida los portales federados territoriales de
+   Colombia en un catálogo comparable.
+2. **El hallazgo**: 71 % del catálogo "en rojo" (desactualizado frente a su propia
+   promesa de frecuencia). Solo 9 % al día.
+3. **Actualización diaria automática**: el panorama se cura solo (ETL nocturno +
+   harvesting semanal + clasificación continua). Ninguna cifra del sitio está quemada.
+4. **Cero cifras inventadas**: verificación determinista + citación de fuente en cada
+   respuesta del buscador.
+5. **Calidad medida**: 17/18 columnas al 100 % de fidelidad contra la fuente; ~89 % de
+   cobertura territorial inferida; **100 % de cobertura de categoría temática** (2.504
+   huecos cerrados con clasificación semántica + curación revisada; vocabulario
+   consolidado de 60+ etiquetas redundantes a 25 canónicas).
+6. **Bodega local en Parquet — completa**: **10.280 datasets** (6,6 GB comprimidos,
+   todos los tabulares viables del catálogo) viven como copia local en la
+   infraestructura y **el buscador responde desde ellos en milisegundos** cuando el
+   snapshot está fresco; si la fuente cambió, cae al dato vivo. Una regla diaria de
+   cola la mantiene sola, y los orígenes muertos (403/404) penalizan el ranking.
+7. **Evaluación centrada en el ciudadano**: 50 preguntas reales con respuesta
+   esperada escrita ANTES de correrlas ([`eval/ciudadano/`](eval/ciudadano/)),
+   corridas en ciclos contra producción; los patrones detectados se convirtieron en
+   mejoras estructurales (re-ranking semántico, TIPO Total para montos, honestidad
+   de lejanía) y el ciclo se repite con seguimiento versionado.
+8. **Filtros de valor dentro del dataset** (ADR-024): la bodega se perfila sola
+   (10.280 datasets → ~297k valores filtrables reales) y el ciudadano filtra
+   eligiendo, nunca escribiendo — por chips, por su propia pregunta ("públicos" →
+   `SECTOR=OFICIAL`, elegido por IA SOLO entre valores existentes) o por territorio
+   (pregunta departamental recorta el dataset nacional). Con filtro se muestra
+   también el total sin filtrar: "1.721 colegios oficiales de 2.184 en Boyacá".
+9. **Diccionario ciudadano↔institucional**: ~130 equivalencias curadas
+   ("colegios"→"establecimientos educativos", "robos"→"hurto") cierran de forma
+   determinista la brecha entre cómo pregunta la gente y cómo el Estado titula sus
+   datos.
 
-## Referencias
+## Interpretación
 
-- [datos.gov.co](https://www.datos.gov.co) — Portal de datos abiertos de Colombia
-- [SODA API](https://dev.socrata.com/consumers/getting-started.html) — Documentación de la API de consulta
-- [Discovery API](https://socratadiscovery.docs.apiary.io/) — Documentación de búsqueda de datasets
-- [MCP Protocol](https://modelcontextprotocol.io/) — Especificación del Model Context Protocol
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — SDK oficial
-- [Ollama](https://ollama.ai) — Servidor de modelos LLM locales
-- [CRISP-ML(Q)](https://arxiv.org/abs/2003.05155) — Paper del marco metodológico
-- [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) — STT/TTS del navegador
-- [WCAG 2.1](https://www.w3.org/TR/WCAG21/) — Estándar de accesibilidad web
-- [Ley 1618 de 2013](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=52081) — Accesibilidad TIC en Colombia
+La brecha del dato abierto colombiano no es de cantidad sino de **gobernanza y
+acceso**: los datos existen, pero no se mantienen frescos y consultarlos exige
+capacidades técnicas. Medir contra la promesa de cada entidad convierte la percepción
+en indicador gestionable.
+
+## Impacto potencial
+
+| Actor | Qué le cambia |
+|---|---|
+| Entidad publicadora | Ve en segundos cuántos datasets tiene y cuántos al día |
+| Gerente / cabeza de sector | Control consolidado de sus entidades adscritas |
+| MinTIC / política pública | Panorama nacional medible para las Hojas de Ruta |
+| Ciudadanía | Cifras verificables en lenguaje natural, sin barrera técnica |
+
+Escalable: agregar un portal CKAN es configuración; el patrón aplica a cualquier país
+con catálogos Socrata/CKAN/DCAT; el MCP server permite construir encima.
+
+## Solución en Producción (Demo en Vivo)
+
+Para ver y probar la solución funcionando en tiempo real:
+
+**Aplicación Web / Producción:** [https://datosvivos.co](https://datosvivos.co)
+· [Tablero del decisor](https://datosvivos.co/tablero)
+· [Buscador en lenguaje natural](https://datosvivos.co/buscar)
+
+**Registro oficial de uso:** el proyecto está postulado en el portal de usos de
+datos.gov.co como *"DatosVivos - El panorama de los datos abiertos de Colombia"*
+(**Uso n.º 1074**, registrado el 2026-07-13 en
+[herramientas.datos.gov.co/usos](https://herramientas.datos.gov.co/usos)).
+
+**API pública de estadísticas (verificación en vivo):**
+[`/api/v1/stats/panorama`](https://datosvivos.co/api/v1/stats/panorama) ·
+[`/api/v1/dashboard/datasets_decisor.csv`](https://datosvivos.co/api/v1/dashboard/datasets_decisor.csv)
+
+## Enlaces de acceso
+
+Presentación del proyecto:
+
+*   [Descargar archivo original (.PPTX)](recursos/presentacion.pptx) — *Para abrir y editar en PowerPoint.*
+*   [Ver presentación en línea (.PDF)](recursos/presentacion.pdf) — *Abre el visor interactivo de GitHub o GitLab.*
+*   [Descarga directa (.PDF)](recursos/presentacion.pdf?raw=true&inline=false) — *Fuerza la descarga en ambas plataformas.*
+
+## Documentación
+
+Este README concentra la documentación del proyecto: problema, fuentes,
+variables, modelo, metodología y resultados. El sistema de diseño vive en
+[docs/BRAND.md](docs/BRAND.md); la evaluación reproducible en [`eval/`](eval/)
+(goldens + runners + las 50 preguntas del ciclo ciudadano); y la guía para
+conectar agentes de IA en [datosvivos.co/mcp](https://datosvivos.co/mcp).
+
+## Roadmap (trabajo futuro)
+
+1. **Filtro por municipio dentro del dataset** — el recorte territorial (ADR-024 F4)
+   cubre departamentos; extender el mismo patrón de verificación contra el Parquet a
+   los 1.100+ municipios.
+2. **Respuestas compuestas** — KPI + tendencia + desglose en una sola vista, y tasas
+   per cápita cruzando con población.
+3. **Filtros sobre federados en vivo** — hoy los filtros de valor aplican solo sobre
+   la copia local (el perfil describe el Parquet); los federados consultados en vivo
+   responden sin filtro, y lo dicen.
+
+## Equipo
+
+**GIT TIC — Agencia Nacional de Infraestructura (ANI)**: Hernán Darío Gutiérrez Casas
+(líder estratégico) · Ileana Andrea Navarro Castrillón (líder de equipo y
+comunicaciones) · Jhonatan Sneider Rico Pinto (líder técnico y de datos).
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE).
+Código abierto para validación y reutilización en el marco del concurso. Los datos
+consultados son públicos, publicados por sus entidades bajo las licencias declaradas
+en cada portal.
