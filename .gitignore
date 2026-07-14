@@ -61,3 +61,8 @@ docs/*
 !docs/BRAND.md
 eval/ciudadano/seguimiento_50.md
 eval/ciudadano/analisis_ciclos.md
+
+# Generador original del pitch — OBSOLETO como fuente (el pptx del equipo
+# es la verdad desde 2026-07-13). Se conserva local como referencia; si se
+# ejecutara, destruiría la edición manual.
+scripts/gen_pitch.py
