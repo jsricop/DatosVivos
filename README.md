@@ -193,9 +193,9 @@ datos.gov.co como *"DatosVivos - El panorama de los datos abiertos de Colombia"*
 
 Presentación del proyecto:
 
-*   [Descargar archivo original (.PPTX)](recursos/presentacion.pptx) — *Para abrir y editar en PowerPoint.*
-*   [Ver presentación en línea (.PDF)](recursos/presentacion.pdf) — *Abre el visor interactivo de GitHub o GitLab.*
-*   [Descarga directa (.PDF)](recursos/presentacion.pdf?raw=true&inline=false) — *Fuerza la descarga en ambas plataformas.*
+*   [Descargar archivo original (.PPTX)](recursos/presentacion_v5.pptx) — *Para abrir y editar en PowerPoint.*
+*   [Ver presentación en línea (.PDF)](recursos/presentacion_v5.pdf) — *Abre el visor interactivo de GitHub o GitLab.*
+*   [Descarga directa (.PDF)](recursos/presentacion_v5.pdf?raw=true&inline=false) — *Fuerza la descarga en ambas plataformas.*
 
 ## Documentación
 
