@@ -351,6 +351,7 @@ ciudadano, con preguntas reales cuya respuesta esperada se escribió **antes** d
 | [`eval/golden_queries.yaml`](eval/golden_queries.yaml) | 38 casos NL→SoQL, incluida la detección de cifras falsas | **38/38**, cero falsos verificados |
 | [`eval/ciudadano/preguntas_50.yaml`](eval/ciudadano/preguntas_50.yaml) | 50 preguntas ciudadanas, 5 ciclos contra producción | 48 datasets ejercitados; los fallos se volvieron mejoras estructurales |
 | [`tests/`](tests/) | 40 archivos de prueba: verificador, validador anti-alucinación, reparación, inferencia territorial, cosecha, MCP y rutas de la API | — |
+| [Auditoría de calidad de datos](eval/reports/data_quality_hito_q_2026-05-29.md) | Validación columna a columna contra Socrata sobre 8.404 nativos + 9.995 federados, con los falsos positivos explicados y reproducible con `scripts/audit_data_quality.py` | **17/18 columnas al 100 %** (corte 2026-05-29) |
 
 Reproducibles con `python eval/run_eval_chips.py` y `python eval/run_eval_queries.py`. Los
 patrones que fallaron produjeron cambios concretos y rastreables: re-ranking semántico,
@@ -386,7 +387,8 @@ TIPO `Total` para montos, honestidad de lejanía y filtros de valor.
    respuesta del buscador.
 6. **Calidad medida, no declarada**: auditoría columna a columna contra la fuente
    Socrata — **17 de 18 columnas al 100 % de fidelidad al corte del 2026-05-29** (la
-   restante, `description`, resultó falso positivo por orden de truncado/normalización);
+   restante, `description`, resultó falso positivo por orden de truncado/normalización),
+   con el [reporte completo publicado](eval/reports/data_quality_hito_q_2026-05-29.md);
    **~89 % de cobertura territorial** (datasets con jurisdicción DIVIPOLA resuelta,
    incluido el ámbito nacional: 22.734 de 25.424); **100 % de cobertura de categoría
    temática** (2.504 huecos cerrados con clasificación semántica + curación revisada;
