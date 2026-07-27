@@ -53,6 +53,9 @@ docs/powerbi/HANDOFF_*.md
 docs/powerbi/guia_powerbi.html
 eval/ciudadano/entregado_ciclo*.yaml
 eval/reports/*
+# Excepción: la auditoría de calidad columna a columna SÍ se publica — es la
+# evidencia de la afirmación "17/18 columnas al 100 %" que cita el README.
+!eval/reports/data_quality_hito_q_2026-05-29.md
 
 # === Poda documental máxima (2026-07-13): el repo público lleva código,
 # README, BRAND e insumos del concurso. El resto de docs/ es material de
